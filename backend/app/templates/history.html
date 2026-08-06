@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Historique
+</h1>
+
+<div class="card shadow mb-4">
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>ID</th>
+                        <th>Lot</th>
+                        <th>Utilisateur</th>
+                        <th>Action</th>
+                        <th>Fichier</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for item in history %}
+
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.job_id }}</td>
+                        <td>{{ item.username }}</td>
+                        <td>{{ item.action }}</td>
+                        <td>{{ item.file_name }}</td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

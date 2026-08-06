@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Lots d'impression
+</h1>
+
+<div class="card shadow mb-4">
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>ID</th>
+                        <th>Créateur</th>
+                        <th>Statut</th>
+                        <th>Étiquettes</th>
+                        <th></th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for job in jobs %}
+
+                    <tr>
+
+                        <td>{{ job.id }}</td>
+
+                        <td>{{ job.created_by }}</td>
+
+                        <td>
+
+                            {% if job.status == "GENERATED" %}
+
+                            <span class="badge badge-success">
+                                GENERATED
+                            </span>
+
+                            {% elif job.status == "PENDING" %}
+
+                            <span class="badge badge-warning">
+                                PENDING
+                            </span>
+
+                            {% else %}
+
+                            <span class="badge badge-secondary">
+                                {{ job.status }}
+                            </span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <td>{{ job.labels_count }}</td>
+
+                        <td>
+                            <a class="btn btn-primary btn-sm" href="/jobs/{{ job.id }}">
+                                Voir
+                            </a>
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

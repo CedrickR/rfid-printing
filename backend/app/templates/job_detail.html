@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Lot #{{ job.id }}
+</h1>
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Informations
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <p>
+            <strong>Statut :</strong>
+            {{ job.status }}
+        </p>
+
+        {% if job.generated_file %}
+
+        <div class="alert alert-success">
+            Fichier généré :
+            <strong>{{ job.generated_file }}</strong>
+        </div>
+
+        {% endif %}
+
+        <p>
+            <strong>Nombre d'étiquettes :</strong>
+            {{ job.labels_count }}
+        </p>
+
+        <p class="mb-0">
+            <strong>Créé par :</strong>
+            {{ job.created_by }}
+        </p>
+
+    </div>
+
+</div>
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+        <h6 class="m-0 font-weight-bold text-primary">
+            Biens associés
+        </h6>
+
+        <form action="/jobs/{{ job.id }}/generate" method="post" class="m-0">
+            <button class="btn btn-success btn-sm" type="submit">
+                <i class="fas fa-cog fa-sm"></i> Générer CMD
+            </button>
+        </form>
+
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered">
+
+                <thead>
+
+                    <tr>
+                        <th>Bien ID</th>
+                        <th>Désignation</th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for asset in assets %}
+
+                    <tr>
+                        <td>{{ asset.bien_id }}</td>
+                        <td>{{ asset.bien_designation }}</td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,6 @@
+Tableau de bord
+Imports
+Inventaire
+Lots d’impression
+Historique
+Administration

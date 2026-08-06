@@ -1,0 +1,128 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>RFID Printing</title>
+
+    <!-- Font Awesome + police Nunito (requis par SB Admin 2) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
+
+    <!-- SB Admin 2 (inclut Bootstrap 4.6) -->
+    <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.4/css/sb-admin-2.min.css" rel="stylesheet">
+
+    <link href="/static/css/app.css" rel="stylesheet">
+
+</head>
+
+<body id="page-top">
+
+<div id="wrapper">
+
+    <!-- Sidebar -->
+    <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+
+        <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
+            <div class="sidebar-brand-icon">
+                <i class="fas fa-tags"></i>
+            </div>
+            <div class="sidebar-brand-text mx-3">RFID Print</div>
+        </a>
+
+        <hr class="sidebar-divider my-0">
+
+        <li class="nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">
+            <a class="nav-link" href="/dashboard">
+                <i class="fas fa-fw fa-tachometer-alt"></i>
+                <span>Tableau de bord</span>
+            </a>
+        </li>
+
+        <hr class="sidebar-divider">
+
+        <li class="nav-item {% if request.url.path == '/assets' %}active{% endif %}">
+            <a class="nav-link" href="/assets">
+                <i class="fas fa-fw fa-boxes"></i>
+                <span>Inventaire</span>
+            </a>
+        </li>
+
+        <li class="nav-item {% if request.url.path.startswith('/jobs') %}active{% endif %}">
+            <a class="nav-link" href="/jobs">
+                <i class="fas fa-fw fa-print"></i>
+                <span>Lots</span>
+            </a>
+        </li>
+
+        <li class="nav-item {% if request.url.path == '/history' %}active{% endif %}">
+            <a class="nav-link" href="/history">
+                <i class="fas fa-fw fa-history"></i>
+                <span>Historique</span>
+            </a>
+        </li>
+
+        <hr class="sidebar-divider d-none d-md-block">
+
+        <!-- Bouton repli sidebar -->
+        <div class="text-center d-none d-md-inline">
+            <button class="rounded-circle border-0" id="sidebarToggle"></button>
+        </div>
+
+    </ul>
+
+    <!-- Contenu -->
+    <div id="content-wrapper" class="d-flex flex-column">
+
+        <div id="content">
+
+            <!-- Topbar -->
+            <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+
+                <button id="sidebarToggleTop" class="btn btn-link d-md-none rounded-circle mr-3">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <span class="navbar-brand text-gray-800">
+                    RFID Printing
+                </span>
+
+            </nav>
+
+            <div class="container-fluid">
+
+                {% block content %}
+                {% endblock %}
+
+            </div>
+
+        </div>
+
+        <footer class="sticky-footer bg-white">
+            <div class="container my-auto">
+                <div class="copyright text-center my-auto">
+                    <span>RFID Printing — CAF</span>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+</div>
+
+<a class="scroll-to-top rounded" href="#page-top">
+    <i class="fas fa-angle-up"></i>
+</a>
+
+<!-- Scripts SB Admin 2 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.4/js/sb-admin-2.min.js"></script>
+
+</body>
+
+</html>

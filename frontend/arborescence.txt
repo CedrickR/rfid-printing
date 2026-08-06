@@ -1,0 +1,42 @@
+frontend/
+│
+├── src/
+│   ├── api/
+│   │   ├── authApi.js
+│   │   ├── importApi.js
+│   │   ├── assetApi.js
+│   │   ├── printApi.js
+│   │   └── historyApi.js
+│   │
+│   ├── components/
+│   │   ├── Layout.jsx
+│   │   ├── Sidebar.jsx
+│   │   ├── Header.jsx
+│   │   ├── ProtectedRoute.jsx
+│   │   ├── StatusBadge.jsx
+│   │   └── LoadingSpinner.jsx
+│   │
+│   ├── pages/
+│   │   ├── LoginPage.jsx
+│   │   ├── DashboardPage.jsx
+│   │   ├── ImportPage.jsx
+│   │   ├── AssetsPage.jsx
+│   │   ├── PrintJobsPage.jsx
+│   │   ├── PrintJobDetailPage.jsx
+│   │   ├── HistoryPage.jsx
+│   │   └── SettingsPage.jsx
+│   │
+│   ├── context/
+│   │   └── AuthContext.jsx
+│   │
+│   ├── routes/
+│   │   └── AppRoutes.jsx
+│   │
+│   ├── styles/
+│   │   └── app.css
+│   │
+│   ├── App.jsx
+│   └── main.jsx
+│
+├── package.json
+└── vite.config.js

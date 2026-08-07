@@ -4,7 +4,10 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from fastapi import Query
 from fastapi import Form
+from fastapi import File
+from fastapi import UploadFile
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
 from sqlalchemy.orm import Session
@@ -28,6 +31,13 @@ from app.services.print_job_service import (
     PrintJobService,
     EmptyPrintJobError,
     AlreadyGeneratedError,
+)
+from app.services.import_service import (
+    ImportService,
+    InvalidEncodingError,
+    MissingColumnsError,
+    CsvReadError,
+    DuplicateBienIdError,
 )
 
 router = APIRouter(
@@ -150,6 +160,135 @@ def dashboard(
             "history_count": history_count
         }
     )
+
+def _import_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, InvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, MissingColumnsError):
+        return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
+
+    if isinstance(exc, CsvReadError):
+        return f"Erreur lecture CSV : {exc.original_error}"
+
+    if isinstance(exc, DuplicateBienIdError):
+        shown = exc.duplicated_ids[:20]
+        suffix = (
+            f" (et {len(exc.duplicated_ids) - 20} de plus)"
+            if len(exc.duplicated_ids) > 20
+            else ""
+        )
+        return (
+            "bien_id en doublon dans le fichier : "
+            f"{', '.join(shown)}{suffix}"
+        )
+
+    return "Fichier CSV invalide."
+
+
+@router.get("/import")
+def import_page(
+    request: Request,
+    current_user=Depends(get_current_user_web)
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="import.html",
+        context={"error": None}
+    )
+
+
+@router.post("/import/preview")
+async def import_preview(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web)
+):
+    """
+    Aperçu du CSV (colonnes détectées, compteurs) sans écriture en base.
+    Appelé en Ajax depuis la page d'import.
+    """
+
+    if not file.filename.lower().endswith(".csv"):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Le fichier doit être un CSV"}
+        )
+
+    content = await file.read()
+
+    try:
+        _, summary = ImportService.validate(content)
+
+    except (
+        InvalidEncodingError,
+        MissingColumnsError,
+        CsvReadError,
+        DuplicateBienIdError
+    ) as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": _import_error_message(e)}
+        )
+
+    return summary
+
+
+@router.post("/import")
+async def import_submit(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return templates.TemplateResponse(
+            request=request,
+            name="import.html",
+            context={"error": "Le fichier doit être un CSV"},
+            status_code=400
+        )
+
+    content = await file.read()
+
+    try:
+        df, summary = ImportService.validate(content)
+
+    except (
+        InvalidEncodingError,
+        MissingColumnsError,
+        CsvReadError,
+        DuplicateBienIdError
+    ) as e:
+
+        return templates.TemplateResponse(
+            request=request,
+            name="import.html",
+            context={"error": _import_error_message(e)},
+            status_code=400
+        )
+
+    ImportService.commit(
+        db,
+        df,
+        file.filename,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url=(
+            "/dashboard?imported=1"
+            f"&total={summary['total_rows']}"
+            f"&active={summary['active_assets']}"
+            f"&excluded={summary['excluded_assets']}"
+            f"&invalid={summary['invalid_rows']}"
+        ),
+        status_code=303
+    )
+
 
 @router.get("/assets")
 def assets(

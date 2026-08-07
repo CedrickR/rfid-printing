@@ -44,6 +44,13 @@
 
         <hr class="sidebar-divider">
 
+        <li class="nav-item {% if request.url.path == '/import' %}active{% endif %}">
+            <a class="nav-link" href="/import">
+                <i class="fas fa-fw fa-file-import"></i>
+                <span>Import CSV</span>
+            </a>
+        </li>
+
         <li class="nav-item {% if request.url.path == '/assets' %}active{% endif %}">
             <a class="nav-link" href="/assets">
                 <i class="fas fa-fw fa-boxes"></i>

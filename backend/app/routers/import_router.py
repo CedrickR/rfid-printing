@@ -51,7 +51,14 @@ def parse_inventory_csv(raw_text: str) -> pd.DataFrame:
         try:
             df = pd.read_csv(
                 StringIO(raw_text),
-                sep=delimiter
+                sep=delimiter,
+                # bien_id/bien_designation en texte : évite qu'une valeur
+                # manquante ailleurs dans la colonne ne fasse basculer des
+                # identifiants numériques en flottant (ex. "1001.0").
+                dtype={
+                    "bien_id": str,
+                    "bien_designation": str
+                }
             )
 
         except Exception as e:
@@ -84,6 +91,65 @@ def parse_inventory_csv(raw_text: str) -> pd.DataFrame:
     )
 
 
+def clean_inventory_rows(df: pd.DataFrame):
+    """
+    Normalise bien_id/bien_designation (espaces superflus) puis sépare les
+    lignes exploitables des lignes invalides (bien_id ou désignation
+    manquants). Retourne (df_valides, nombre_de_lignes_invalides).
+    """
+
+    df = df.copy()
+
+    df["bien_id"] = (
+        df["bien_id"]
+        .astype(str)
+        .str.strip()
+        .replace({"nan": None, "": None})
+    )
+
+    df["bien_designation"] = (
+        df["bien_designation"]
+        .astype(str)
+        .str.strip()
+        .replace({"nan": None, "": None})
+    )
+
+    valid_mask = (
+        df["bien_id"].notna()
+        & df["bien_designation"].notna()
+    )
+
+    invalid_rows = int((~valid_mask).sum())
+
+    return df[valid_mask], invalid_rows
+
+
+def check_no_duplicate_bien_id(df: pd.DataFrame):
+
+    duplicated_ids = (
+        df["bien_id"][df["bien_id"].duplicated()]
+        .unique()
+        .tolist()
+    )
+
+    if duplicated_ids:
+
+        shown = duplicated_ids[:20]
+        suffix = (
+            f" (et {len(duplicated_ids) - 20} de plus)"
+            if len(duplicated_ids) > 20
+            else ""
+        )
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "bien_id en doublon dans le fichier : "
+                f"{', '.join(shown)}{suffix}"
+            )
+        )
+
+
 @router.post("/")
 async def import_csv(
     file: UploadFile = File(...),
@@ -99,9 +165,20 @@ async def import_csv(
 
     content = await file.read()
 
-    df = parse_inventory_csv(
-        content.decode("utf-8")
-    )
+    try:
+        raw_text = content.decode("utf-8")
+
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Encodage de fichier invalide : UTF-8 attendu"
+        )
+
+    df = parse_inventory_csv(raw_text)
+
+    df, invalid_rows = clean_inventory_rows(df)
+
+    check_no_duplicate_bien_id(df)
 
     total_rows = len(df)
 
@@ -135,10 +212,8 @@ async def import_csv(
         )
 
         asset = Asset(
-            bien_id=str(row["bien_id"]),
-            bien_designation=str(
-                row["bien_designation"]
-            ),
+            bien_id=row["bien_id"],
+            bien_designation=row["bien_designation"],
             bien_amort_date_sortie=(
                 None
                 if pd.isna(
@@ -161,7 +236,8 @@ async def import_csv(
         "filename": file.filename,
         "total_rows": total_rows,
         "active_assets": active_assets,
-        "excluded_assets": excluded_assets
+        "excluded_assets": excluded_assets,
+        "invalid_rows": invalid_rows
     }
 
 @router.get("/assets-count")
@@ -213,14 +289,21 @@ def active_assets(
 @router.get("/assets/search")
 def search_assets(
     q: str,
+    page: int = 1,
+    size: int = 100,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    offset = (page - 1) * size
+
     results = (
         db.query(Asset)
         .filter(
             Asset.bien_designation.contains(q)
         )
+        .offset(offset)
+        .limit(size)
         .all()
     )
 

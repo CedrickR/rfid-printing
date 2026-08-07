@@ -1,11 +1,15 @@
 import os
 
 from fastapi import FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import Base
 from app.database import engine
+
+from app.auth import WebAuthRequired
 
 # Chargement des modèles
 from app.models.user_model import User
@@ -50,6 +54,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Redirige vers la page de connexion quand une page Jinja2 est visitée
+# sans session cookie valide (voir app.auth.get_current_user_web)
+@app.exception_handler(WebAuthRequired)
+def handle_web_auth_required(request: Request, exc: WebAuthRequired):
+
+    return RedirectResponse(
+        url=f"/login?next={exc.next_path}",
+        status_code=303
+    )
 
 
 # Création des tables SQLite

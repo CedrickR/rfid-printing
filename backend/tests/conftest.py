@@ -137,6 +137,27 @@ def admin_user():
 
 
 @pytest.fixture
+def standard_user():
+
+    db = TestingSessionLocal()
+
+    user = User(
+        username="employe",
+        password_hash=hash_password(
+            "Employe123!"
+        ),
+        role="employe"
+    )
+
+    db.add(user)
+    db.commit()
+
+    yield user
+
+    db.close()
+
+
+@pytest.fixture
 def client():
 
     with TestClient(app) as client:

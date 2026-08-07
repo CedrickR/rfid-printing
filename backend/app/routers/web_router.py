@@ -15,13 +15,20 @@ from app.models.asset_model import Asset
 from app.models.import_model import Import
 from app.models.print_job_model import PrintJob
 from app.models.print_history_model import PrintHistory
-from app.models.print_job_model import PrintJob
 from app.models.print_job_line_model import PrintJobLine
 
-from datetime import UTC
-from datetime import datetime
+from app.auth import authenticate_user
+from app.auth import create_access_token
+from app.auth import get_current_user_web
+from app.auth import require_manager
+from app.auth import set_auth_cookie
+from app.auth import clear_auth_cookie
 
-from app.services.cmd_generator import CommandGenerator
+from app.services.print_job_service import (
+    PrintJobService,
+    EmptyPrintJobError,
+    AlreadyGeneratedError,
+)
 
 router = APIRouter(
     tags=["Web"]
@@ -32,9 +39,81 @@ templates = Jinja2Templates(
 )
 
 
+@router.get("/login")
+def login_page(
+    request: Request,
+    next: str = "/dashboard"
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "error": None,
+            "next": next
+        }
+    )
+
+
+@router.post("/login")
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form(default="/dashboard"),
+    db: Session = Depends(get_db)
+):
+
+    user = authenticate_user(db, username, password)
+
+    if not user:
+
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Identifiant ou mot de passe invalide.",
+                "next": next
+            },
+            status_code=401
+        )
+
+    token = create_access_token(
+        {
+            "sub": user.username,
+            "role": user.role
+        }
+    )
+
+    redirect_to = next if next.startswith("/") else "/dashboard"
+
+    response = RedirectResponse(
+        url=redirect_to,
+        status_code=303
+    )
+
+    set_auth_cookie(response, token)
+
+    return response
+
+
+@router.get("/logout")
+def logout():
+
+    response = RedirectResponse(
+        url="/login",
+        status_code=303
+    )
+
+    clear_auth_cookie(response)
+
+    return response
+
+
 @router.get("/dashboard")
 def dashboard(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -78,6 +157,7 @@ def assets(
     q: str = Query(default=""),
     active_only: bool = False,
     page: int = 1,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -126,6 +206,7 @@ def assets(
 @router.post("/jobs/create")
 def create_job_from_inventory(
     asset_ids: list[int] = Form(default=[]),
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
     """
@@ -156,7 +237,7 @@ def create_job_from_inventory(
         )
 
     job = PrintJob(
-        created_by="web_user",
+        created_by=current_user["sub"],
         labels_count=len(assets),
         status="PENDING"
     )
@@ -185,6 +266,7 @@ def create_job_from_inventory(
 def job_detail(
     request: Request,
     job_id: int,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -238,6 +320,7 @@ def job_detail(
 @router.get("/jobs")
 def jobs(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -260,6 +343,7 @@ def jobs(
 @router.get("/history")
 def history(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -282,8 +366,11 @@ def history(
 @router.post("/jobs/{job_id}/generate")
 def generate_job(
     job_id: int,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     job = (
         db.query(PrintJob)
@@ -300,51 +387,26 @@ def generate_job(
             detail="Lot introuvable"
         )
 
-    lines = (
-        db.query(PrintJobLine)
-        .filter(
-            PrintJobLine.job_id == job.id
-        )
-        .all()
-    )
-
-    assets = []
-
-    for line in lines:
-
-        asset = (
-            db.query(Asset)
-            .filter(
-                Asset.id == line.asset_id
-            )
-            .first()
+    try:
+        PrintJobService.generate(
+            db,
+            job,
+            current_user["sub"]
         )
 
-        if asset:
-            assets.append(asset)
+    except EmptyPrintJobError:
 
-    generator = CommandGenerator()
+        return RedirectResponse(
+            url=f"/jobs/{job.id}?error=empty",
+            status_code=303
+        )
 
-    filename = generator.generate(
-        job_id=job.id,
-        assets=assets
-    )
+    except AlreadyGeneratedError:
 
-    job.generated_file = filename
-    job.generated_at = datetime.now(UTC)
-    job.status = "GENERATED"
-
-    history = PrintHistory(
-        job_id=job.id,
-        username="web_user",
-        action="GENERATED",
-        file_name=filename,
-        labels_count=job.labels_count
-    )
-
-    db.add(history)
-
-    db.commit()
+        return RedirectResponse(
+            url=f"/jobs/{job.id}?error=already_generated",
+            status_code=303
+        )
 
     return RedirectResponse(
         url=f"/jobs/{job.id}",

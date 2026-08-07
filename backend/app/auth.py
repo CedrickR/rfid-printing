@@ -11,10 +11,15 @@ from passlib.context import CryptContext
 
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi.security import HTTPBearer
 from fastapi.security import HTTPAuthorizationCredentials
 
+from app.models.user_model import User
+
 security = HTTPBearer()
+
+COOKIE_NAME = "access_token"
 
 
 def _load_secret_key() -> str:
@@ -57,6 +62,23 @@ def verify_password(
         plain_password,
         hashed_password
     )
+
+
+def authenticate_user(db, username: str, password: str):
+
+    user = (
+        db.query(User)
+        .filter(User.username == username)
+        .first()
+    )
+
+    if not user:
+        return None
+
+    if not verify_password(password, user.password_hash):
+        return None
+
+    return user
 
 
 def create_access_token(data: dict):
@@ -112,3 +134,48 @@ def require_manager(user):
             status_code=403,
             detail="Accès refusé"
         )
+
+
+class WebAuthRequired(Exception):
+    """
+    Levée par get_current_user_web quand aucune session cookie valide
+    n'est présente. Un handler dédié (voir main.py) la transforme en
+    redirection vers /login, adaptée à une navigation par pages plutôt
+    qu'à un client API.
+    """
+
+    def __init__(self, next_path: str = "/dashboard"):
+        self.next_path = next_path
+
+
+def get_current_user_web(request: Request):
+
+    token = request.cookies.get(COOKIE_NAME)
+
+    payload = decode_token(token) if token else None
+
+    if not payload:
+        raise WebAuthRequired(next_path=request.url.path)
+
+    return payload
+
+
+def set_auth_cookie(response, token: str):
+
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=os.environ.get("COOKIE_SECURE", "false").lower() == "true",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+def clear_auth_cookie(response):
+
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/",
+    )

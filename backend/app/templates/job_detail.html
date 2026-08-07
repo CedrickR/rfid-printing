@@ -6,6 +6,16 @@
     Lot #{{ job.id }}
 </h1>
 
+{% if request.query_params.get('error') == 'already_generated' %}
+<div class="alert alert-warning">
+    Ce lot a déjà été généré. Utilisez la réimpression si nécessaire.
+</div>
+{% elif request.query_params.get('error') == 'empty' %}
+<div class="alert alert-warning">
+    Le lot est vide, impossible de générer le fichier.
+</div>
+{% endif %}
+
 <div class="card shadow mb-4">
 
     <div class="card-header py-3">

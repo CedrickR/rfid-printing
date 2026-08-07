@@ -1,5 +1,3 @@
-from datetime import UTC
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -14,14 +12,17 @@ from app.auth import require_manager
 from app.database import get_db
 
 from app.models.asset_model import Asset
-from app.models.print_history_model import PrintHistory
 from app.models.print_job_line_model import PrintJobLine
 from app.models.print_job_model import PrintJob
 
 from app.schemas import CreatePrintJobRequest
 
-from app.services.cmd_generator import CommandGenerator
 from app.services.reprint_service import ReprintService
+from app.services.print_job_service import (
+    PrintJobService,
+    EmptyPrintJobError,
+    AlreadyGeneratedError,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -248,44 +249,21 @@ def generate_print_job_file(
             detail="Lot introuvable"
         )
 
-    lines = (
-        db.query(PrintJobLine)
-        .filter(
-            PrintJobLine.job_id == job.id
+    try:
+        filename = PrintJobService.generate(
+            db,
+            job,
+            current_user["sub"]
         )
-        .all()
-    )
 
-    if not lines:
+    except EmptyPrintJobError:
 
         raise HTTPException(
             status_code=400,
             detail="Le lot est vide"
         )
 
-    assets = []
-
-    for line in lines:
-
-        asset = (
-            db.query(Asset)
-            .filter(
-                Asset.id == line.asset_id
-            )
-            .first()
-        )
-
-        if asset:
-            assets.append(asset)
-
-    already_generated = (
-        ReprintService.has_generated_before(
-            db,
-            job.id
-        )
-    )
-
-    if already_generated:
+    except AlreadyGeneratedError:
 
         raise HTTPException(
             status_code=409,
@@ -294,30 +272,6 @@ def generate_print_job_file(
                 "Utilisez la réimpression."
             )
         )
-
-    generator = CommandGenerator()
-
-    filename = generator.generate(
-        job_id=job.id,
-        assets=assets
-    )
-
-    job.generated_file = filename
-    job.generated_at = datetime.now(UTC)
-    job.status = "GENERATED"
-
-    history = PrintHistory(
-        job_id=job.id,
-        username=current_user["sub"],
-        action="GENERATED",
-        file_name=filename,
-        labels_count=job.labels_count
-    )
-
-    db.add(history)
-
-    db.commit()
-    db.refresh(job)
 
     return {
         "job_id": job.id,

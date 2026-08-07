@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.auth import require_manager
 from app.database import get_db
 
 from app.models.asset_model import Asset
@@ -90,6 +91,7 @@ def create_print_job(
 
 @router.get("/jobs")
 def get_jobs(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -113,6 +115,7 @@ def get_jobs(
 @router.get("/jobs/{job_id}")
 def get_job(
     job_id: int,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -177,11 +180,14 @@ def get_job(
 @router.delete("/jobs/{job_id}")
 def delete_job(
     job_id: int,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Suppression d'un lot
     """
+
+    require_manager(current_user)
 
     job = (
         db.query(PrintJob)
@@ -224,6 +230,8 @@ def generate_print_job_file(
     """
     Génération du fichier CMD
     """
+
+    require_manager(current_user)
 
     job = (
         db.query(PrintJob)
@@ -321,6 +329,7 @@ def generate_print_job_file(
 @router.get("/jobs/{job_id}/file")
 def download_job_file(
     job_id: int,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 

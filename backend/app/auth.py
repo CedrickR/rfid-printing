@@ -1,5 +1,8 @@
-from datetime import datetime
-from datetime import timedelta
+import os
+import secrets
+import warnings
+
+from datetime import datetime, timedelta, UTC
 
 from jose import JWTError
 from jose import jwt
@@ -11,13 +14,27 @@ from fastapi import HTTPException
 from fastapi.security import HTTPBearer
 from fastapi.security import HTTPAuthorizationCredentials
 
-from datetime import datetime, timedelta, UTC
-
-datetime.now(UTC)
-
 security = HTTPBearer()
 
-SECRET_KEY = "SPRINT1_RFID_SECRET_KEY"
+
+def _load_secret_key() -> str:
+
+    env_key = os.environ.get("RFID_SECRET_KEY")
+
+    if env_key:
+        return env_key
+
+    warnings.warn(
+        "RFID_SECRET_KEY n'est pas défini : une clé aléatoire temporaire "
+        "est utilisée pour cette exécution. Les jetons émis ne survivront "
+        "pas à un redémarrage. Définissez RFID_SECRET_KEY en production.",
+        stacklevel=2
+    )
+
+    return secrets.token_hex(32)
+
+
+SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60

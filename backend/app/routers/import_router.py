@@ -133,6 +133,7 @@ async def import_csv(
 
 @router.get("/assets-count")
 def assets_count(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     return {
@@ -143,6 +144,7 @@ def assets_count(
 def get_assets(
     page: int = 1,
     size: int = 100,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -160,6 +162,7 @@ def get_assets(
 
 @router.get("/assets/active")
 def active_assets(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     count = (
@@ -177,6 +180,7 @@ def active_assets(
 @router.get("/assets/search")
 def search_assets(
     q: str,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     results = (

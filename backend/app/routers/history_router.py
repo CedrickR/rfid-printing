@@ -18,6 +18,7 @@ router = APIRouter(
 
 @router.get("/")
 def get_history(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -54,6 +55,7 @@ def get_my_history(
 @router.get("/{job_id}")
 def get_job_history(
     job_id: int,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 

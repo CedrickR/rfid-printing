@@ -56,14 +56,14 @@ délimiteur (voir `parse_inventory_csv`).
 
 *(mis à jour pour cibler l'UI Jinja2, `frontend/` étant retiré — voir P0-3)*
 
-| # | Action | Fichiers | Effort |
-|---|--------|----------|--------|
-| P1-1 | ~~Décider de l'interface cible unique~~ → tranché : Jinja2 (voir « Décisions actées ») | — | — |
-| P1-2 | La pagination existe déjà côté Jinja2 (`page`/`page_size=10` dans `web_router.assets`) — vérifier qu'elle couvre bien la sélection multi-pages pour un lot d'impression (conserver la sélection cochée d'une page à l'autre) | `backend/app/routers/web_router.py`, `backend/app/templates/assets.html` | M |
-| P1-3 | Ajouter une limite/pagination sur `GET /api/import/assets/search` (endpoint API, toujours utilisé en consultation directe / intégrations) | `backend/app/routers/import_router.py` | S |
-| P1-4 | Étoffer les filtres de sélection Jinja2 (`active_only` existe déjà) : ajouter un filtre par plage de date de sortie | `backend/app/routers/web_router.py`, `backend/app/templates/assets.html` | M |
-| P1-5 | Ajouter un aperçu du CSV avant validation de l'import (colonnes détectées, nombre de lignes actives/exclues) — le parcours utilisateur documenté prévoit un « contrôle du fichier » absent du code actuel | `backend/app/routers/web_router.py` ou `import_router.py` + un template dédié | M |
-| P1-6 | Renforcer la validation du CSV : encodage non-UTF-8, colonnes en trop, doublons de `bien_id`, lignes vides — remonter des erreurs explicites plutôt que l'exception pandas brute | `backend/app/routers/import_router.py` | M |
+| # | Action | Fichiers | Effort | Statut |
+|---|--------|----------|--------|--------|
+| P1-1 | ~~Décider de l'interface cible unique~~ → tranché : Jinja2 (voir « Décisions actées ») | — | — | ✅ fait |
+| P1-2 | Persister la sélection de biens d'une page à l'autre (localStorage + injection de champs cachés au submit) | `backend/app/templates/assets.html` | M | ✅ fait |
+| P1-3 | Ajouter une limite/pagination sur `GET /api/import/assets/search` | `backend/app/routers/import_router.py` | S | ✅ fait |
+| P1-4 | Ajouter un filtre par plage de date de sortie (`date_from`/`date_to`) | `backend/app/routers/web_router.py`, `backend/app/templates/assets.html` | M | ✅ fait |
+| P1-5 | Ajouter un aperçu du CSV avant validation de l'import (colonnes détectées, compteurs) | `backend/app/routers/web_router.py`, `backend/app/templates/import.html` | M | ✅ fait — a aussi corrigé un manque : `web_router.py` n'avait **aucune** route d'import après suppression de `frontend/` |
+| P1-6 | Renforcer la validation du CSV : encodage non-UTF-8, `bien_id`/désignation manquants, doublons de `bien_id` | `backend/app/services/import_service.py` | M | ✅ fait |
 
 ---
 
@@ -71,38 +71,41 @@ délimiteur (voir `parse_inventory_csv`).
 
 | # | Action | Fichiers | Effort | Statut |
 |---|--------|----------|--------|--------|
-| P2-1 | Supprimer `legacy_models.py` (doublon exact de `models/user_model.py`) | `backend/app/legacy_models.py` | S | |
-| P2-2 | Déplacer `models/test_history.py` vers `backend/tests/` (fichier de test égaré, actuellement non collecté par pytest) | `backend/app/models/test_history.py` → `backend/tests/` | S | |
+| P2-1 | Supprimer `legacy_models.py` (doublon exact de `models/user_model.py`) | `backend/app/legacy_models.py` | S | ✅ fait |
+| P2-2 | Déplacer `models/test_history.py` vers `backend/tests/` | `backend/app/models/test_history.py` → `backend/tests/` | S | ✅ fait |
 | P2-3 | Nettoyer les imports/déclarations dupliqués en fin de `auth_router.py` | `backend/app/routers/auth_router.py` | S | ✅ fait |
-| P2-4 | Factoriser la génération de fichier CMD dupliquée entre `print_router.generate_print_job_file` et `web_router.generate_job` dans un seul service | `backend/app/services/print_job_service.py` | M | ✅ fait |
-| P2-5 | Supprimer la classe `client(TestClient)` non utilisée dans `conftest.py` | `backend/tests/conftest.py` | S | |
-| P2-6 | Uniformiser `datetime.utcnow()` → `datetime.now(UTC)` dans `import_model.py` | `backend/app/models/import_model.py` | S | |
+| P2-4 | Factoriser la génération de fichier CMD dupliquée entre API et web | `backend/app/services/print_job_service.py` | M | ✅ fait |
+| P2-5 | Supprimer la classe `client(TestClient)` non utilisée dans `conftest.py` | `backend/tests/conftest.py` | S | ✅ fait |
+| P2-6 | Uniformiser `datetime.utcnow()` → `datetime.now(UTC)` dans `import_model.py` | `backend/app/models/import_model.py` | S | ✅ fait |
 | P2-7 | Supprimer `frontend/` (React/Vite) | `frontend/` | S | ✅ fait |
-| P2-8 | Supprimer `backend/app/templates/jobs.zip` (archive égarée dans les templates) | `backend/app/templates/jobs.zip` | S | |
+| P2-8 | Supprimer `backend/app/templates/jobs.zip` (archive égarée dans les templates) | `backend/app/templates/jobs.zip` | S | ✅ fait |
+
+**P0, P1 et P2 sont entièrement traités.**
 
 ---
 
-## P3 — Qualité, infra, maintenabilité
+## P3 — Qualité, infra, maintenabilité (restant)
 
 | # | Action | Fichiers | Effort | Statut |
 |---|--------|----------|--------|--------|
-| P3-1 | Remplacer `migrate_sprint5.py` (ALTER TABLE manuel) par un vrai outil de migration (Alembic) | `backend/app/migrate_sprint5.py` | M | |
+| P3-1 | Remplacer `migrate_sprint5.py` (ALTER TABLE manuel) par un vrai outil de migration (Alembic) | `backend/app/migrate_sprint5.py` | M | à décider — voir note ci-dessous |
 | P3-2 | Figer les versions de dépendances Python (`requirements.txt` avec `==`) | `backend/requirements.txt` | S | `jinja2` ajouté ✅, pin des versions restant à faire |
-| P3-3 | Ajouter un handler d'exception global FastAPI pour un format d'erreur cohérent | `backend/app/main.py` | S | |
-| P3-4 | Compléter les tests manquants : génération CMD (`cmd_generator.py` / `print_job_service.py`), CSRF/role sur les autres routes `web_router` | `backend/tests/` | M | tests login/logout/rôle ajoutés ✅ (`test_web_auth.py`), reste à couvrir |
+| P3-3 | Ajouter un handler d'exception global FastAPI pour un format d'erreur cohérent (JSON pour l'API, page HTML pour l'UI Jinja2) | `backend/app/main.py` | S | |
+| P3-4 | Ajouter des tests pour `cmd_generator.py` / `CommandGenerator` (aucun test direct actuellement, seulement via les routes) | `backend/tests/` | S | tests routes web/API ✅ (nombreux ajouts cette session), reste `cmd_generator.py` isolé |
 | P3-5 | Mettre en place une CI (GitHub Actions) exécutant `pytest` à chaque push/PR | `.github/workflows/` | S | |
+
+**Note sur P3-1 (Alembic)** : pour un outil interne sur SQLite avec un schéma
+qui évolue rarement, Alembic peut être disproportionné. À valider avec vous
+avant de l'ajouter — l'alternative light est de garder des scripts de
+migration ponctuels comme `migrate_sprint5.py`, mais nommés et documentés de
+façon cohérente.
 
 ---
 
-## Ordre d'exécution recommandé
+## État global
 
-1. ~~**P0-1, P0-2, P0-3, P0-4, P0-5, P0-6, P0-7**~~ — fait (sécurité API et
-   UI Jinja2, y compris authentification par cookie, contrôle de rôle,
-   suppression de `frontend/`, factorisation de la génération CMD).
-2. **P1-3** (pagination de la recherche API) et **P1-6** (validation CSV
-   renforcée), rapides et sans dépendance.
-3. **P1-2, P1-4, P1-5** : vérification de la pagination multi-pages,
-   filtres et aperçu CSV côté UI Jinja2.
-4. **P2** restant (P2-1, P2-2, P2-5, P2-6, P2-8) par petites PR
-   indépendantes, sans risque fonctionnel.
-5. **P3** en continu, au fil des autres chantiers.
+Tout le **P0** (sécurité), tout le **P1** (gaps fonctionnels : import CSV
+manquant après suppression du frontend, pagination, sélection multi-pages,
+filtres, validation CSV) et tout le **P2** (nettoyage) sont traités et
+testés (30 tests passent). Il reste uniquement des items **P3** de
+qualité/infra, dont aucun n'est bloquant pour l'usage de l'application.

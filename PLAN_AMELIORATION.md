@@ -84,15 +84,34 @@ délimiteur (voir `parse_inventory_csv`).
 
 ---
 
-## P3 — Qualité, infra, maintenabilité (restant)
+## P3 — Qualité, infra, maintenabilité
 
 | # | Action | Fichiers | Effort | Statut |
 |---|--------|----------|--------|--------|
 | P3-1 | Remplacer `migrate_sprint5.py` (ALTER TABLE manuel) par Alembic | `backend/alembic/`, `backend/app/main.py` | M | ✅ fait |
-| P3-2 | Figer les versions de dépendances Python (`requirements.txt` avec `==`) | `backend/requirements.txt` | S | `jinja2`, `alembic` ajoutés ✅, pin des versions restant à faire |
-| P3-3 | Ajouter un handler d'exception global FastAPI pour un format d'erreur cohérent (JSON pour l'API, page HTML pour l'UI Jinja2) | `backend/app/main.py` | S | |
-| P3-4 | Ajouter des tests pour `cmd_generator.py` / `CommandGenerator` (aucun test direct actuellement, seulement via les routes) | `backend/tests/` | S | tests routes web/API ✅ (nombreux ajouts cette session), reste `cmd_generator.py` isolé |
-| P3-5 | Mettre en place une CI (GitHub Actions) exécutant `pytest` à chaque push/PR | `.github/workflows/` | S | |
+| P3-2 | Figer les versions de dépendances Python (`requirements.txt` avec `==`) | `backend/requirements.txt` | S | ✅ fait — a aussi révélé un bug bloquant (voir note) |
+| P3-3 | Ajouter un handler d'exception global FastAPI pour un format d'erreur cohérent (JSON pour l'API, page HTML pour l'UI Jinja2) | `backend/app/main.py` | S | ✅ fait |
+| P3-4 | Ajouter des tests pour `cmd_generator.py` / `CommandGenerator` | `backend/tests/test_cmd_generator.py` | S | ✅ fait |
+| P3-5 | Mettre en place une CI (GitHub Actions) exécutant `pytest` à chaque push/PR | `.github/workflows/tests.yml` | S | ✅ fait |
+
+**P3-2 — bug bloquant découvert et corrigé.** En testant `requirements.txt`
+sur une installation 100 % neuve (sans aucun venv réutilisé) : `passlib
+1.7.4` est incompatible avec `bcrypt>=4.1` (bug connu upstream), ce qui
+faisait planter `hash_password()`/`verify_password()` avec une `ValueError`
+dès le premier login. Corrigé en épinglant `bcrypt==4.0.1` en plus du
+pin de toutes les dépendances. Un `requirements-dev.txt` (pytest, httpx)
+a aussi été ajouté pour ne pas mélanger dépendances runtime et tests.
+
+**P3-3 — comportement avant/après.** `GET /jobs/999` (lot inexistant)
+renvoyait `{"detail": "Lot introuvable"}` en JSON brut même en visitant la
+page dans un navigateur. Un handler d'exception dédié route désormais les
+erreurs vers du JSON pour `/api/*`/`/auth/*` et vers une page HTML
+(`error.html`, cohérente avec le reste de l'UI) pour les autres routes ;
+un filet de sécurité supplémentaire évite qu'une exception non prévue
+n'expose un traceback au client.
+
+**P3-5 — CI.** `.github/workflows/tests.yml` installe
+`requirements-dev.txt` et lance `pytest` sur chaque push et pull request.
 
 **P3-1 (Alembic) — décision actée.** `migrate_sprint5.py` était un script
 SQLite brut, avec un chemin de base de données codé en dur (indépendant de
@@ -121,8 +140,6 @@ et committer le fichier généré dans `alembic/versions/`.
 
 ## État global
 
-Tout le **P0** (sécurité), tout le **P1** (gaps fonctionnels : import CSV
-manquant après suppression du frontend, pagination, sélection multi-pages,
-filtres, validation CSV) et tout le **P2** (nettoyage) sont traités et
-testés (30 tests passent). Il reste uniquement des items **P3** de
-qualité/infra, dont aucun n'est bloquant pour l'usage de l'application.
+**Tous les items du plan (P0, P1, P2, P3) sont traités.** 40 tests passent,
+vérifiés sur une installation 100 % neuve. Une CI GitHub Actions les
+exécute désormais sur chaque push/PR.

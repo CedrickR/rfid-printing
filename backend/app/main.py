@@ -37,12 +37,14 @@ app = FastAPI(
 )
 
 
-# CORS : origines autorisées pour le frontend (configurable via env)
+# CORS : l'UI Jinja2 est servie en same-origin (pas besoin de CORS).
+# À renseigner via CORS_ALLOWED_ORIGINS uniquement pour d'éventuels
+# clients API externes (intégrations, scripts...).
 allowed_origins = [
     origin.strip()
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173"
+        ""
     ).split(",")
     if origin.strip()
 ]

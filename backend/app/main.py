@@ -1,4 +1,8 @@
 import os
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 
 from fastapi import FastAPI
 from fastapi import Request
@@ -6,18 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.database import Base
-from app.database import engine
-
 from app.auth import WebAuthRequired
-
-# Chargement des modèles
-from app.models.user_model import User
-from app.models.import_model import Import
-from app.models.asset_model import Asset
-from app.models.print_job_model import PrintJob
-from app.models.print_job_line_model import PrintJobLine
-from app.models.print_history_model import PrintHistory
 
 # Routeurs API
 from app.routers.auth_router import router as auth_router
@@ -69,10 +62,14 @@ def handle_web_auth_required(request: Request, exc: WebAuthRequired):
     )
 
 
-# Création des tables SQLite
-Base.metadata.create_all(
-    bind=engine
-)
+# Applique les migrations Alembic (crée le schéma s'il n'existe pas
+# encore, ou le met à niveau sinon). Remplace l'ancien
+# Base.metadata.create_all() : le schéma est désormais versionné dans
+# alembic/versions/ au lieu de scripts de migration ponctuels.
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+command.upgrade(alembic_cfg, "head")
 
 
 # Répertoire des fichiers statiques

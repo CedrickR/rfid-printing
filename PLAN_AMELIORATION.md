@@ -88,17 +88,34 @@ délimiteur (voir `parse_inventory_csv`).
 
 | # | Action | Fichiers | Effort | Statut |
 |---|--------|----------|--------|--------|
-| P3-1 | Remplacer `migrate_sprint5.py` (ALTER TABLE manuel) par un vrai outil de migration (Alembic) | `backend/app/migrate_sprint5.py` | M | à décider — voir note ci-dessous |
-| P3-2 | Figer les versions de dépendances Python (`requirements.txt` avec `==`) | `backend/requirements.txt` | S | `jinja2` ajouté ✅, pin des versions restant à faire |
+| P3-1 | Remplacer `migrate_sprint5.py` (ALTER TABLE manuel) par Alembic | `backend/alembic/`, `backend/app/main.py` | M | ✅ fait |
+| P3-2 | Figer les versions de dépendances Python (`requirements.txt` avec `==`) | `backend/requirements.txt` | S | `jinja2`, `alembic` ajoutés ✅, pin des versions restant à faire |
 | P3-3 | Ajouter un handler d'exception global FastAPI pour un format d'erreur cohérent (JSON pour l'API, page HTML pour l'UI Jinja2) | `backend/app/main.py` | S | |
 | P3-4 | Ajouter des tests pour `cmd_generator.py` / `CommandGenerator` (aucun test direct actuellement, seulement via les routes) | `backend/tests/` | S | tests routes web/API ✅ (nombreux ajouts cette session), reste `cmd_generator.py` isolé |
 | P3-5 | Mettre en place une CI (GitHub Actions) exécutant `pytest` à chaque push/PR | `.github/workflows/` | S | |
 
-**Note sur P3-1 (Alembic)** : pour un outil interne sur SQLite avec un schéma
-qui évolue rarement, Alembic peut être disproportionné. À valider avec vous
-avant de l'ajouter — l'alternative light est de garder des scripts de
-migration ponctuels comme `migrate_sprint5.py`, mais nommés et documentés de
-façon cohérente.
+**P3-1 (Alembic) — décision actée.** `migrate_sprint5.py` était un script
+SQLite brut, avec un chemin de base de données codé en dur (indépendant de
+`DATABASE_URL`) et aucune traçabilité de ce qui était appliqué où — un
+risque réel vu que le nom laissait présager `migrate_sprint6.py`, etc. à
+chaque sprint. Mis en place :
+- `backend/alembic/` (config + `env.py` branché sur `app.database.Base` et
+  `DATABASE_URL`) et une migration `baseline` reflétant l'intégralité du
+  schéma actuel (vérifié : un `autogenerate` après application ne détecte
+  plus aucune différence).
+- `main.py` applique `alembic upgrade head` au démarrage à la place de
+  `Base.metadata.create_all()` : toujours zéro-config à l'usage, mais avec
+  un historique versionné et rejouable.
+- `migrate_sprint5.py` supprimé (son contenu — colonnes `generated_file`/
+  `generated_at` — fait déjà partie de la migration `baseline`).
+
+Pour un futur changement de schéma : modifier les modèles SQLAlchemy puis
+lancer, depuis `backend/` :
+```
+alembic revision --autogenerate -m "description du changement"
+alembic upgrade head
+```
+et committer le fichier généré dans `alembic/versions/`.
 
 ---
 

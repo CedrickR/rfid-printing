@@ -24,6 +24,65 @@ router = APIRouter(
     tags=["Imports"]
 )
 
+REQUIRED_COLUMNS = [
+    "bien_id",
+    "bien_designation",
+    "bien_amort_date_sortie"
+]
+
+# Le point-virgule est le séparateur le plus courant sur les exports
+# Excel FR ; la virgule reste tentée en repli pour les exports "CSV" au
+# sens strict (RFC 4180).
+CANDIDATE_DELIMITERS = [";", ","]
+
+
+def parse_inventory_csv(raw_text: str) -> pd.DataFrame:
+    """
+    Lit un CSV en détectant automatiquement le séparateur (';' ou ',')
+    utilisé : on retient le premier qui fait apparaître toutes les
+    colonnes attendues.
+    """
+
+    last_error = None
+    best_attempt = None
+
+    for delimiter in CANDIDATE_DELIMITERS:
+
+        try:
+            df = pd.read_csv(
+                StringIO(raw_text),
+                sep=delimiter
+            )
+
+        except Exception as e:
+            last_error = e
+            continue
+
+        missing_columns = [
+            col
+            for col in REQUIRED_COLUMNS
+            if col not in df.columns
+        ]
+
+        if not missing_columns:
+            return df
+
+        if best_attempt is None:
+            best_attempt = (df, missing_columns)
+
+    if best_attempt is not None:
+        df, missing_columns = best_attempt
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"Colonnes manquantes : {', '.join(missing_columns)}"
+        )
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Erreur lecture CSV : {str(last_error)}"
+    )
+
 
 @router.post("/")
 async def import_csv(
@@ -40,35 +99,9 @@ async def import_csv(
 
     content = await file.read()
 
-    try:
-        df = pd.read_csv(
-            StringIO(content.decode("utf-8")),
-            sep=";"
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Erreur lecture CSV : {str(e)}"
-        )
-
-    required_columns = [
-        "bien_id",
-        "bien_designation",
-        "bien_amort_date_sortie"
-    ]
-
-    missing_columns = [
-        col
-        for col in required_columns
-        if col not in df.columns
-    ]
-
-    if missing_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Colonnes manquantes : {', '.join(missing_columns)}"
-        )
+    df = parse_inventory_csv(
+        content.decode("utf-8")
+    )
 
     total_rows = len(df)
 

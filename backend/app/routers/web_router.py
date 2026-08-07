@@ -295,6 +295,8 @@ def assets(
     request: Request,
     q: str = Query(default=""),
     active_only: bool = False,
+    date_from: str = Query(default=""),
+    date_to: str = Query(default=""),
     page: int = 1,
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
@@ -314,6 +316,21 @@ def assets(
 
         query = query.filter(
             Asset.is_active == True
+        )
+
+    # bien_amort_date_sortie est stockée en texte ISO (YYYY-MM-DD) : la
+    # comparaison lexicographique suffit, et exclut naturellement les
+    # biens actifs (valeur NULL) du filtre.
+    if date_from:
+
+        query = query.filter(
+            Asset.bien_amort_date_sortie >= date_from
+        )
+
+    if date_to:
+
+        query = query.filter(
+            Asset.bien_amort_date_sortie <= date_to
         )
 
     page_size = 10
@@ -336,6 +353,8 @@ def assets(
             "assets": assets_list,
             "q": q,
             "active_only": active_only,
+            "date_from": date_from,
+            "date_to": date_to,
             "page": page,
             "total": total,
             "page_size": page_size

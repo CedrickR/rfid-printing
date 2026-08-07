@@ -25,14 +25,14 @@
 
             <input
                 type="text"
-                class="form-control mr-3"
-                style="min-width: 300px;"
+                class="form-control mr-3 mb-2"
+                style="min-width: 260px;"
                 name="q"
                 placeholder="Rechercher une désignation"
                 value="{{ q }}"
             >
 
-            <div class="form-check mr-3">
+            <div class="form-check mr-3 mb-2">
 
                 <input
                     class="form-check-input"
@@ -49,7 +49,29 @@
 
             </div>
 
-            <button type="submit" class="btn btn-primary">
+            <label class="mr-2 mb-2" for="date_from">
+                Sortie du
+            </label>
+            <input
+                type="date"
+                class="form-control mr-3 mb-2"
+                id="date_from"
+                name="date_from"
+                value="{{ date_from }}"
+            >
+
+            <label class="mr-2 mb-2" for="date_to">
+                au
+            </label>
+            <input
+                type="date"
+                class="form-control mr-3 mb-2"
+                id="date_to"
+                name="date_to"
+                value="{{ date_to }}"
+            >
+
+            <button type="submit" class="btn btn-primary mb-2">
                 <i class="fas fa-search fa-sm"></i> Rechercher
             </button>
 
@@ -61,7 +83,7 @@
 
 <!-- Création du lot -->
 
-<form method="post" action="/jobs/create">
+<form method="post" action="/jobs/create" id="create-job-form">
 
     <div class="card shadow mb-4">
 
@@ -69,11 +91,19 @@
 
             <h6 class="m-0 font-weight-bold text-primary">
                 Biens
+                <span class="badge badge-primary ml-2">
+                    <span id="selected-count">0</span> sélectionné(s) au total
+                </span>
             </h6>
 
-            <button type="submit" class="btn btn-success btn-sm">
-                <i class="fas fa-plus fa-sm"></i> Créer un lot d'impression
-            </button>
+            <div>
+                <button type="button" id="clear-selection" class="btn btn-outline-secondary btn-sm">
+                    Vider la sélection
+                </button>
+                <button type="submit" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus fa-sm"></i> Créer un lot d'impression
+                </button>
+            </div>
 
         </div>
 
@@ -155,11 +185,13 @@
 
     <ul class="pagination">
 
+        {% set base_qs = "q=" ~ (q | urlencode) ~ ("&active_only=true" if active_only else "") ~ ("&date_from=" ~ date_from if date_from else "") ~ ("&date_to=" ~ date_to if date_to else "") %}
+
         {% if page > 1 %}
 
         <li class="page-item">
 
-            <a class="page-link" href="/assets?page={{ page - 1 }}&q={{ q }}{% if active_only %}&active_only=true{% endif %}">
+            <a class="page-link" href="/assets?page={{ page - 1 }}&{{ base_qs }}">
                 Précédent
             </a>
 
@@ -179,7 +211,7 @@
 
         <li class="page-item">
 
-            <a class="page-link" href="/assets?page={{ page + 1 }}&q={{ q }}{% if active_only %}&active_only=true{% endif %}">
+            <a class="page-link" href="/assets?page={{ page + 1 }}&{{ base_qs }}">
                 Suivant
             </a>
 
@@ -190,5 +222,76 @@
     </ul>
 
 </nav>
+
+<script>
+(function () {
+
+    var STORAGE_KEY = "rfid_selected_assets";
+
+    function getSelected() {
+        try {
+            return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"));
+        } catch (e) {
+            return new Set();
+        }
+    }
+
+    function setSelected(selected) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected)));
+    }
+
+    function updateCount() {
+        document.getElementById("selected-count").textContent = getSelected().size;
+    }
+
+    var checkboxes = document.querySelectorAll('input[name="asset_ids"]');
+    var selected = getSelected();
+
+    checkboxes.forEach(function (checkbox) {
+
+        if (selected.has(checkbox.value)) {
+            checkbox.checked = true;
+        }
+
+        checkbox.addEventListener("change", function () {
+            var current = getSelected();
+            if (checkbox.checked) {
+                current.add(checkbox.value);
+            } else {
+                current.delete(checkbox.value);
+            }
+            setSelected(current);
+            updateCount();
+        });
+    });
+
+    updateCount();
+
+    document.getElementById("clear-selection").addEventListener("click", function () {
+        localStorage.removeItem(STORAGE_KEY);
+        checkboxes.forEach(function (checkbox) { checkbox.checked = false; });
+        updateCount();
+    });
+
+    document.getElementById("create-job-form").addEventListener("submit", function (event) {
+
+        var current = getSelected();
+        var onThisPage = new Set(Array.from(checkboxes).map(function (c) { return c.value; }));
+
+        current.forEach(function (id) {
+            if (!onThisPage.has(id)) {
+                var hidden = document.createElement("input");
+                hidden.type = "hidden";
+                hidden.name = "asset_ids";
+                hidden.value = id;
+                event.target.appendChild(hidden);
+            }
+        });
+
+        localStorage.removeItem(STORAGE_KEY);
+    });
+
+})();
+</script>
 
 {% endblock %}

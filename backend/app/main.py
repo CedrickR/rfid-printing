@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -6,11 +7,16 @@ from alembic.config import Config
 
 from fastapi import FastAPI
 from fastapi import Request
+from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app.auth import WebAuthRequired
+
+logger = logging.getLogger("rfid_printing")
 
 # Routeurs API
 from app.routers.auth_router import router as auth_router
@@ -59,6 +65,70 @@ def handle_web_auth_required(request: Request, exc: WebAuthRequired):
     return RedirectResponse(
         url=f"/login?next={exc.next_path}",
         status_code=303
+    )
+
+
+error_templates = Jinja2Templates(directory="app/templates")
+
+
+def _is_api_route(request: Request) -> bool:
+
+    path = request.url.path
+
+    return path.startswith("/api/") or path.startswith("/auth/")
+
+
+# Format d'erreur cohérent : JSON pour l'API (comportement par défaut de
+# FastAPI), page HTML à l'identique du reste de l'UI pour les pages
+# Jinja2 (qui, sans ce handler, recevaient elles aussi du JSON brut).
+@app.exception_handler(FastAPIHTTPException)
+async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
+
+    if _is_api_route(request):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers
+        )
+
+    return error_templates.TemplateResponse(
+        request=request,
+        name="error.html",
+        context={
+            "status_code": exc.status_code,
+            "detail": exc.detail
+        },
+        status_code=exc.status_code
+    )
+
+
+# Filet de sécurité pour toute exception non prévue : jamais de
+# traceback exposé au client, toujours tracée côté serveur.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+
+    logger.exception(
+        "Erreur non gérée sur %s %s",
+        request.method,
+        request.url.path
+    )
+
+    detail = "Une erreur inattendue est survenue."
+
+    if _is_api_route(request):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": detail}
+        )
+
+    return error_templates.TemplateResponse(
+        request=request,
+        name="error.html",
+        context={
+            "status_code": 500,
+            "detail": detail
+        },
+        status_code=500
     )
 
 

@@ -293,3 +293,63 @@ def test_import_csv_missing_source_column_is_reported(client, admin_user):
 
     assert response.status_code == 400
     assert "sortie" in response.json()["detail"]
+
+
+def test_import_csv_handles_real_export_format(client, admin_user):
+    """
+    Reproduit le format réel du logiciel de gestion d'inventaire :
+    délimiteur virgule, BOM UTF-8 en tête de fichier, champs entre
+    guillemets, et une quarantaine de colonnes non utilisées.
+    """
+
+    token = _login(client)
+
+    header = (
+        "numero,libelle,date_achat,valeur_achat,sortie,etat,"
+        "gestion_libelle,fournisseur_libelle,nature_libelle,"
+        "compte_libelle,local_libelle\n"
+    )
+
+    rows = (
+        '19570001,"CASIER RAYONNAGE 6 TABLETTES",1957-06-14,2.36,,'
+        'valide,"GESTION GA0","YA CHAUVIN","CASIER DE TRI",'
+        '"MOBILIER DE BUREAU","021-ENTREPOT"\n'
+        '19590002,"CASIER SUPERPOSABLE REF 8261",1959-04-04,17.86,'
+        '2024-10-07,sorti,"GESTION GA0","Y.A CHAUVIN","CASIER DE TRI",'
+        '"MOBILIER DE BUREAU",\n'
+    )
+
+    csv_content = ("﻿" + header + rows).encode("utf-8")
+
+    response = client.post(
+        "/api/import/",
+        files={
+            "file": ("export.csv", csv_content, "text/csv")
+        },
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total_rows"] == 2
+    assert data["active_assets"] == 1
+    assert data["excluded_assets"] == 1
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assets = {a["bien_id"]: a for a in assets_response.json()}
+
+    # Le numéro ne doit pas être corrompu par le BOM ni par la
+    # conversion numérique (ex. "19570001.0")
+    assert "19570001" in assets
+    assert assets["19570001"]["is_active"] is True
+    assert assets["19570001"]["bien_designation"] == (
+        "CASIER RAYONNAGE 6 TABLETTES"
+    )
+    assert assets["19590002"]["is_active"] is False
+    assert assets["19590002"]["bien_amort_date_sortie"] == "2024-10-07"

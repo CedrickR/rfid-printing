@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -42,6 +43,12 @@ from app.services.import_service import (
     MissingColumnsError,
     CsvReadError,
     DuplicateBienIdError,
+)
+from app.services.cmd_template_service import CmdTemplateService
+from app.services.cmd_generator import (
+    CommandGenerator,
+    ASSET_PLACEHOLDERS,
+    JOB_PLACEHOLDERS,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -199,6 +206,126 @@ def reset_database(
         url="/dashboard?reset=1",
         status_code=303
     )
+
+
+def _sample_asset_for_preview(db: Session):
+    """
+    Bien réel pour l'aperçu du gabarit si l'inventaire n'est pas vide,
+    sinon un bien fictif pour que tous les placeholders restent
+    visibles même sur une base vide.
+    """
+
+    asset = db.query(Asset).first()
+
+    if asset:
+        return asset
+
+    return SimpleNamespace(
+        bien_id="EXEMPLE001",
+        bien_designation="Bien d'exemple",
+        bien_amort_date_sortie=None,
+        is_active=True,
+        local_numero="00000001",
+        immeuble_libelle="IMMEUBLE EXEMPLE",
+        niveau_libelle="NIVEAU EXEMPLE",
+        local_libelle="LOCAL EXEMPLE"
+    )
+
+
+@router.get("/settings/cmd-template")
+def cmd_template_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    template = CmdTemplateService.get_current(db)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="cmd_template.html",
+        context={
+            "header_template": template.header_template,
+            "line_template": template.line_template,
+            "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
+            "job_placeholders": sorted(JOB_PLACEHOLDERS.keys()),
+            "error": None
+        }
+    )
+
+
+@router.post("/settings/cmd-template")
+def cmd_template_update(
+    request: Request,
+    header_template: str = Form(...),
+    line_template: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    if not line_template.strip():
+
+        return templates.TemplateResponse(
+            request=request,
+            name="cmd_template.html",
+            context={
+                "header_template": header_template,
+                "line_template": line_template,
+                "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
+                "job_placeholders": sorted(JOB_PLACEHOLDERS.keys()),
+                "error": "Le gabarit de ligne ne peut pas être vide."
+            },
+            status_code=400
+        )
+
+    CmdTemplateService.update(
+        db,
+        header_template,
+        line_template,
+        current_user["sub"]
+    )
+
+    logger.warning(
+        "Gabarit CMD modifié par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/settings/cmd-template?saved=1",
+        status_code=303
+    )
+
+
+@router.post("/settings/cmd-template/preview")
+def cmd_template_preview(
+    header_template: str = Form(...),
+    line_template: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    sample_asset = _sample_asset_for_preview(db)
+
+    generator = CommandGenerator()
+
+    return {
+        "header": generator.render_template(
+            header_template,
+            JOB_PLACEHOLDERS,
+            42
+        ),
+        "line": generator.render_template(
+            line_template,
+            ASSET_PLACEHOLDERS,
+            sample_asset
+        )
+    }
 
 
 def _import_error_message(exc: Exception) -> str:

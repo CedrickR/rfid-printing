@@ -10,7 +10,7 @@ def _login_and_seed(client):
     )
 
     csv_content = (
-        "bien_id;bien_designation;bien_amort_date_sortie\n"
+        "numero;libelle;sortie\n"
         "1001;PC actif;\n"
         "1002;Ecran sorti tot;2024-01-15\n"
         "1003;Imprimante sortie tard;2024-12-01\n"

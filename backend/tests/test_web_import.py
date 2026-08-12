@@ -23,7 +23,7 @@ def test_import_preview_does_not_write_to_db(client, admin_user):
     _login(client)
 
     csv_content = (
-        "bien_id;bien_designation;bien_amort_date_sortie\n"
+        "numero;libelle;sortie\n"
         "1001;PC Portable;\n"
         "1002;Ecran;2024-06-01\n"
     )
@@ -40,7 +40,7 @@ def test_import_preview_does_not_write_to_db(client, admin_user):
     assert data["total_rows"] == 2
     assert data["active_assets"] == 1
     assert data["excluded_assets"] == 1
-    assert "bien_id" in data["columns"]
+    assert "numero" in data["columns"]
 
     assets_response = client.get(
         "/api/import/assets",
@@ -67,7 +67,7 @@ def test_import_submit_creates_assets(client, admin_user):
     _login(client)
 
     csv_content = (
-        "bien_id;bien_designation;bien_amort_date_sortie\n"
+        "numero;libelle;sortie\n"
         "1001;PC Portable;\n"
     )
 
@@ -95,7 +95,7 @@ def test_import_submit_shows_error_on_duplicate(client, admin_user):
     _login(client)
 
     csv_content = (
-        "bien_id;bien_designation;bien_amort_date_sortie\n"
+        "numero;libelle;sortie\n"
         "1001;PC;\n"
         "1001;PC bis;\n"
     )

@@ -6,11 +6,18 @@ import pandas as pd
 from app.models.asset_model import Asset
 from app.models.import_model import Import
 
-REQUIRED_COLUMNS = [
-    "bien_id",
-    "bien_designation",
-    "bien_amort_date_sortie"
-]
+# Le fichier vient tel quel du logiciel de gestion d'inventaire : seules
+# ces 3 colonnes sont exploitées, le reste est ignoré. On les fait
+# correspondre à nos champs internes (bien_id, bien_designation,
+# bien_amort_date_sortie), inchangés par ailleurs (déjà utilisés partout
+# dans le modèle, les routes et les templates).
+SOURCE_COLUMN_MAP = {
+    "numero": "bien_id",
+    "libelle": "bien_designation",
+    "sortie": "bien_amort_date_sortie"
+}
+
+REQUIRED_COLUMNS = list(SOURCE_COLUMN_MAP.keys())
 
 # Le point-virgule est le séparateur le plus courant sur les exports
 # Excel FR ; la virgule reste tentée en repli pour les exports "CSV" au
@@ -53,10 +60,14 @@ class ImportService:
             raise InvalidEncodingError()
 
     @staticmethod
-    def parse(raw_text: str) -> pd.DataFrame:
+    def parse(raw_text: str):
         """
         Détecte automatiquement le séparateur (';' ou ',') : on retient
-        le premier qui fait apparaître toutes les colonnes attendues.
+        le premier qui fait apparaître les 3 colonnes attendues
+        (numero/libelle/sortie). Retourne (df, colonnes_détectées) où le
+        df est déjà ramené à nos noms de champs internes (bien_id,
+        bien_designation, bien_amort_date_sortie) et purgé des colonnes
+        non utilisées.
         """
 
         last_error = None
@@ -68,13 +79,13 @@ class ImportService:
                 df = pd.read_csv(
                     StringIO(raw_text),
                     sep=delimiter,
-                    # bien_id/bien_designation en texte : évite qu'une
-                    # valeur manquante ailleurs dans la colonne ne fasse
+                    # numero/libelle en texte : évite qu'une valeur
+                    # manquante ailleurs dans la colonne ne fasse
                     # basculer des identifiants numériques en flottant
                     # (ex. "1001.0").
                     dtype={
-                        "bien_id": str,
-                        "bien_designation": str
+                        "numero": str,
+                        "libelle": str
                     }
                 )
 
@@ -89,7 +100,16 @@ class ImportService:
             ]
 
             if not missing_columns:
-                return df
+
+                detected_columns = df.columns.tolist()
+
+                df = (
+                    df
+                    .rename(columns=SOURCE_COLUMN_MAP)
+                    [list(SOURCE_COLUMN_MAP.values())]
+                )
+
+                return df, detected_columns
 
             if best_attempt is None:
                 best_attempt = missing_columns
@@ -154,9 +174,7 @@ class ImportService:
 
         raw_text = ImportService.decode(content)
 
-        df = ImportService.parse(raw_text)
-
-        columns = df.columns.tolist()
+        df, columns = ImportService.parse(raw_text)
 
         df, invalid_rows = ImportService.clean(df)
 

@@ -64,9 +64,9 @@ def test_generate_print_job_file(
     token = login.json()["access_token"]
 
     csv_content = (
-        "bien_id;"
-        "bien_designation;"
-        "bien_amort_date_sortie\n"
+        "numero;"
+        "libelle;"
+        "sortie\n"
         "1001;PC Portable;\n"
     )
 
@@ -149,9 +149,9 @@ def test_get_generated_file(
     token = login.json()["access_token"]
 
     csv_content = (
-        "bien_id;"
-        "bien_designation;"
-        "bien_amort_date_sortie\n"
+        "numero;"
+        "libelle;"
+        "sortie\n"
         "1001;PC Portable;\n"
     )
 

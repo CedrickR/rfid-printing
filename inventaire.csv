@@ -1,5 +1,5 @@
-numero;libelle;categorie;sortie
-10001;PC Portable;Informatique;
-10002;Ecran;Informatique;
-10003;Imprimante;Informatique;2024-06-01
-10004;Dock USB-C;Informatique;
+numero;libelle;categorie;sortie;local_numero;immeuble_libelle;niveau_libelle;local_libelle
+10001;PC Portable;Informatique;;01100021;SIEGE;REZ DE CHAUSSEE;021-ENTREPOT
+10002;Ecran;Informatique;;01100021;SIEGE;REZ DE CHAUSSEE;021-ENTREPOT
+10003;Imprimante;Informatique;2024-06-01;;;;
+10004;Dock USB-C;Informatique;;01100023;SIEGE;REZ DE CHAUSSEE;023-REPROGRAPHIE

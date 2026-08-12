@@ -29,6 +29,22 @@ class Asset(Base):
         String(50)
     )
 
+    local_numero = Column(
+        String(100)
+    )
+
+    immeuble_libelle = Column(
+        String(255)
+    )
+
+    niveau_libelle = Column(
+        String(255)
+    )
+
+    local_libelle = Column(
+        String(255)
+    )
+
     is_active = Column(
         Boolean,
         default=True

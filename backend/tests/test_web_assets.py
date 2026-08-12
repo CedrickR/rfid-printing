@@ -97,3 +97,70 @@ def test_assets_no_bien_id_filter_shows_all(client, admin_user):
 
     assert response.status_code == 200
     assert "3 biens trouvés" in response.text
+
+
+def _login_and_seed_locations(client):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero;immeuble_libelle;"
+        "niveau_libelle;local_libelle\n"
+        "10001;PC Portable;;01100021;SIEGE;REZ DE CHAUSSEE;021-ENTREPOT\n"
+        "10002;Ecran;;01100023;SIEGE;REZ DE CHAUSSEE;023-REPRO\n"
+        "10003;Imprimante;;02200001;ANNEXE;1ER ETAGE;101-BUREAU\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+
+def test_assets_immeuble_filter(client, admin_user):
+
+    _login_and_seed_locations(client)
+
+    response = client.get("/assets", params={"immeuble": "SIEGE"})
+
+    assert response.status_code == 200
+    assert "2 biens trouvés" in response.text
+    assert "PC Portable" in response.text
+    assert "Ecran" in response.text
+    assert "Imprimante" not in response.text
+
+
+def test_assets_niveau_and_local_filter_combine(client, admin_user):
+
+    _login_and_seed_locations(client)
+
+    response = client.get(
+        "/assets",
+        params={"niveau": "REZ DE CHAUSSEE", "local": "023-REPRO"}
+    )
+
+    assert response.status_code == 200
+    assert "1 biens trouvés" in response.text
+    assert "Ecran" in response.text
+    assert "PC Portable" not in response.text
+
+
+def test_assets_page_lists_filter_options_from_existing_data(
+    client, admin_user
+):
+
+    _login_and_seed_locations(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "SIEGE" in response.text
+    assert "ANNEXE" in response.text
+    assert "1ER ETAGE" in response.text

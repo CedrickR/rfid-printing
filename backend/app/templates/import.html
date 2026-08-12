@@ -37,10 +37,14 @@
                     required
                 >
                 <small class="form-text text-muted">
-                    Colonnes attendues : <code>numero</code> (Bien ID),
+                    Colonnes obligatoires : <code>numero</code> (Bien ID),
                     <code>libelle</code> (désignation),
                     <code>sortie</code> (date de sortie, vide si le bien
-                    est actif). Les autres colonnes du fichier sont
+                    est actif). Colonnes optionnelles, utilisées si
+                    présentes : <code>local_numero</code>,
+                    <code>immeuble_libelle</code>,
+                    <code>niveau_libelle</code>, <code>local_libelle</code>
+                    (localisation). Les autres colonnes du fichier sont
                     ignorées.
                 </small>
             </div>

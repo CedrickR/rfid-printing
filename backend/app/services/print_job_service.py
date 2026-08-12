@@ -5,6 +5,7 @@ from app.models.print_history_model import PrintHistory
 from app.models.print_job_line_model import PrintJobLine
 
 from app.services.cmd_generator import CommandGenerator
+from app.services.cmd_template_service import CmdTemplateService
 from app.services.reprint_service import ReprintService
 
 
@@ -52,9 +53,13 @@ class PrintJobService:
 
         generator = generator or CommandGenerator()
 
+        template = CmdTemplateService.get_current(db)
+
         filename = generator.generate(
             job_id=job.id,
-            assets=assets
+            assets=assets,
+            header_template=template.header_template,
+            line_template=template.line_template
         )
 
         job.generated_file = filename

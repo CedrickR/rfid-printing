@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Modèle du fichier CMD
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+{% if request.query_params.get('saved') == '1' %}
+<div class="alert alert-success">
+    Modèle enregistré. Il sera utilisé pour toutes les prochaines
+    générations de fichier CMD.
+</div>
+{% endif %}
+
+<div class="row">
+
+    <div class="col-lg-8">
+
+        <div class="card shadow mb-4">
+
+            <div class="card-body">
+
+                <form method="post" action="/settings/cmd-template" id="template-form">
+
+                    <div class="form-group">
+                        <label for="header_template">
+                            En-tête du fichier (une fois par lot)
+                        </label>
+                        <textarea
+                            class="form-control"
+                            id="header_template"
+                            name="header_template"
+                            rows="4"
+                            style="font-family: monospace;"
+                        >{{ header_template }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="line_template">
+                            Ligne par bien (répétée pour chaque étiquette)
+                        </label>
+                        <textarea
+                            class="form-control"
+                            id="line_template"
+                            name="line_template"
+                            rows="3"
+                            style="font-family: monospace;"
+                            required
+                        >{{ line_template }}</textarea>
+                    </div>
+
+                    <button type="button" id="preview-button" class="btn btn-outline-primary">
+                        <i class="fas fa-eye fa-sm"></i> Aperçu
+                    </button>
+
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save fa-sm"></i> Enregistrer
+                    </button>
+
+                </form>
+
+                <div id="preview-result" class="mt-4" style="display: none;">
+                    <h6 class="font-weight-bold text-primary">
+                        Aperçu (avec un bien d'exemple)
+                    </h6>
+                    <pre id="preview-content" class="bg-light p-3 border rounded"></pre>
+                </div>
+
+                <div id="preview-error" class="alert alert-danger mt-4" style="display: none;"></div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="col-lg-4">
+
+        <div class="card shadow mb-4">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Placeholders disponibles
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <p class="font-weight-bold mb-1">En-tête</p>
+                <ul class="mb-3">
+                    {% for name in job_placeholders %}
+                    <li><code>{{ '{{' }}{{ name }}{{ '}}' }}</code></li>
+                    {% endfor %}
+                </ul>
+
+                <p class="font-weight-bold mb-1">Ligne par bien</p>
+                <ul class="mb-0">
+                    {% for name in asset_placeholders %}
+                    <li><code>{{ '{{' }}{{ name }}{{ '}}' }}</code></li>
+                    {% endfor %}
+                </ul>
+
+                <hr>
+
+                <p class="text-muted small mb-0">
+                    Un placeholder inconnu (faute de frappe) est laissé
+                    tel quel dans le fichier généré, pour rester visible
+                    plutôt que de disparaître silencieusement.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+(function () {
+
+    var previewButton = document.getElementById("preview-button");
+    var headerInput = document.getElementById("header_template");
+    var lineInput = document.getElementById("line_template");
+    var resultBox = document.getElementById("preview-result");
+    var contentBox = document.getElementById("preview-content");
+    var errorBox = document.getElementById("preview-error");
+
+    previewButton.addEventListener("click", function () {
+
+        errorBox.style.display = "none";
+        resultBox.style.display = "none";
+
+        var formData = new FormData();
+        formData.append("header_template", headerInput.value);
+        formData.append("line_template", lineInput.value);
+
+        previewButton.disabled = true;
+
+        fetch("/settings/cmd-template/preview", {
+            method: "POST",
+            body: formData,
+            credentials: "same-origin"
+        })
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return { ok: response.ok, data: data };
+                });
+            })
+            .then(function (result) {
+
+                if (!result.ok) {
+                    errorBox.textContent = result.data.detail || "Impossible de générer l'aperçu.";
+                    errorBox.style.display = "block";
+                    return;
+                }
+
+                contentBox.textContent = result.data.header + result.data.line;
+                resultBox.style.display = "block";
+            })
+            .catch(function () {
+                errorBox.textContent = "Impossible de générer l'aperçu.";
+                errorBox.style.display = "block";
+            })
+            .finally(function () {
+                previewButton.disabled = false;
+            });
+    });
+
+})();
+</script>
+
+{% endblock %}

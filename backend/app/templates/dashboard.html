@@ -15,6 +15,17 @@
     {{ request.query_params.get('invalid') }} ligne(s) ignorée(s)
     (bien_id ou désignation manquants).
     {% endif %}
+    {% if request.query_params.get('existing') and request.query_params.get('existing') != '0' %}
+    {{ request.query_params.get('existing') }} bien(s) déjà présent(s) en
+    base, non réimporté(s).
+    {% endif %}
+</div>
+{% endif %}
+
+{% if request.query_params.get('reset') == '1' %}
+<div class="alert alert-success">
+    Base de données réinitialisée : biens, imports, lots et historique ont
+    été supprimés.
 </div>
 {% endif %}
 
@@ -101,5 +112,37 @@
     </div>
 
 </div>
+
+{% if role == "gestionnaire" %}
+<div class="card shadow border-left-danger mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-danger">
+            Zone sensible
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <p class="mb-3">
+            Supprime définitivement tous les biens, imports, lots
+            d'impression et l'historique. Les comptes utilisateurs sont
+            conservés. Cette action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/admin/reset-database"
+            onsubmit="return confirm('Supprimer définitivement toutes les données (biens, imports, lots, historique) ? Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Vider la base de données
+            </button>
+        </form>
+
+    </div>
+
+</div>
+{% endif %}
 
 {% endblock %}

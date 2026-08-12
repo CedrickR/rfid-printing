@@ -165,11 +165,14 @@ class ImportService:
             raise DuplicateBienIdError(duplicated_ids)
 
     @staticmethod
-    def validate(content: bytes):
+    def validate(content: bytes, db):
         """
-        Décode, parse et valide le CSV sans toucher la base. Retourne
-        (df_valide, résumé) où résumé contient les colonnes détectées et
-        les compteurs de lignes.
+        Décode, parse et valide le CSV (lecture seule sur la base, pour
+        écarter les bien_id déjà importés). Retourne (df_à_importer,
+        résumé) où résumé contient les colonnes détectées et les
+        compteurs de lignes. df_à_importer ne contient que les lignes
+        réellement nouvelles : import incrémental, aucun bien_id déjà en
+        base n'est réinséré.
         """
 
         raw_text = ImportService.decode(content)
@@ -179,6 +182,17 @@ class ImportService:
         df, invalid_rows = ImportService.clean(df)
 
         ImportService.check_no_duplicate_bien_id(df)
+
+        existing_bien_ids = {
+            bien_id
+            for (bien_id,) in db.query(Asset.bien_id).all()
+        }
+
+        already_existing_mask = df["bien_id"].isin(existing_bien_ids)
+
+        already_existing = int(already_existing_mask.sum())
+
+        df = df[~already_existing_mask]
 
         total_rows = len(df)
 
@@ -193,7 +207,8 @@ class ImportService:
             "total_rows": total_rows,
             "active_assets": active_assets,
             "excluded_assets": excluded_assets,
-            "invalid_rows": invalid_rows
+            "invalid_rows": invalid_rows,
+            "already_existing": already_existing
         }
 
         return df, summary

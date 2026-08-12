@@ -91,7 +91,7 @@ async def import_csv(
 
     content = await file.read()
 
-    df, summary = ImportService.validate(content)
+    df, summary = ImportService.validate(content, db)
 
     new_import = ImportService.commit(
         db,
@@ -106,7 +106,8 @@ async def import_csv(
         "total_rows": summary["total_rows"],
         "active_assets": summary["active_assets"],
         "excluded_assets": summary["excluded_assets"],
-        "invalid_rows": summary["invalid_rows"]
+        "invalid_rows": summary["invalid_rows"],
+        "already_existing": summary["already_existing"]
     }
 
 @router.get("/assets-count")

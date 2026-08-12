@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
@@ -41,6 +43,8 @@ from app.services.import_service import (
     CsvReadError,
     DuplicateBienIdError,
 )
+
+logger = logging.getLogger("rfid_printing")
 
 router = APIRouter(
     tags=["Web"]
@@ -159,9 +163,43 @@ def dashboard(
             "imports_count": imports_count,
             "assets_count": assets_count,
             "jobs_count": jobs_count,
-            "history_count": history_count
+            "history_count": history_count,
+            "role": current_user["role"]
         }
     )
+
+
+@router.post("/admin/reset-database")
+def reset_database(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Vide les données métier (biens, imports, lots, historique). Les
+    comptes utilisateurs sont conservés pour ne pas bloquer l'accès.
+    Réservé aux gestionnaires : action irréversible.
+    """
+
+    require_manager(current_user)
+
+    db.query(PrintHistory).delete()
+    db.query(PrintJobLine).delete()
+    db.query(PrintJob).delete()
+    db.query(Asset).delete()
+    db.query(Import).delete()
+
+    db.commit()
+
+    logger.warning(
+        "Base de données réinitialisée par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/dashboard?reset=1",
+        status_code=303
+    )
+
 
 def _import_error_message(exc: Exception) -> str:
 
@@ -205,7 +243,8 @@ def import_page(
 @router.post("/import/preview")
 async def import_preview(
     file: UploadFile = File(...),
-    current_user=Depends(get_current_user_web)
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
 ):
     """
     Aperçu du CSV (colonnes détectées, compteurs) sans écriture en base.
@@ -221,7 +260,7 @@ async def import_preview(
     content = await file.read()
 
     try:
-        _, summary = ImportService.validate(content)
+        _, summary = ImportService.validate(content, db)
 
     except (
         InvalidEncodingError,
@@ -257,7 +296,7 @@ async def import_submit(
     content = await file.read()
 
     try:
-        df, summary = ImportService.validate(content)
+        df, summary = ImportService.validate(content, db)
 
     except (
         InvalidEncodingError,
@@ -287,6 +326,7 @@ async def import_submit(
             f"&active={summary['active_assets']}"
             f"&excluded={summary['excluded_assets']}"
             f"&invalid={summary['invalid_rows']}"
+            f"&existing={summary['already_existing']}"
         ),
         status_code=303
     )

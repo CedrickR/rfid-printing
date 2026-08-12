@@ -353,3 +353,101 @@ def test_import_csv_handles_real_export_format(client, admin_user):
     )
     assert assets["19590002"]["is_active"] is False
     assert assets["19590002"]["bien_amort_date_sortie"] == "2024-10-07"
+
+
+def test_import_csv_skips_bien_ids_already_in_database(client, admin_user):
+    """
+    Import incrémental : un bien_id déjà présent en base (import
+    précédent) n'est pas réimporté ni dupliqué.
+    """
+
+    token = _login(client)
+
+    first_csv = (
+        "numero;libelle;sortie\n"
+        "10001;PC Portable;\n"
+        "10002;Ecran;\n"
+    )
+
+    first_response = client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", first_csv, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert first_response.status_code == 200
+    assert first_response.json()["total_rows"] == 2
+    assert first_response.json()["already_existing"] == 0
+
+    second_csv = (
+        "numero;libelle;sortie\n"
+        "10001;PC Portable;\n"
+        "10003;Imprimante;\n"
+    )
+
+    second_response = client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", second_csv, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert second_response.status_code == 200
+
+    data = second_response.json()
+
+    assert data["total_rows"] == 1
+    assert data["already_existing"] == 1
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assets = assets_response.json()
+
+    # 10001 n'a pas été dupliqué : une seule occurrence en base
+    bien_ids = [a["bien_id"] for a in assets]
+
+    assert bien_ids.count("10001") == 1
+    assert set(bien_ids) == {"10001", "10002", "10003"}
+
+
+def test_import_preview_reports_already_existing_without_writing(
+    client, admin_user
+):
+
+    token = _login(client)
+
+    csv_content = "numero;libelle;sortie\n10001;PC Portable;\n"
+
+    client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    preview_response = client.post(
+        "/import/preview",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    assert preview_response.status_code == 200
+    assert preview_response.json()["total_rows"] == 0
+    assert preview_response.json()["already_existing"] == 1
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    # L'aperçu ne doit rien avoir écrit en base
+    assert len(assets_response.json()) == 1

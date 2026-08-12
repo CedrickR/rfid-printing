@@ -67,9 +67,10 @@
             </p>
 
             <ul class="list-unstyled mb-0">
-                <li>Lignes exploitables : <strong id="preview-total"></strong></li>
-                <li>Biens actifs : <strong id="preview-active"></strong></li>
-                <li>Biens exclus (déjà sortis) : <strong id="preview-excluded"></strong></li>
+                <li>Nouveaux biens à importer : <strong id="preview-total"></strong></li>
+                <li>dont actifs : <strong id="preview-active"></strong></li>
+                <li>dont exclus (déjà sortis) : <strong id="preview-excluded"></strong></li>
+                <li>Déjà présents en base (ignorés) : <strong id="preview-existing"></strong></li>
                 <li>Lignes ignorées (numero ou libelle manquant) : <strong id="preview-invalid"></strong></li>
             </ul>
 
@@ -134,6 +135,8 @@
                     result.data.excluded_assets;
                 document.getElementById("preview-invalid").textContent =
                     result.data.invalid_rows;
+                document.getElementById("preview-existing").textContent =
+                    result.data.already_existing;
 
                 resultBox.style.display = "block";
             })

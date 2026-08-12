@@ -75,6 +75,57 @@
                 value="{{ bien_id_to }}"
             >
 
+            <label class="mr-2 mb-2" for="immeuble">
+                Immeuble
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="max-width: 200px;"
+                id="immeuble"
+                name="immeuble"
+            >
+                <option value="">Tous</option>
+                {% for option in immeuble_options %}
+                <option value="{{ option }}" {% if option == immeuble %}selected{% endif %}>
+                    {{ option }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <label class="mr-2 mb-2" for="niveau">
+                Niveau
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="max-width: 160px;"
+                id="niveau"
+                name="niveau"
+            >
+                <option value="">Tous</option>
+                {% for option in niveau_options %}
+                <option value="{{ option }}" {% if option == niveau %}selected{% endif %}>
+                    {{ option }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <label class="mr-2 mb-2" for="local">
+                Local
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="max-width: 200px;"
+                id="local"
+                name="local"
+            >
+                <option value="">Tous</option>
+                {% for option in local_options %}
+                <option value="{{ option }}" {% if option == local %}selected{% endif %}>
+                    {{ option }}
+                </option>
+                {% endfor %}
+            </select>
+
             <button type="submit" class="btn btn-primary mb-2">
                 <i class="fas fa-search fa-sm"></i> Rechercher
             </button>
@@ -124,6 +175,10 @@
                             <th>ID</th>
                             <th>Bien ID</th>
                             <th>Désignation</th>
+                            <th>Numéro local</th>
+                            <th>Immeuble</th>
+                            <th>Niveau</th>
+                            <th>Local</th>
                             <th>Actif</th>
                         </tr>
 
@@ -148,6 +203,14 @@
                             <td>{{ asset.bien_id }}</td>
 
                             <td>{{ asset.bien_designation }}</td>
+
+                            <td>{{ asset.local_numero or "" }}</td>
+
+                            <td>{{ asset.immeuble_libelle or "" }}</td>
+
+                            <td>{{ asset.niveau_libelle or "" }}</td>
+
+                            <td>{{ asset.local_libelle or "" }}</td>
 
                             <td>
 
@@ -189,7 +252,13 @@
 
     <ul class="pagination">
 
-        {% set base_qs = "q=" ~ (q | urlencode) ~ ("&active_only=true" if active_only else "") ~ ("&bien_id_from=" ~ bien_id_from if bien_id_from else "") ~ ("&bien_id_to=" ~ bien_id_to if bien_id_to else "") %}
+        {% set base_qs = "q=" ~ (q | urlencode)
+            ~ ("&active_only=true" if active_only else "")
+            ~ ("&bien_id_from=" ~ bien_id_from if bien_id_from else "")
+            ~ ("&bien_id_to=" ~ bien_id_to if bien_id_to else "")
+            ~ ("&immeuble=" ~ (immeuble | urlencode) if immeuble else "")
+            ~ ("&niveau=" ~ (niveau | urlencode) if niveau else "")
+            ~ ("&local=" ~ (local | urlencode) if local else "") %}
 
         {% if page > 1 %}
 

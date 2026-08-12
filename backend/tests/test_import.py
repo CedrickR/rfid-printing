@@ -451,3 +451,72 @@ def test_import_preview_reports_already_existing_without_writing(
 
     # L'aperçu ne doit rien avoir écrit en base
     assert len(assets_response.json()) == 1
+
+
+def test_import_csv_stores_location_columns_when_present(
+    client, admin_user
+):
+
+    token = _login(client)
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero;immeuble_libelle;"
+        "niveau_libelle;local_libelle\n"
+        "10001;PC Portable;;01100021;SIEGE;REZ DE CHAUSSEE;021-ENTREPOT\n"
+        "10002;Imprimante;2024-06-01;;;;\n"
+    )
+
+    response = client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assets = {a["bien_id"]: a for a in assets_response.json()}
+
+    assert assets["10001"]["local_numero"] == "01100021"
+    assert assets["10001"]["immeuble_libelle"] == "SIEGE"
+    assert assets["10001"]["niveau_libelle"] == "REZ DE CHAUSSEE"
+    assert assets["10001"]["local_libelle"] == "021-ENTREPOT"
+
+    # Bien sorti, sans localisation dans le fichier : champs vides -> None
+    assert assets["10002"]["local_numero"] is None
+    assert assets["10002"]["immeuble_libelle"] is None
+
+
+def test_import_csv_works_without_location_columns(client, admin_user):
+    """
+    Les colonnes de localisation sont optionnelles : un fichier qui ne
+    les a pas du tout doit continuer à s'importer normalement.
+    """
+
+    token = _login(client)
+
+    csv_content = "numero;libelle;sortie\n10001;PC Portable;\n"
+
+    response = client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 200
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    asset = assets_response.json()[0]
+
+    assert asset["local_numero"] is None
+    assert asset["immeuble_libelle"] is None
+    assert asset["niveau_libelle"] is None
+    assert asset["local_libelle"] is None

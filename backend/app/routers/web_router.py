@@ -332,6 +332,20 @@ async def import_submit(
     )
 
 
+def _distinct_values(db: Session, column):
+
+    return sorted(
+        value
+        for (value,) in (
+            db.query(column)
+            .filter(column.isnot(None))
+            .filter(column != "")
+            .distinct()
+            .all()
+        )
+    )
+
+
 @router.get("/assets")
 def assets(
     request: Request,
@@ -339,6 +353,9 @@ def assets(
     active_only: bool = False,
     bien_id_from: str = Query(default=""),
     bien_id_to: str = Query(default=""),
+    immeuble: str = Query(default=""),
+    niveau: str = Query(default=""),
+    local: str = Query(default=""),
     page: int = 1,
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
@@ -383,6 +400,24 @@ def assets(
         except ValueError:
             pass
 
+    if immeuble:
+
+        query = query.filter(
+            Asset.immeuble_libelle == immeuble
+        )
+
+    if niveau:
+
+        query = query.filter(
+            Asset.niveau_libelle == niveau
+        )
+
+    if local:
+
+        query = query.filter(
+            Asset.local_libelle == local
+        )
+
     page_size = 10
 
     total = query.count()
@@ -405,6 +440,12 @@ def assets(
             "active_only": active_only,
             "bien_id_from": bien_id_from,
             "bien_id_to": bien_id_to,
+            "immeuble": immeuble,
+            "niveau": niveau,
+            "local": local,
+            "immeuble_options": _distinct_values(db, Asset.immeuble_libelle),
+            "niveau_options": _distinct_values(db, Asset.niveau_libelle),
+            "local_options": _distinct_values(db, Asset.local_libelle),
             "page": page,
             "total": total,
             "page_size": page_size

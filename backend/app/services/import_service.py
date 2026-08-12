@@ -6,18 +6,29 @@ import pandas as pd
 from app.models.asset_model import Asset
 from app.models.import_model import Import
 
-# Le fichier vient tel quel du logiciel de gestion d'inventaire : seules
-# ces 3 colonnes sont exploitées, le reste est ignoré. On les fait
-# correspondre à nos champs internes (bien_id, bien_designation,
+# Le fichier vient tel quel du logiciel de gestion d'inventaire. Ces 3
+# colonnes sont indispensables (l'import échoue si l'une manque) et sont
+# ramenées à nos champs internes (bien_id, bien_designation,
 # bien_amort_date_sortie), inchangés par ailleurs (déjà utilisés partout
 # dans le modèle, les routes et les templates).
-SOURCE_COLUMN_MAP = {
+REQUIRED_COLUMN_MAP = {
     "numero": "bien_id",
     "libelle": "bien_designation",
     "sortie": "bien_amort_date_sortie"
 }
 
-REQUIRED_COLUMNS = list(SOURCE_COLUMN_MAP.keys())
+# Colonnes de localisation : exploitées si présentes dans le fichier,
+# mais ne font pas échouer l'import si elles sont absentes (variantes
+# d'export possibles). Les lignes qui n'ont pas de valeur (ex. biens
+# déjà sortis) restent importées, juste sans localisation.
+OPTIONAL_COLUMN_MAP = {
+    "local_numero": "local_numero",
+    "immeuble_libelle": "immeuble_libelle",
+    "niveau_libelle": "niveau_libelle",
+    "local_libelle": "local_libelle"
+}
+
+REQUIRED_COLUMNS = list(REQUIRED_COLUMN_MAP.keys())
 
 # Le point-virgule est le séparateur le plus courant sur les exports
 # Excel FR ; la virgule reste tentée en repli pour les exports "CSV" au
@@ -63,15 +74,26 @@ class ImportService:
     def parse(raw_text: str):
         """
         Détecte automatiquement le séparateur (';' ou ',') : on retient
-        le premier qui fait apparaître les 3 colonnes attendues
+        le premier qui fait apparaître les 3 colonnes obligatoires
         (numero/libelle/sortie). Retourne (df, colonnes_détectées) où le
-        df est déjà ramené à nos noms de champs internes (bien_id,
-        bien_designation, bien_amort_date_sortie) et purgé des colonnes
-        non utilisées.
+        df est ramené à nos noms de champs internes (bien_id,
+        bien_designation, bien_amort_date_sortie, + les colonnes de
+        localisation présentes) et purgé des colonnes non utilisées. Les
+        colonnes de localisation absentes du fichier sont ajoutées à
+        None pour que la suite du traitement les trouve toujours.
         """
 
         last_error = None
         best_attempt = None
+
+        dtype_hints = {
+            col: str
+            for col in list(REQUIRED_COLUMN_MAP) + list(OPTIONAL_COLUMN_MAP)
+            # numero/libelle en texte : évite qu'une valeur manquante
+            # ailleurs dans la colonne ne fasse basculer des identifiants
+            # numériques en flottant (ex. "1001.0", ou une perte de zéro
+            # non significatif sur local_numero, ex. "01100021").
+        }
 
         for delimiter in CANDIDATE_DELIMITERS:
 
@@ -79,14 +101,7 @@ class ImportService:
                 df = pd.read_csv(
                     StringIO(raw_text),
                     sep=delimiter,
-                    # numero/libelle en texte : évite qu'une valeur
-                    # manquante ailleurs dans la colonne ne fasse
-                    # basculer des identifiants numériques en flottant
-                    # (ex. "1001.0").
-                    dtype={
-                        "numero": str,
-                        "libelle": str
-                    }
+                    dtype=dtype_hints
                 )
 
             except Exception as e:
@@ -103,11 +118,24 @@ class ImportService:
 
                 detected_columns = df.columns.tolist()
 
-                df = (
-                    df
-                    .rename(columns=SOURCE_COLUMN_MAP)
-                    [list(SOURCE_COLUMN_MAP.values())]
+                rename_map = dict(REQUIRED_COLUMN_MAP)
+
+                for source_col, target_col in OPTIONAL_COLUMN_MAP.items():
+                    if source_col in df.columns:
+                        rename_map[source_col] = target_col
+
+                df = df.rename(columns=rename_map)
+
+                for target_col in OPTIONAL_COLUMN_MAP.values():
+                    if target_col not in df.columns:
+                        df[target_col] = None
+
+                selected_columns = (
+                    list(REQUIRED_COLUMN_MAP.values())
+                    + list(OPTIONAL_COLUMN_MAP.values())
                 )
+
+                df = df[selected_columns]
 
                 return df, detected_columns
 
@@ -254,6 +282,26 @@ class ImportService:
                     None
                     if pd.isna(row["bien_amort_date_sortie"])
                     else str(row["bien_amort_date_sortie"])
+                ),
+                local_numero=(
+                    None
+                    if pd.isna(row["local_numero"])
+                    else str(row["local_numero"])
+                ),
+                immeuble_libelle=(
+                    None
+                    if pd.isna(row["immeuble_libelle"])
+                    else str(row["immeuble_libelle"])
+                ),
+                niveau_libelle=(
+                    None
+                    if pd.isna(row["niveau_libelle"])
+                    else str(row["niveau_libelle"])
+                ),
+                local_libelle=(
+                    None
+                    if pd.isna(row["local_libelle"])
+                    else str(row["local_libelle"])
                 ),
                 is_active=is_active,
                 import_id=new_import.id

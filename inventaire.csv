@@ -1,5 +1,5 @@
-bien_id;bien_designation;bien_amort_date_sortie
-10001;PC Portable;
-10002;Ecran;
-10003;Imprimante;2024-06-01
-10004;Dock USB-C;
+numero;libelle;categorie;sortie
+10001;PC Portable;Informatique;
+10002;Ecran;Informatique;
+10003;Imprimante;Informatique;2024-06-01
+10004;Dock USB-C;Informatique;

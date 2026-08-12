@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Request
@@ -10,6 +12,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
+from sqlalchemy import cast
+from sqlalchemy import Integer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -39,6 +43,8 @@ from app.services.import_service import (
     CsvReadError,
     DuplicateBienIdError,
 )
+
+logger = logging.getLogger("rfid_printing")
 
 router = APIRouter(
     tags=["Web"]
@@ -157,9 +163,43 @@ def dashboard(
             "imports_count": imports_count,
             "assets_count": assets_count,
             "jobs_count": jobs_count,
-            "history_count": history_count
+            "history_count": history_count,
+            "role": current_user["role"]
         }
     )
+
+
+@router.post("/admin/reset-database")
+def reset_database(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Vide les données métier (biens, imports, lots, historique). Les
+    comptes utilisateurs sont conservés pour ne pas bloquer l'accès.
+    Réservé aux gestionnaires : action irréversible.
+    """
+
+    require_manager(current_user)
+
+    db.query(PrintHistory).delete()
+    db.query(PrintJobLine).delete()
+    db.query(PrintJob).delete()
+    db.query(Asset).delete()
+    db.query(Import).delete()
+
+    db.commit()
+
+    logger.warning(
+        "Base de données réinitialisée par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/dashboard?reset=1",
+        status_code=303
+    )
+
 
 def _import_error_message(exc: Exception) -> str:
 
@@ -203,7 +243,8 @@ def import_page(
 @router.post("/import/preview")
 async def import_preview(
     file: UploadFile = File(...),
-    current_user=Depends(get_current_user_web)
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
 ):
     """
     Aperçu du CSV (colonnes détectées, compteurs) sans écriture en base.
@@ -219,7 +260,7 @@ async def import_preview(
     content = await file.read()
 
     try:
-        _, summary = ImportService.validate(content)
+        _, summary = ImportService.validate(content, db)
 
     except (
         InvalidEncodingError,
@@ -255,7 +296,7 @@ async def import_submit(
     content = await file.read()
 
     try:
-        df, summary = ImportService.validate(content)
+        df, summary = ImportService.validate(content, db)
 
     except (
         InvalidEncodingError,
@@ -285,6 +326,7 @@ async def import_submit(
             f"&active={summary['active_assets']}"
             f"&excluded={summary['excluded_assets']}"
             f"&invalid={summary['invalid_rows']}"
+            f"&existing={summary['already_existing']}"
         ),
         status_code=303
     )
@@ -295,8 +337,8 @@ def assets(
     request: Request,
     q: str = Query(default=""),
     active_only: bool = False,
-    date_from: str = Query(default=""),
-    date_to: str = Query(default=""),
+    bien_id_from: str = Query(default=""),
+    bien_id_to: str = Query(default=""),
     page: int = 1,
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
@@ -318,20 +360,28 @@ def assets(
             Asset.is_active == True
         )
 
-    # bien_amort_date_sortie est stockée en texte ISO (YYYY-MM-DD) : la
-    # comparaison lexicographique suffit, et exclut naturellement les
-    # biens actifs (valeur NULL) du filtre.
-    if date_from:
+    # bien_id est stocké en texte mais représente un numéro : on caste
+    # en entier pour une vraie comparaison numérique (ex. 9 < 10), pas
+    # une comparaison lexicographique sur la chaîne. Une valeur non
+    # numérique dans le champ est simplement ignorée (filtre non
+    # appliqué) plutôt que de faire planter la recherche.
+    if bien_id_from:
 
-        query = query.filter(
-            Asset.bien_amort_date_sortie >= date_from
-        )
+        try:
+            query = query.filter(
+                cast(Asset.bien_id, Integer) >= int(bien_id_from)
+            )
+        except ValueError:
+            pass
 
-    if date_to:
+    if bien_id_to:
 
-        query = query.filter(
-            Asset.bien_amort_date_sortie <= date_to
-        )
+        try:
+            query = query.filter(
+                cast(Asset.bien_id, Integer) <= int(bien_id_to)
+            )
+        except ValueError:
+            pass
 
     page_size = 10
 
@@ -353,8 +403,8 @@ def assets(
             "assets": assets_list,
             "q": q,
             "active_only": active_only,
-            "date_from": date_from,
-            "date_to": date_to,
+            "bien_id_from": bien_id_from,
+            "bien_id_to": bien_id_to,
             "page": page,
             "total": total,
             "page_size": page_size

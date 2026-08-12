@@ -49,26 +49,30 @@
 
             </div>
 
-            <label class="mr-2 mb-2" for="date_from">
-                Sortie du
+            <label class="mr-2 mb-2" for="bien_id_from">
+                Bien ID de
             </label>
             <input
-                type="date"
+                type="number"
                 class="form-control mr-3 mb-2"
-                id="date_from"
-                name="date_from"
-                value="{{ date_from }}"
+                style="max-width: 160px;"
+                id="bien_id_from"
+                name="bien_id_from"
+                placeholder="ex. 20260001"
+                value="{{ bien_id_from }}"
             >
 
-            <label class="mr-2 mb-2" for="date_to">
-                au
+            <label class="mr-2 mb-2" for="bien_id_to">
+                à
             </label>
             <input
-                type="date"
+                type="number"
                 class="form-control mr-3 mb-2"
-                id="date_to"
-                name="date_to"
-                value="{{ date_to }}"
+                style="max-width: 160px;"
+                id="bien_id_to"
+                name="bien_id_to"
+                placeholder="ex. 20260020"
+                value="{{ bien_id_to }}"
             >
 
             <button type="submit" class="btn btn-primary mb-2">
@@ -185,7 +189,7 @@
 
     <ul class="pagination">
 
-        {% set base_qs = "q=" ~ (q | urlencode) ~ ("&active_only=true" if active_only else "") ~ ("&date_from=" ~ date_from if date_from else "") ~ ("&date_to=" ~ date_to if date_to else "") %}
+        {% set base_qs = "q=" ~ (q | urlencode) ~ ("&active_only=true" if active_only else "") ~ ("&bien_id_from=" ~ bien_id_from if bien_id_from else "") ~ ("&bien_id_to=" ~ bien_id_to if bien_id_to else "") %}
 
         {% if page > 1 %}
 

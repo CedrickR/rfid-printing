@@ -1,7 +1,4 @@
-from datetime import datetime
-from io import StringIO
-
-import pandas as pd
+import functools
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -14,10 +11,15 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import get_current_user
 
-from app.models.import_model import Import
 from app.models.asset_model import Asset
 
-from datetime import datetime, UTC
+from app.services.import_service import (
+    ImportService,
+    InvalidEncodingError,
+    MissingColumnsError,
+    CsvReadError,
+    DuplicateBienIdError,
+)
 
 router = APIRouter(
     prefix="/api/import",
@@ -25,7 +27,56 @@ router = APIRouter(
 )
 
 
+def handle_import_errors(func):
+    """
+    Traduit les exceptions d'ImportService en réponses HTTP explicites,
+    partagées par les endpoints qui valident/importent un CSV.
+    """
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+
+        try:
+            return await func(*args, **kwargs)
+
+        except InvalidEncodingError:
+            raise HTTPException(
+                status_code=400,
+                detail="Encodage de fichier invalide : UTF-8 attendu"
+            )
+
+        except MissingColumnsError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Colonnes manquantes : {', '.join(e.missing_columns)}"
+            )
+
+        except CsvReadError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lecture CSV : {str(e.original_error)}"
+            )
+
+        except DuplicateBienIdError as e:
+            shown = e.duplicated_ids[:20]
+            suffix = (
+                f" (et {len(e.duplicated_ids) - 20} de plus)"
+                if len(e.duplicated_ids) > 20
+                else ""
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "bien_id en doublon dans le fichier : "
+                    f"{', '.join(shown)}{suffix}"
+                )
+            )
+
+    return wrapper
+
+
 @router.post("/")
+@handle_import_errors
 async def import_csv(
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
@@ -40,99 +91,27 @@ async def import_csv(
 
     content = await file.read()
 
-    try:
-        df = pd.read_csv(
-            StringIO(content.decode("utf-8")),
-            sep=";"
-        )
+    df, summary = ImportService.validate(content)
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Erreur lecture CSV : {str(e)}"
-        )
-
-    required_columns = [
-        "bien_id",
-        "bien_designation",
-        "bien_amort_date_sortie"
-    ]
-
-    missing_columns = [
-        col
-        for col in required_columns
-        if col not in df.columns
-    ]
-
-    if missing_columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Colonnes manquantes : {', '.join(missing_columns)}"
-        )
-
-    total_rows = len(df)
-
-    active_assets = len(
-        df[
-            df["bien_amort_date_sortie"].isna()
-        ]
+    new_import = ImportService.commit(
+        db,
+        df,
+        file.filename,
+        current_user["sub"]
     )
-
-    excluded_assets = total_rows - active_assets
-
-    # Création de l'import
-    new_import = Import(
-        filename=file.filename,
-        imported_by=current_user["sub"],
-        imported_at=datetime.now(UTC),
-        total_rows=total_rows,
-        active_assets=active_assets,
-        excluded_assets=excluded_assets
-    )
-
-    db.add(new_import)
-    db.commit()
-    db.refresh(new_import)
-
-    # Enregistrement des biens
-    for _, row in df.iterrows():
-
-        is_active = pd.isna(
-            row["bien_amort_date_sortie"]
-        )
-
-        asset = Asset(
-            bien_id=str(row["bien_id"]),
-            bien_designation=str(
-                row["bien_designation"]
-            ),
-            bien_amort_date_sortie=(
-                None
-                if pd.isna(
-                    row["bien_amort_date_sortie"]
-                )
-                else str(
-                    row["bien_amort_date_sortie"]
-                )
-            ),
-            is_active=is_active,
-            import_id=new_import.id
-        )
-
-        db.add(asset)
-
-    db.commit()
 
     return {
         "import_id": new_import.id,
         "filename": file.filename,
-        "total_rows": total_rows,
-        "active_assets": active_assets,
-        "excluded_assets": excluded_assets
+        "total_rows": summary["total_rows"],
+        "active_assets": summary["active_assets"],
+        "excluded_assets": summary["excluded_assets"],
+        "invalid_rows": summary["invalid_rows"]
     }
 
 @router.get("/assets-count")
 def assets_count(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     return {
@@ -143,6 +122,7 @@ def assets_count(
 def get_assets(
     page: int = 1,
     size: int = 100,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 
@@ -160,6 +140,7 @@ def get_assets(
 
 @router.get("/assets/active")
 def active_assets(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     count = (
@@ -177,13 +158,21 @@ def active_assets(
 @router.get("/assets/search")
 def search_assets(
     q: str,
+    page: int = 1,
+    size: int = 100,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    offset = (page - 1) * size
+
     results = (
         db.query(Asset)
         .filter(
             Asset.bien_designation.contains(q)
         )
+        .offset(offset)
+        .limit(size)
         .all()
     )
 

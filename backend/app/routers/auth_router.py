@@ -7,9 +7,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user_model import User
 
-from app.auth import verify_password
+from app.auth import authenticate_user
 from app.auth import create_access_token
 from app.auth import decode_token
 
@@ -29,25 +28,16 @@ def login(
     db: Session = Depends(get_db)
 ):
 
-    user = (
-        db.query(User)
-        .filter(User.username == request.username)
-        .first()
+    user = authenticate_user(
+        db,
+        request.username,
+        request.password
     )
 
     if not user:
         raise HTTPException(
             status_code=401,
-            detail="Utilisateur non trouvé"
-        )
-
-    if not verify_password(
-        request.password,
-        user.password_hash
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Mot de passe invalide"
+            detail="Identifiant ou mot de passe invalide"
         )
 
     token = create_access_token(
@@ -61,13 +51,6 @@ def login(
         "access_token": token,
         "token_type": "bearer"
     }
-
-
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer
-from fastapi.security import HTTPAuthorizationCredentials
-
-security = HTTPBearer()
 
 
 @router.get("/me")

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Import inventaire CSV
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-body">
+
+        <form
+            method="post"
+            action="/import"
+            enctype="multipart/form-data"
+            id="import-form"
+        >
+
+            <div class="form-group">
+                <label for="file-input">
+                    Fichier CSV (séparateur <code>;</code> ou <code>,</code>)
+                </label>
+                <input
+                    type="file"
+                    class="form-control-file"
+                    id="file-input"
+                    name="file"
+                    accept=".csv"
+                    required
+                >
+            </div>
+
+            <button type="button" id="preview-button" class="btn btn-outline-primary">
+                <i class="fas fa-eye fa-sm"></i> Aperçu
+            </button>
+
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-file-import fa-sm"></i> Importer
+            </button>
+
+        </form>
+
+        <div id="preview-result" class="mt-4" style="display: none;">
+
+            <h6 class="font-weight-bold text-primary">
+                Aperçu du fichier
+            </h6>
+
+            <p class="mb-1">
+                Colonnes détectées :
+                <span id="preview-columns"></span>
+            </p>
+
+            <ul class="list-unstyled mb-0">
+                <li>Lignes exploitables : <strong id="preview-total"></strong></li>
+                <li>Biens actifs : <strong id="preview-active"></strong></li>
+                <li>Biens exclus (déjà sortis) : <strong id="preview-excluded"></strong></li>
+                <li>Lignes ignorées (bien_id ou désignation manquants) : <strong id="preview-invalid"></strong></li>
+            </ul>
+
+        </div>
+
+        <div id="preview-error" class="alert alert-danger mt-4" style="display: none;"></div>
+
+    </div>
+
+</div>
+
+<script>
+(function () {
+
+    var previewButton = document.getElementById("preview-button");
+    var fileInput = document.getElementById("file-input");
+    var resultBox = document.getElementById("preview-result");
+    var errorBox = document.getElementById("preview-error");
+
+    previewButton.addEventListener("click", function () {
+
+        errorBox.style.display = "none";
+        resultBox.style.display = "none";
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            errorBox.textContent = "Sélectionne d'abord un fichier CSV.";
+            errorBox.style.display = "block";
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        previewButton.disabled = true;
+        previewButton.textContent = "Analyse en cours...";
+
+        fetch("/import/preview", {
+            method: "POST",
+            body: formData,
+            credentials: "same-origin"
+        })
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    return { ok: response.ok, data: data };
+                });
+            })
+            .then(function (result) {
+
+                if (!result.ok) {
+                    errorBox.textContent = result.data.error || "Fichier CSV invalide.";
+                    errorBox.style.display = "block";
+                    return;
+                }
+
+                document.getElementById("preview-columns").textContent =
+                    result.data.columns.join(", ");
+                document.getElementById("preview-total").textContent =
+                    result.data.total_rows;
+                document.getElementById("preview-active").textContent =
+                    result.data.active_assets;
+                document.getElementById("preview-excluded").textContent =
+                    result.data.excluded_assets;
+                document.getElementById("preview-invalid").textContent =
+                    result.data.invalid_rows;
+
+                resultBox.style.display = "block";
+            })
+            .catch(function () {
+                errorBox.textContent = "Impossible d'analyser le fichier.";
+                errorBox.style.display = "block";
+            })
+            .finally(function () {
+                previewButton.disabled = false;
+                previewButton.innerHTML = '<i class="fas fa-eye fa-sm"></i> Aperçu';
+            });
+    });
+
+})();
+</script>
+
+{% endblock %}

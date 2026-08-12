@@ -10,6 +10,8 @@ from app.models.print_job_model import PrintJob
 from app.models.print_history_model import PrintHistory
 from app.models.import_model import Import
 
+from app.auth import get_current_user
+
 router = APIRouter(
     prefix="/api/dashboard",
     tags=["Dashboard"]
@@ -18,6 +20,7 @@ router = APIRouter(
 
 @router.get("")
 def get_dashboard_stats(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     imports_count = (
@@ -73,6 +76,7 @@ def get_dashboard_stats(
 
 @router.get("/recent")
 def get_recent_activity(
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
 

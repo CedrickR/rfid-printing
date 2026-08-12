@@ -4,7 +4,10 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from fastapi import Query
 from fastapi import Form
+from fastapi import File
+from fastapi import UploadFile
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
 from sqlalchemy.orm import Session
@@ -15,13 +18,27 @@ from app.models.asset_model import Asset
 from app.models.import_model import Import
 from app.models.print_job_model import PrintJob
 from app.models.print_history_model import PrintHistory
-from app.models.print_job_model import PrintJob
 from app.models.print_job_line_model import PrintJobLine
 
-from datetime import UTC
-from datetime import datetime
+from app.auth import authenticate_user
+from app.auth import create_access_token
+from app.auth import get_current_user_web
+from app.auth import require_manager
+from app.auth import set_auth_cookie
+from app.auth import clear_auth_cookie
 
-from app.services.cmd_generator import CommandGenerator
+from app.services.print_job_service import (
+    PrintJobService,
+    EmptyPrintJobError,
+    AlreadyGeneratedError,
+)
+from app.services.import_service import (
+    ImportService,
+    InvalidEncodingError,
+    MissingColumnsError,
+    CsvReadError,
+    DuplicateBienIdError,
+)
 
 router = APIRouter(
     tags=["Web"]
@@ -32,9 +49,81 @@ templates = Jinja2Templates(
 )
 
 
+@router.get("/login")
+def login_page(
+    request: Request,
+    next: str = "/dashboard"
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "error": None,
+            "next": next
+        }
+    )
+
+
+@router.post("/login")
+def login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form(default="/dashboard"),
+    db: Session = Depends(get_db)
+):
+
+    user = authenticate_user(db, username, password)
+
+    if not user:
+
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "error": "Identifiant ou mot de passe invalide.",
+                "next": next
+            },
+            status_code=401
+        )
+
+    token = create_access_token(
+        {
+            "sub": user.username,
+            "role": user.role
+        }
+    )
+
+    redirect_to = next if next.startswith("/") else "/dashboard"
+
+    response = RedirectResponse(
+        url=redirect_to,
+        status_code=303
+    )
+
+    set_auth_cookie(response, token)
+
+    return response
+
+
+@router.get("/logout")
+def logout():
+
+    response = RedirectResponse(
+        url="/login",
+        status_code=303
+    )
+
+    clear_auth_cookie(response)
+
+    return response
+
+
 @router.get("/dashboard")
 def dashboard(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -72,12 +161,144 @@ def dashboard(
         }
     )
 
+def _import_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, InvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, MissingColumnsError):
+        return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
+
+    if isinstance(exc, CsvReadError):
+        return f"Erreur lecture CSV : {exc.original_error}"
+
+    if isinstance(exc, DuplicateBienIdError):
+        shown = exc.duplicated_ids[:20]
+        suffix = (
+            f" (et {len(exc.duplicated_ids) - 20} de plus)"
+            if len(exc.duplicated_ids) > 20
+            else ""
+        )
+        return (
+            "bien_id en doublon dans le fichier : "
+            f"{', '.join(shown)}{suffix}"
+        )
+
+    return "Fichier CSV invalide."
+
+
+@router.get("/import")
+def import_page(
+    request: Request,
+    current_user=Depends(get_current_user_web)
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="import.html",
+        context={"error": None}
+    )
+
+
+@router.post("/import/preview")
+async def import_preview(
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web)
+):
+    """
+    Aperçu du CSV (colonnes détectées, compteurs) sans écriture en base.
+    Appelé en Ajax depuis la page d'import.
+    """
+
+    if not file.filename.lower().endswith(".csv"):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Le fichier doit être un CSV"}
+        )
+
+    content = await file.read()
+
+    try:
+        _, summary = ImportService.validate(content)
+
+    except (
+        InvalidEncodingError,
+        MissingColumnsError,
+        CsvReadError,
+        DuplicateBienIdError
+    ) as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": _import_error_message(e)}
+        )
+
+    return summary
+
+
+@router.post("/import")
+async def import_submit(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return templates.TemplateResponse(
+            request=request,
+            name="import.html",
+            context={"error": "Le fichier doit être un CSV"},
+            status_code=400
+        )
+
+    content = await file.read()
+
+    try:
+        df, summary = ImportService.validate(content)
+
+    except (
+        InvalidEncodingError,
+        MissingColumnsError,
+        CsvReadError,
+        DuplicateBienIdError
+    ) as e:
+
+        return templates.TemplateResponse(
+            request=request,
+            name="import.html",
+            context={"error": _import_error_message(e)},
+            status_code=400
+        )
+
+    ImportService.commit(
+        db,
+        df,
+        file.filename,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url=(
+            "/dashboard?imported=1"
+            f"&total={summary['total_rows']}"
+            f"&active={summary['active_assets']}"
+            f"&excluded={summary['excluded_assets']}"
+            f"&invalid={summary['invalid_rows']}"
+        ),
+        status_code=303
+    )
+
+
 @router.get("/assets")
 def assets(
     request: Request,
     q: str = Query(default=""),
     active_only: bool = False,
+    date_from: str = Query(default=""),
+    date_to: str = Query(default=""),
     page: int = 1,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -95,6 +316,21 @@ def assets(
 
         query = query.filter(
             Asset.is_active == True
+        )
+
+    # bien_amort_date_sortie est stockée en texte ISO (YYYY-MM-DD) : la
+    # comparaison lexicographique suffit, et exclut naturellement les
+    # biens actifs (valeur NULL) du filtre.
+    if date_from:
+
+        query = query.filter(
+            Asset.bien_amort_date_sortie >= date_from
+        )
+
+    if date_to:
+
+        query = query.filter(
+            Asset.bien_amort_date_sortie <= date_to
         )
 
     page_size = 10
@@ -117,6 +353,8 @@ def assets(
             "assets": assets_list,
             "q": q,
             "active_only": active_only,
+            "date_from": date_from,
+            "date_to": date_to,
             "page": page,
             "total": total,
             "page_size": page_size
@@ -126,6 +364,7 @@ def assets(
 @router.post("/jobs/create")
 def create_job_from_inventory(
     asset_ids: list[int] = Form(default=[]),
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
     """
@@ -156,7 +395,7 @@ def create_job_from_inventory(
         )
 
     job = PrintJob(
-        created_by="web_user",
+        created_by=current_user["sub"],
         labels_count=len(assets),
         status="PENDING"
     )
@@ -185,6 +424,7 @@ def create_job_from_inventory(
 def job_detail(
     request: Request,
     job_id: int,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -238,6 +478,7 @@ def job_detail(
 @router.get("/jobs")
 def jobs(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -260,6 +501,7 @@ def jobs(
 @router.get("/history")
 def history(
     request: Request,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
@@ -282,8 +524,11 @@ def history(
 @router.post("/jobs/{job_id}/generate")
 def generate_job(
     job_id: int,
+    current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     job = (
         db.query(PrintJob)
@@ -300,51 +545,26 @@ def generate_job(
             detail="Lot introuvable"
         )
 
-    lines = (
-        db.query(PrintJobLine)
-        .filter(
-            PrintJobLine.job_id == job.id
-        )
-        .all()
-    )
-
-    assets = []
-
-    for line in lines:
-
-        asset = (
-            db.query(Asset)
-            .filter(
-                Asset.id == line.asset_id
-            )
-            .first()
+    try:
+        PrintJobService.generate(
+            db,
+            job,
+            current_user["sub"]
         )
 
-        if asset:
-            assets.append(asset)
+    except EmptyPrintJobError:
 
-    generator = CommandGenerator()
+        return RedirectResponse(
+            url=f"/jobs/{job.id}?error=empty",
+            status_code=303
+        )
 
-    filename = generator.generate(
-        job_id=job.id,
-        assets=assets
-    )
+    except AlreadyGeneratedError:
 
-    job.generated_file = filename
-    job.generated_at = datetime.now(UTC)
-    job.status = "GENERATED"
-
-    history = PrintHistory(
-        job_id=job.id,
-        username="web_user",
-        action="GENERATED",
-        file_name=filename,
-        labels_count=job.labels_count
-    )
-
-    db.add(history)
-
-    db.commit()
+        return RedirectResponse(
+            url=f"/jobs/{job.id}?error=already_generated",
+            status_code=303
+        )
 
     return RedirectResponse(
         url=f"/jobs/{job.id}",

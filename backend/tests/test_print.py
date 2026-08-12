@@ -12,7 +12,11 @@ def test_get_jobs(client,
     token = login.json()["access_token"]
 
     response = client.get(
-        "/api/print/jobs"
+        "/api/print/jobs",
+        headers={
+            "Authorization":
+                f"Bearer {token}"
+        }
     )
 
     assert response.status_code == 200
@@ -23,8 +27,22 @@ def test_get_unknown_job(
     admin_user
 ):
 
+    login = client.post(
+        "/auth/login",
+        json={
+            "username": "admin",
+            "password": "Admin123!"
+        }
+    )
+
+    token = login.json()["access_token"]
+
     response = client.get(
-        "/api/print/jobs/99999"
+        "/api/print/jobs/99999",
+        headers={
+            "Authorization":
+                f"Bearer {token}"
+        }
     )
 
     assert response.status_code == 404
@@ -70,7 +88,11 @@ def test_generate_print_job_file(
     assert import_response.status_code == 200
 
     assets_response = client.get(
-        "/api/import/assets"
+        "/api/import/assets",
+        headers={
+            "Authorization":
+                f"Bearer {token}"
+        }
     )
 
     assets = assets_response.json()
@@ -151,7 +173,11 @@ def test_get_generated_file(
     assert import_response.status_code == 200
 
     assets_response = client.get(
-        "/api/import/assets"
+        "/api/import/assets",
+        headers={
+            "Authorization":
+                f"Bearer {token}"
+        }
     )
 
     assert assets_response.status_code == 200
@@ -188,7 +214,11 @@ def test_get_generated_file(
     assert generate_response.status_code == 200
 
     file_response = client.get(
-        f"/api/print/jobs/{job_id}/file"
+        f"/api/print/jobs/{job_id}/file",
+        headers={
+            "Authorization":
+                f"Bearer {token}"
+        }
     )
 
     assert file_response.status_code == 200

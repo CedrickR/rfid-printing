@@ -10,6 +10,8 @@ from fastapi.responses import RedirectResponse
 from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
+from sqlalchemy import cast
+from sqlalchemy import Integer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -295,8 +297,8 @@ def assets(
     request: Request,
     q: str = Query(default=""),
     active_only: bool = False,
-    date_from: str = Query(default=""),
-    date_to: str = Query(default=""),
+    bien_id_from: str = Query(default=""),
+    bien_id_to: str = Query(default=""),
     page: int = 1,
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
@@ -318,20 +320,28 @@ def assets(
             Asset.is_active == True
         )
 
-    # bien_amort_date_sortie est stockée en texte ISO (YYYY-MM-DD) : la
-    # comparaison lexicographique suffit, et exclut naturellement les
-    # biens actifs (valeur NULL) du filtre.
-    if date_from:
+    # bien_id est stocké en texte mais représente un numéro : on caste
+    # en entier pour une vraie comparaison numérique (ex. 9 < 10), pas
+    # une comparaison lexicographique sur la chaîne. Une valeur non
+    # numérique dans le champ est simplement ignorée (filtre non
+    # appliqué) plutôt que de faire planter la recherche.
+    if bien_id_from:
 
-        query = query.filter(
-            Asset.bien_amort_date_sortie >= date_from
-        )
+        try:
+            query = query.filter(
+                cast(Asset.bien_id, Integer) >= int(bien_id_from)
+            )
+        except ValueError:
+            pass
 
-    if date_to:
+    if bien_id_to:
 
-        query = query.filter(
-            Asset.bien_amort_date_sortie <= date_to
-        )
+        try:
+            query = query.filter(
+                cast(Asset.bien_id, Integer) <= int(bien_id_to)
+            )
+        except ValueError:
+            pass
 
     page_size = 10
 
@@ -353,8 +363,8 @@ def assets(
             "assets": assets_list,
             "q": q,
             "active_only": active_only,
-            "date_from": date_from,
-            "date_to": date_to,
+            "bien_id_from": bien_id_from,
+            "bien_id_to": bien_id_to,
             "page": page,
             "total": total,
             "page_size": page_size

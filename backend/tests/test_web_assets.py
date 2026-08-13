@@ -99,6 +99,69 @@ def test_assets_no_bien_id_filter_shows_all(client, admin_user):
     assert "3 biens trouvés" in response.text
 
 
+def _login_and_seed_many(client, count):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    rows = "\n".join(
+        f"{i};Bien numero {i};" for i in range(1, count + 1)
+    )
+
+    csv_content = "numero;libelle;sortie\n" + rows + "\n"
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+
+def test_assets_default_page_size_is_ten(client, admin_user):
+
+    _login_and_seed_many(client, 30)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert response.text.count("Bien numero ") == 10
+
+
+def test_assets_page_size_25(client, admin_user):
+
+    _login_and_seed_many(client, 30)
+
+    response = client.get("/assets", params={"page_size": "25"})
+
+    assert response.status_code == 200
+    assert response.text.count("Bien numero ") == 25
+
+
+def test_assets_page_size_50(client, admin_user):
+
+    _login_and_seed_many(client, 30)
+
+    response = client.get("/assets", params={"page_size": "50"})
+
+    assert response.status_code == 200
+    assert response.text.count("Bien numero ") == 30
+
+
+def test_assets_invalid_page_size_falls_back_to_ten(client, admin_user):
+
+    _login_and_seed_many(client, 30)
+
+    response = client.get("/assets", params={"page_size": "999"})
+
+    assert response.status_code == 200
+    assert response.text.count("Bien numero ") == 10
+
+
 def _login_and_seed_locations(client):
 
     client.post(

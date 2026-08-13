@@ -29,6 +29,8 @@
 
         <form method="get" class="form-inline">
 
+            <input type="hidden" name="page_size" value="{{ page_size }}">
+
             <input
                 type="text"
                 class="form-control mr-3 mb-2"
@@ -185,7 +187,13 @@
                     <thead>
 
                         <tr>
-                            <th></th>
+                            <th>
+                                <input
+                                    type="checkbox"
+                                    id="select-all-assets"
+                                    title="Sélectionner toutes les lignes affichées"
+                                >
+                            </th>
                             <th>ID</th>
                             <th>Bien ID</th>
                             <th>Désignation</th>
@@ -260,6 +268,37 @@
 
 </form>
 
+<!-- Lignes par page -->
+
+<form method="get" class="form-inline mb-3" id="page-size-form">
+
+    <input type="hidden" name="q" value="{{ q }}">
+    {% if active_only %}<input type="hidden" name="active_only" value="true">{% endif %}
+    <input type="hidden" name="bien_id_from" value="{{ bien_id_from }}">
+    <input type="hidden" name="bien_id_to" value="{{ bien_id_to }}">
+    <input type="hidden" name="immeuble" value="{{ immeuble }}">
+    <input type="hidden" name="niveau" value="{{ niveau }}">
+    <input type="hidden" name="local" value="{{ local }}">
+
+    <label class="mr-2" for="page_size">
+        Lignes par page
+    </label>
+    <select
+        class="form-control"
+        style="max-width: 100px;"
+        id="page_size"
+        name="page_size"
+        onchange="this.form.submit()"
+    >
+        {% for option in [10, 25, 50] %}
+        <option value="{{ option }}" {% if option == page_size %}selected{% endif %}>
+            {{ option }}
+        </option>
+        {% endfor %}
+    </select>
+
+</form>
+
 <!-- Pagination -->
 
 <nav class="mt-4">
@@ -272,7 +311,8 @@
             ~ ("&bien_id_to=" ~ bien_id_to if bien_id_to else "")
             ~ ("&immeuble=" ~ (immeuble | urlencode) if immeuble else "")
             ~ ("&niveau=" ~ (niveau | urlencode) if niveau else "")
-            ~ ("&local=" ~ (local | urlencode) if local else "") %}
+            ~ ("&local=" ~ (local | urlencode) if local else "")
+            ~ ("&page_size=" ~ page_size) %}
 
         {% if page > 1 %}
 
@@ -332,7 +372,14 @@
     }
 
     var checkboxes = document.querySelectorAll('input[name="asset_ids"]');
+    var selectAllCheckbox = document.getElementById("select-all-assets");
     var selected = getSelected();
+
+    function updateSelectAllState() {
+        var checkedCount = Array.from(checkboxes).filter(function (c) { return c.checked; }).length;
+        selectAllCheckbox.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+        selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+    }
 
     checkboxes.forEach(function (checkbox) {
 
@@ -349,15 +396,35 @@
             }
             setSelected(current);
             updateCount();
+            updateSelectAllState();
         });
     });
 
     updateCount();
+    updateSelectAllState();
+
+    selectAllCheckbox.addEventListener("change", function () {
+
+        var current = getSelected();
+
+        checkboxes.forEach(function (checkbox) {
+            checkbox.checked = selectAllCheckbox.checked;
+            if (selectAllCheckbox.checked) {
+                current.add(checkbox.value);
+            } else {
+                current.delete(checkbox.value);
+            }
+        });
+
+        setSelected(current);
+        updateCount();
+    });
 
     document.getElementById("clear-selection").addEventListener("click", function () {
         localStorage.removeItem(STORAGE_KEY);
         checkboxes.forEach(function (checkbox) { checkbox.checked = false; });
         updateCount();
+        updateSelectAllState();
     });
 
     document.getElementById("create-job-form").addEventListener("submit", function (event) {

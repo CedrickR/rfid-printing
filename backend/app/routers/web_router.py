@@ -696,12 +696,28 @@ def job_detail(
 @router.get("/jobs")
 def jobs(
     request: Request,
+    bien_id: str = Query(default=""),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
+    query = db.query(PrintJob)
+
+    if bien_id:
+
+        matching_job_ids = (
+            db.query(PrintJobLine.job_id)
+            .join(Asset, Asset.id == PrintJobLine.asset_id)
+            .filter(Asset.bien_id.contains(bien_id))
+            .distinct()
+        )
+
+        query = query.filter(
+            PrintJob.id.in_(matching_job_ids)
+        )
+
     jobs = (
-        db.query(PrintJob)
+        query
         .order_by(
             PrintJob.id.desc()
         )
@@ -712,7 +728,8 @@ def jobs(
         request=request,
         name="jobs.html",
         context={
-            "jobs": jobs
+            "jobs": jobs,
+            "bien_id": bien_id
         }
     )
 

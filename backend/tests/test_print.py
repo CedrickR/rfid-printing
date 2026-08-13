@@ -369,3 +369,138 @@ def test_web_jobs_page_search_by_bien_id(client, admin_user):
     assert "1 lot(s) trouvé(s)" in response.text
     assert f'/jobs/{job_ids["10001"]}' in response.text
     assert f'/jobs/{job_ids["20002"]}' not in response.text
+
+
+def test_jobs_search_button_redirects_directly_to_matching_job(
+    client, admin_user
+):
+
+    login = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "Admin123!"}
+    )
+
+    token = login.json()["access_token"]
+
+    job_ids = _create_two_jobs_with_distinct_assets(client, token)
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get(
+        "/jobs/search",
+        params={"bien_id": "20002"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f'/jobs/{job_ids["20002"]}'
+
+
+def test_jobs_search_button_redirects_to_most_recent_when_several_match(
+    client, admin_user
+):
+
+    login = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "Admin123!"}
+    )
+
+    token = login.json()["access_token"]
+
+    csv_content = "numero;libelle;sortie\n10001;PC Portable;\n"
+
+    client.post(
+        "/api/import/",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    ).json()[0]["id"]
+
+    job_ids = []
+
+    for _ in range(2):
+
+        job_response = client.post(
+            "/api/print/jobs",
+            json={"asset_ids": [asset_id]},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+
+        job_ids.append(job_response.json()["job_id"])
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get(
+        "/jobs/search",
+        params={"bien_id": "10001"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/jobs/{max(job_ids)}"
+
+
+def test_jobs_search_button_redirects_to_list_with_error_when_no_match(
+    client, admin_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get(
+        "/jobs/search",
+        params={"bien_id": "99999999"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/jobs?bien_id=99999999&error=not_found"
+    )
+
+    page = client.get(response.headers["location"])
+
+    assert "Aucun lot ne contient le Bien ID" in page.text
+
+
+def test_jobs_search_button_without_bien_id_redirects_to_list(
+    client, admin_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get("/jobs/search", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/jobs"

@@ -1,5 +1,6 @@
 import logging
 from types import SimpleNamespace
+from urllib.parse import quote
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -637,6 +638,50 @@ def create_job_from_inventory(
         url=f"/jobs/{job.id}",
         status_code=303
     )
+
+
+@router.get("/jobs/search")
+def jobs_search_and_view(
+    bien_id: str = Query(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Va directement au lot correspondant au Bien ID recherché, sans
+    passer par la liste. Doit être déclarée avant /jobs/{job_id} pour
+    ne pas être capturée par ce pattern.
+    """
+
+    if not bien_id:
+        return RedirectResponse(url="/jobs", status_code=303)
+
+    matching_job_ids = (
+        db.query(PrintJobLine.job_id)
+        .join(Asset, Asset.id == PrintJobLine.asset_id)
+        .filter(Asset.bien_id.contains(bien_id))
+        .distinct()
+        .all()
+    )
+
+    job_ids = sorted(
+        {row[0] for row in matching_job_ids},
+        reverse=True
+    )
+
+    if not job_ids:
+
+        return RedirectResponse(
+            url=f"/jobs?bien_id={quote(bien_id)}&error=not_found",
+            status_code=303
+        )
+
+    # Plusieurs lots peuvent contenir le même bien (réimpressions,
+    # imports distincts...) : on ouvre le plus récent.
+    return RedirectResponse(
+        url=f"/jobs/{job_ids[0]}",
+        status_code=303
+    )
+
 
 @router.get("/jobs/{job_id}")
 def job_detail(

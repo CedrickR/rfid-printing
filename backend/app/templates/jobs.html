@@ -10,7 +10,13 @@
 
     <div class="card-body">
 
-        <form method="get" class="form-inline mb-4">
+        {% if request.query_params.get('error') == 'not_found' %}
+        <div class="alert alert-warning">
+            Aucun lot ne contient le Bien ID « {{ bien_id }} ».
+        </div>
+        {% endif %}
+
+        <form method="get" action="/jobs" class="form-inline mb-4">
 
             <label class="mr-2" for="bien_id">
                 Bien ID
@@ -25,8 +31,12 @@
                 value="{{ bien_id }}"
             >
 
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" class="btn btn-primary mr-2">
                 <i class="fas fa-search fa-sm"></i> Rechercher
+            </button>
+
+            <button type="submit" formaction="/jobs/search" class="btn btn-success">
+                <i class="fas fa-arrow-right fa-sm"></i> Afficher le lot
             </button>
 
             {% if bien_id %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Fichier RFID : {{ scan_file.filename }}
+</h1>
+
+{% if error == 'missing_fields' %}
+<div class="alert alert-danger">
+    Numéro de lieu et Bien ID sont obligatoires.
+</div>
+{% endif %}
+
+{% if invalid %}
+<div class="alert alert-warning">
+    {{ invalid }} ligne(s) ignorée(s) à l'import (préfixes L261/261 non
+    respectés).
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+        <h6 class="m-0 font-weight-bold text-primary">
+            Lignes
+            <span class="badge badge-primary ml-2">
+                {{ lines | length }}
+            </span>
+        </h6>
+
+        <a href="/rfid-scans/{{ scan_file.id }}/export" class="btn btn-success btn-sm">
+            <i class="fas fa-file-export fa-sm"></i> Exporter
+        </a>
+
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered">
+
+                <thead>
+
+                    <tr>
+                        <th>Numéro de lieu</th>
+                        <th>Bien ID</th>
+                        <th></th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for line in lines %}
+
+                    <tr>
+
+                        <td>
+                            <form
+                                method="post"
+                                action="/rfid-scans/{{ scan_file.id }}/lines/{{ line.id }}"
+                                class="form-inline"
+                                id="edit-line-form-{{ line.id }}"
+                            >
+                                <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    name="lieu_numero"
+                                    value="{{ line.lieu_numero }}"
+                                    required
+                                >
+                            </form>
+                        </td>
+
+                        <td>
+                            <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                name="bien_id"
+                                value="{{ line.bien_id }}"
+                                form="edit-line-form-{{ line.id }}"
+                                required
+                            >
+                        </td>
+
+                        <td>
+
+                            <button
+                                type="submit"
+                                form="edit-line-form-{{ line.id }}"
+                                class="btn btn-primary btn-sm"
+                            >
+                                <i class="fas fa-save fa-sm"></i>
+                            </button>
+
+                            <form
+                                method="post"
+                                action="/rfid-scans/{{ scan_file.id }}/lines/{{ line.id }}/delete"
+                                class="d-inline"
+                                onsubmit="return confirm('Supprimer cette ligne ?');"
+                            >
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-trash fa-sm"></i>
+                                </button>
+                            </form>
+
+                        </td>
+
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="3" class="text-center text-muted">
+                            Aucune ligne.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                    <tr>
+
+                        <td>
+                            <form
+                                method="post"
+                                action="/rfid-scans/{{ scan_file.id }}/lines"
+                                class="form-inline"
+                                id="add-line-form"
+                            >
+                                <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    name="lieu_numero"
+                                    placeholder="numéro de lieu"
+                                    required
+                                >
+                            </form>
+                        </td>
+
+                        <td>
+                            <input
+                                type="text"
+                                class="form-control form-control-sm"
+                                name="bien_id"
+                                placeholder="Bien ID"
+                                form="add-line-form"
+                                required
+                            >
+                        </td>
+
+                        <td>
+                            <button
+                                type="submit"
+                                form="add-line-form"
+                                class="btn btn-success btn-sm"
+                            >
+                                <i class="fas fa-plus fa-sm"></i> Ajouter
+                            </button>
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

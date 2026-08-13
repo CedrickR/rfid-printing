@@ -6,12 +6,18 @@
     Inventaire
 </h1>
 
-<p class="text-muted mb-4">
-    {% if request.query_params.get('error') == 'no_selection' %}
+{% if request.query_params.get('error') == 'no_selection' %}
 <div class="alert alert-warning">
     Sélectionne au moins un bien avant de créer un lot.
 </div>
+{% elif request.query_params.get('error') == 'no_location' %}
+<div class="alert alert-warning">
+    Aucun bien sélectionné n'a de numéro local renseigné : impossible de
+    générer le fichier d'inventaire immatériel.
+</div>
 {% endif %}
+
+<p class="text-muted mb-4">
     {{ total }} biens trouvés
 </p>
 
@@ -154,6 +160,14 @@
             <div>
                 <button type="button" id="clear-selection" class="btn btn-outline-secondary btn-sm">
                     Vider la sélection
+                </button>
+                <button
+                    type="submit"
+                    formaction="/assets/export-immateriel"
+                    formmethod="post"
+                    class="btn btn-info btn-sm"
+                >
+                    <i class="fas fa-file-csv fa-sm"></i> Inventaire immatériel
                 </button>
                 <button type="submit" class="btn btn-success btn-sm">
                     <i class="fas fa-plus fa-sm"></i> Créer un lot d'impression

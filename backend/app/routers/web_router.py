@@ -1,4 +1,7 @@
+import csv
 import logging
+from datetime import UTC, datetime
+from io import StringIO
 from types import SimpleNamespace
 from urllib.parse import quote
 
@@ -12,6 +15,7 @@ from fastapi import File
 from fastapi import UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from fastapi import HTTPException
 
 from sqlalchemy import cast
@@ -25,6 +29,7 @@ from app.models.import_model import Import
 from app.models.print_job_model import PrintJob
 from app.models.print_history_model import PrintHistory
 from app.models.print_job_line_model import PrintJobLine
+from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
 
 from app.auth import authenticate_user
 from app.auth import create_access_token
@@ -50,6 +55,13 @@ from app.services.cmd_generator import (
     CommandGenerator,
     ASSET_PLACEHOLDERS,
     JOB_PLACEHOLDERS,
+)
+from app.services.rfid_scan_service import (
+    RfidScanService,
+    InvalidEncodingError as RfidInvalidEncodingError,
+    NoValidLineError,
+    format_lieu_code,
+    format_bien_code,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -640,6 +652,70 @@ def create_job_from_inventory(
     )
 
 
+@router.post("/assets/export-immateriel")
+def export_immateriel(
+    asset_ids: list[int] = Form(default=[]),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Génère un fichier CSV "inventaire immatériel" (2 colonnes, ';', sans
+    en-tête) à partir des biens cochés dans l'inventaire, au même format
+    que les fichiers issus d'un lecteur RFID.
+    """
+
+    if not asset_ids:
+
+        return RedirectResponse(
+            url="/assets?error=no_selection",
+            status_code=303
+        )
+
+    assets_list = (
+        db.query(Asset)
+        .filter(
+            Asset.id.in_(asset_ids)
+        )
+        .all()
+    )
+
+    rows = [
+        (asset.local_numero, asset.bien_id)
+        for asset in assets_list
+        if asset.local_numero
+    ]
+
+    if not rows:
+
+        return RedirectResponse(
+            url="/assets?error=no_location",
+            status_code=303
+        )
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    for local_numero, bien_id in rows:
+        writer.writerow(
+            [
+                format_lieu_code(local_numero),
+                format_bien_code(bien_id)
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"inventaire_immateriel_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
 @router.get("/jobs/search")
 def jobs_search_and_view(
     bien_id: str = Query(default=""),
@@ -849,4 +925,323 @@ def generate_job(
     return RedirectResponse(
         url=f"/jobs/{job.id}",
         status_code=303
+    )
+
+
+def _rfid_scan_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, RfidInvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, NoValidLineError):
+        return (
+            "Aucune ligne valide dans le fichier "
+            "(préfixes L261/261 attendus)."
+        )
+
+    return "Fichier CSV invalide."
+
+
+def _render_rfid_scan_list(request: Request, db: Session, error: str = None):
+
+    scan_files = (
+        db.query(RfidScanFile)
+        .order_by(
+            RfidScanFile.id.desc()
+        )
+        .all()
+    )
+
+    line_counts = {
+        scan_file.id: (
+            db.query(RfidScanLine)
+            .filter(
+                RfidScanLine.scan_file_id == scan_file.id
+            )
+            .count()
+        )
+        for scan_file in scan_files
+    }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="rfid_scans.html",
+        context={
+            "scan_files": scan_files,
+            "line_counts": line_counts,
+            "error": error
+        },
+        status_code=400 if error else 200
+    )
+
+
+@router.get("/rfid-scans")
+def rfid_scans_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    return _render_rfid_scan_list(request, db)
+
+
+@router.post("/rfid-scans")
+async def rfid_scans_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return _render_rfid_scan_list(
+            request,
+            db,
+            error="Le fichier doit être un CSV"
+        )
+
+    content = await file.read()
+
+    try:
+        valid_lines, invalid_rows = RfidScanService.parse(content)
+
+    except (RfidInvalidEncodingError, NoValidLineError) as e:
+
+        return _render_rfid_scan_list(
+            request,
+            db,
+            error=_rfid_scan_error_message(e)
+        )
+
+    scan_file = RfidScanService.commit(
+        db,
+        valid_lines,
+        file.filename,
+        current_user["sub"]
+    )
+
+    redirect_url = f"/rfid-scans/{scan_file.id}"
+
+    if invalid_rows:
+        redirect_url += f"?invalid={invalid_rows}"
+
+    return RedirectResponse(
+        url=redirect_url,
+        status_code=303
+    )
+
+
+@router.get("/rfid-scans/{scan_file_id}")
+def rfid_scan_detail(
+    request: Request,
+    scan_file_id: int,
+    error: str = Query(default=None),
+    invalid: int = Query(default=0),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    scan_file = (
+        db.query(RfidScanFile)
+        .filter(
+            RfidScanFile.id == scan_file_id
+        )
+        .first()
+    )
+
+    if not scan_file:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Fichier introuvable"
+        )
+
+    lines = (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.scan_file_id == scan_file.id
+        )
+        .order_by(
+            RfidScanLine.id
+        )
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="rfid_scan_detail.html",
+        context={
+            "scan_file": scan_file,
+            "lines": lines,
+            "error": error,
+            "invalid": invalid
+        }
+    )
+
+
+@router.post("/rfid-scans/{scan_file_id}/lines")
+def rfid_scan_line_add(
+    scan_file_id: int,
+    lieu_numero: str = Form(...),
+    bien_id: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    scan_file = (
+        db.query(RfidScanFile)
+        .filter(
+            RfidScanFile.id == scan_file_id
+        )
+        .first()
+    )
+
+    if not scan_file:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Fichier introuvable"
+        )
+
+    lieu_numero = lieu_numero.strip()
+    bien_id = bien_id.strip()
+
+    if not lieu_numero or not bien_id:
+
+        return RedirectResponse(
+            url=f"/rfid-scans/{scan_file_id}?error=missing_fields",
+            status_code=303
+        )
+
+    db.add(
+        RfidScanLine(
+            scan_file_id=scan_file.id,
+            lieu_numero=lieu_numero,
+            bien_id=bien_id
+        )
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/rfid-scans/{scan_file_id}",
+        status_code=303
+    )
+
+
+@router.post("/rfid-scans/{scan_file_id}/lines/{line_id}")
+def rfid_scan_line_update(
+    scan_file_id: int,
+    line_id: int,
+    lieu_numero: str = Form(...),
+    bien_id: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    line = (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.id == line_id,
+            RfidScanLine.scan_file_id == scan_file_id
+        )
+        .first()
+    )
+
+    if not line:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Ligne introuvable"
+        )
+
+    lieu_numero = lieu_numero.strip()
+    bien_id = bien_id.strip()
+
+    if not lieu_numero or not bien_id:
+
+        return RedirectResponse(
+            url=f"/rfid-scans/{scan_file_id}?error=missing_fields",
+            status_code=303
+        )
+
+    line.lieu_numero = lieu_numero
+    line.bien_id = bien_id
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/rfid-scans/{scan_file_id}",
+        status_code=303
+    )
+
+
+@router.post("/rfid-scans/{scan_file_id}/lines/{line_id}/delete")
+def rfid_scan_line_delete(
+    scan_file_id: int,
+    line_id: int,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.id == line_id,
+            RfidScanLine.scan_file_id == scan_file_id
+        )
+        .delete()
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/rfid-scans/{scan_file_id}",
+        status_code=303
+    )
+
+
+@router.get("/rfid-scans/{scan_file_id}/export")
+def rfid_scan_export(
+    scan_file_id: int,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    scan_file = (
+        db.query(RfidScanFile)
+        .filter(
+            RfidScanFile.id == scan_file_id
+        )
+        .first()
+    )
+
+    if not scan_file:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Fichier introuvable"
+        )
+
+    lines = (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.scan_file_id == scan_file.id
+        )
+        .order_by(
+            RfidScanLine.id
+        )
+        .all()
+    )
+
+    content = RfidScanService.export_csv(lines)
+    filename = RfidScanService.export_filename()
+
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
     )

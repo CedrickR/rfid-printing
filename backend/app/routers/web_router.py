@@ -696,35 +696,12 @@ def job_detail(
 @router.get("/jobs")
 def jobs(
     request: Request,
-    current_user=Depends(get_current_user_web),
-    db: Session = Depends(get_db)
-):
-
-    jobs = (
-        db.query(PrintJob)
-        .order_by(
-            PrintJob.id.desc()
-        )
-        .all()
-    )
-
-    return templates.TemplateResponse(
-        request=request,
-        name="jobs.html",
-        context={
-            "jobs": jobs
-        }
-    )
-
-@router.get("/history")
-def history(
-    request: Request,
     bien_id: str = Query(default=""),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
-    query = db.query(PrintHistory)
+    query = db.query(PrintJob)
 
     if bien_id:
 
@@ -736,11 +713,35 @@ def history(
         )
 
         query = query.filter(
-            PrintHistory.job_id.in_(matching_job_ids)
+            PrintJob.id.in_(matching_job_ids)
         )
 
-    history_list = (
+    jobs = (
         query
+        .order_by(
+            PrintJob.id.desc()
+        )
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="jobs.html",
+        context={
+            "jobs": jobs,
+            "bien_id": bien_id
+        }
+    )
+
+@router.get("/history")
+def history(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    history_list = (
+        db.query(PrintHistory)
         .order_by(
             PrintHistory.id.desc()
         )
@@ -751,8 +752,7 @@ def history(
         request=request,
         name="history.html",
         context={
-            "history": history_list,
-            "bien_id": bien_id
+            "history": history_list
         }
     )
 

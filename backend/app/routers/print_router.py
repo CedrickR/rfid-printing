@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi.responses import FileResponse
 
 from sqlalchemy.orm import Session
@@ -92,6 +93,7 @@ def create_print_job(
 
 @router.get("/jobs")
 def get_jobs(
+    bien_id: str = Query(default=""),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -99,7 +101,22 @@ def get_jobs(
     Liste des lots
     """
 
-    jobs = db.query(PrintJob).all()
+    query = db.query(PrintJob)
+
+    if bien_id:
+
+        matching_job_ids = (
+            db.query(PrintJobLine.job_id)
+            .join(Asset, Asset.id == PrintJobLine.asset_id)
+            .filter(Asset.bien_id.contains(bien_id))
+            .distinct()
+        )
+
+        query = query.filter(
+            PrintJob.id.in_(matching_job_ids)
+        )
+
+    jobs = query.all()
 
     return [
         {

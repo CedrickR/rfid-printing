@@ -10,6 +10,38 @@
 
     <div class="card-body">
 
+        <form method="get" class="form-inline mb-4">
+
+            <label class="mr-2" for="bien_id">
+                Bien ID
+            </label>
+            <input
+                type="text"
+                class="form-control mr-3"
+                style="min-width: 200px;"
+                id="bien_id"
+                name="bien_id"
+                placeholder="Rechercher un lot par Bien ID"
+                value="{{ bien_id }}"
+            >
+
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-search fa-sm"></i> Rechercher
+            </button>
+
+            {% if bien_id %}
+            <a href="/jobs" class="btn btn-outline-secondary ml-2">
+                Réinitialiser
+            </a>
+            {% endif %}
+
+        </form>
+
+        <p class="text-muted">
+            {{ jobs|length }} lot(s) trouvé(s)
+            {% if bien_id %}pour le Bien ID « {{ bien_id }} »{% endif %}
+        </p>
+
         <div class="table-responsive">
 
             <table class="table table-bordered table-hover">

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Fichiers RFID
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Charger un fichier de scan
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <form
+            method="post"
+            action="/rfid-scans"
+            enctype="multipart/form-data"
+        >
+
+            <div class="form-group">
+                <label for="file-input">
+                    Fichier CSV (séparateur <code>;</code>, sans en-tête)
+                    — export du lecteur RFID
+                </label>
+                <input
+                    type="file"
+                    class="form-control-file"
+                    id="file-input"
+                    name="file"
+                    accept=".csv"
+                    required
+                >
+                <small class="form-text text-muted">
+                    Colonne 1 : <code>L261</code> + numéro du lieu.
+                    Colonne 2 : <code>261</code> + Bien ID.
+                </small>
+            </div>
+
+            <button type="submit" class="btn btn-success">
+                <i class="fas fa-file-import fa-sm"></i> Charger
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Fichiers chargés
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>ID</th>
+                        <th>Fichier</th>
+                        <th>Chargé par</th>
+                        <th>Chargé le</th>
+                        <th>Lignes</th>
+                        <th></th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for scan_file in scan_files %}
+
+                    <tr>
+
+                        <td>{{ scan_file.id }}</td>
+                        <td>{{ scan_file.filename }}</td>
+                        <td>{{ scan_file.imported_by }}</td>
+                        <td>{{ scan_file.imported_at }}</td>
+                        <td>{{ line_counts.get(scan_file.id, 0) }}</td>
+
+                        <td>
+                            <a href="/rfid-scans/{{ scan_file.id }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-edit fa-sm"></i> Ouvrir
+                            </a>
+                        </td>
+
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            Aucun fichier chargé.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -164,3 +164,51 @@ def test_assets_page_lists_filter_options_from_existing_data(
     assert "SIEGE" in response.text
     assert "ANNEXE" in response.text
     assert "1ER ETAGE" in response.text
+
+
+def test_export_immateriel_requires_selection(client, admin_user):
+
+    _login_and_seed_locations(client)
+
+    response = client.post(
+        "/assets/export-immateriel",
+        data={},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets?error=no_selection"
+
+
+def test_export_immateriel_generates_csv_from_selected_assets(
+    client, admin_user
+):
+
+    _login_and_seed_locations(client)
+
+    response = client.post(
+        "/assets/export-immateriel",
+        data={"asset_ids": ["1", "2"]}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "inventaire_immateriel_" in response.headers["content-disposition"]
+    assert "L26101100021;26110001" in response.text
+    assert "L26101100023;26110002" in response.text
+
+
+def test_export_immateriel_skips_assets_without_local_numero(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.post(
+        "/assets/export-immateriel",
+        data={"asset_ids": ["1"]},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets?error=no_location"

@@ -72,6 +72,13 @@
             </a>
         </li>
 
+        <li class="nav-item {% if request.url.path.startswith('/rfid-scans') %}active{% endif %}">
+            <a class="nav-link" href="/rfid-scans">
+                <i class="fas fa-fw fa-wifi"></i>
+                <span>Fichiers RFID</span>
+            </a>
+        </li>
+
         <hr class="sidebar-divider">
 
         <li class="nav-item {% if request.url.path == '/settings/cmd-template' %}active{% endif %}">

@@ -497,9 +497,13 @@ def assets(
     niveau: str = Query(default=""),
     local: str = Query(default=""),
     page: int = 1,
+    page_size: int = Query(default=10),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    if page_size not in (10, 25, 50):
+        page_size = 10
 
     query = db.query(Asset)
 
@@ -557,8 +561,6 @@ def assets(
         query = query.filter(
             Asset.local_libelle == local
         )
-
-    page_size = 10
 
     total = query.count()
 

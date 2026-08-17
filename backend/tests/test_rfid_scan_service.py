@@ -87,6 +87,19 @@ def test_service_parse_strips_utf8_bom():
     assert valid_lines == [("00000001", "20260001")]
 
 
+def test_service_parse_deduplicates_repeated_bien_id_keeping_last():
+
+    content = (
+        "L26100000001;26120260001\n"
+        "L26100000099;26120260001\n"
+    ).encode("utf-8")
+
+    valid_lines, invalid_rows = RfidScanService.parse(content)
+
+    assert valid_lines == [("00000099", "20260001")]
+    assert invalid_rows == 0
+
+
 def test_service_parse_raises_when_no_valid_line():
 
     content = "BADROW;xyz\n".encode("utf-8")

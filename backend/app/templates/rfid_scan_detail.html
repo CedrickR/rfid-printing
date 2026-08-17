@@ -10,6 +10,20 @@
 <div class="alert alert-danger">
     Numéro de lieu et Bien ID sont obligatoires.
 </div>
+{% elif error == 'duplicate_bien_id' %}
+<div class="alert alert-danger">
+    Ce Bien ID existe déjà pour une autre ligne (chaque Bien ID ne peut
+    apparaître qu'une seule fois).
+</div>
+{% endif %}
+
+{% if added is not none or updated is not none %}
+<div class="alert alert-success">
+    Import terminé :
+    {{ added }} bien(s) ajouté(s),
+    {{ updated }} déjà connu(s) et mis à jour (numéro de lieu
+    rafraîchi, aucun doublon créé).
+</div>
 {% endif %}
 
 {% if invalid %}

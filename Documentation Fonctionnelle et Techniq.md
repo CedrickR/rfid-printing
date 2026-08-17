@@ -122,8 +122,9 @@ Gestion des fichiers CSV bruts **issus d'un lecteur RFID physique** : 2 colonnes
 
 Fonctions :
 
-- **Chargement** d'un fichier (`POST /rfid-scans`) : les lignes valides sont enregistrées en base ; les lignes dont un des deux préfixes est absent sont ignorées et comptabilisées (l'import du reste n'échoue pas).
-- **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles.
+- **Chargement** d'un fichier (`POST /rfid-scans`) : les lignes valides sont enregistrées en base ; les lignes dont un des deux préfixes est absent sont ignorées et comptabilisées (l'import du reste n'échoue pas). Une même étiquette relue plusieurs fois dans un seul fichier ne produit qu'une seule ligne (dernière lecture retenue).
+- **Jamais de doublon de Bien ID** : un Bien ID déjà présent en base (chargé via un fichier précédent, quel qu'il soit) est **mis à jour** avec son nouveau numéro de lieu — au lieu d'être dupliqué — et rattaché au fichier qui vient de le fournir. Le compte-rendu après chargement indique le nombre de biens ajoutés et mis à jour.
+- **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles ; l'ajout ou la modification d'une ligne vers un Bien ID déjà utilisé par une autre ligne est refusé.
 - **Export horodaté** (`GET /rfid-scans/{id}/export`) : reconstruit le CSV 2 colonnes/`;`/sans en-tête à partir des lignes (éditées ou non), nom de fichier `export_rfid_AAAAMMJJ_HHMMSS.csv`.
 
 ### 2.7 Mise à jour des codes lieux (`/glpi-locations`)

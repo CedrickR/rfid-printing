@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Mise à jour des codes lieux
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% elif request.query_params.get('error') == 'no_selection' %}
+<div class="alert alert-warning">
+    Sélectionne au moins une ligne avant de générer le fichier CSV.
+</div>
+{% elif request.query_params.get('imported') == '1' %}
+<div class="alert alert-success">
+    Import GLPI terminé :
+    {{ request.query_params.get('added') }} bien(s) ajouté(s),
+    {{ request.query_params.get('updated') }} mis à jour.
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Charger un export GLPI
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <form
+            method="post"
+            action="/glpi-locations"
+            enctype="multipart/form-data"
+            class="form-inline"
+        >
+
+            <label class="mr-2 mb-2" for="glpi_type">
+                Type
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                id="glpi_type"
+                name="glpi_type"
+            >
+                {% for type_key, type_label in glpi_types.items() %}
+                <option value="{{ type_key }}">{{ type_label }}</option>
+                {% endfor %}
+            </select>
+
+            <input
+                type="file"
+                class="form-control-file mr-3 mb-2"
+                name="file"
+                accept=".csv"
+                required
+            >
+
+            <button type="submit" class="btn btn-success mb-2">
+                <i class="fas fa-file-import fa-sm"></i> Charger
+            </button>
+
+        </form>
+
+        <small class="form-text text-muted">
+            Fichier CSV (';', avec en-tête) issu de GLPI. Colonnes
+            utilisées : <code>Numéro d'inventaire</code> (Bien ID) et
+            <code>Numéro de la pièce</code>. Un import ultérieur pour un
+            Bien ID déjà connu met à jour son numéro de pièce (jamais de
+            doublon).
+        </small>
+
+        <div class="table-responsive mt-4">
+
+            <table class="table table-sm table-bordered">
+
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Dernier fichier</th>
+                        <th>Chargé le</th>
+                        <th>Par</th>
+                        <th>Lignes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for type_key, type_label in glpi_types.items() %}
+                    <tr>
+                        <td>{{ type_label }}</td>
+
+                        {% set last_import = imports_by_type.get(type_key) %}
+
+                        {% if last_import %}
+                        <td>{{ last_import.filename }}</td>
+                        <td>{{ last_import.imported_at }}</td>
+                        <td>{{ last_import.imported_by }}</td>
+                        <td>{{ last_import.total_rows }}</td>
+                        {% else %}
+                        <td colspan="4" class="text-muted">Aucun import</td>
+                        {% endif %}
+
+                    </tr>
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<form method="post" action="/glpi-locations/export-csv" id="glpi-form">
+
+    <div class="card shadow mb-4">
+
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+            <h6 class="m-0 font-weight-bold text-primary">
+                Écarts numéro local / numéro de la pièce (GLPI)
+                <span class="badge badge-primary ml-2">
+                    {{ discrepancies | length }}
+                </span>
+            </h6>
+
+            <button type="submit" class="btn btn-success btn-sm">
+                <i class="fas fa-file-csv fa-sm"></i> Générer un fichier CSV
+            </button>
+
+        </div>
+
+        <div class="card-body">
+
+            <div class="table-responsive">
+
+                <table class="table table-bordered table-hover">
+
+                    <thead>
+                        <tr>
+                            <th>
+                                <input type="checkbox" id="select-all-glpi">
+                            </th>
+                            <th>Bien ID</th>
+                            <th>Désignation</th>
+                            <th>Numéro local (inventaire)</th>
+                            <th>Numéro de la pièce (GLPI)</th>
+                            <th>Corriger vers</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for asset, glpi_asset in discrepancies %}
+
+                        <tr>
+
+                            <td>
+                                <input
+                                    type="checkbox"
+                                    name="asset_ids"
+                                    value="{{ asset.id }}"
+                                >
+                            </td>
+
+                            <td>{{ asset.bien_id }}</td>
+                            <td>{{ asset.bien_designation }}</td>
+                            <td>{{ asset.local_numero or "" }}</td>
+                            <td>{{ glpi_asset.numero_piece or "" }}</td>
+
+                            <td>
+                                <select
+                                    class="form-control form-control-sm"
+                                    name="local_choice_{{ asset.id }}"
+                                >
+                                    <option value="">-- Choisir --</option>
+                                    {% for numero, libelle in local_options %}
+                                    <option
+                                        value="{{ numero }}"
+                                        {% if numero == asset.local_numero %}selected{% endif %}
+                                    >
+                                        {{ libelle }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">
+                                Aucun écart détecté.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</form>
+
+<script>
+(function () {
+
+    var selectAll = document.getElementById("select-all-glpi");
+
+    if (!selectAll) {
+        return;
+    }
+
+    var checkboxes = document.querySelectorAll('input[name="asset_ids"]');
+
+    selectAll.addEventListener("change", function () {
+        checkboxes.forEach(function (checkbox) {
+            checkbox.checked = selectAll.checked;
+        });
+    });
+
+})();
+</script>
+
+{% endblock %}

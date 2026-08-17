@@ -126,7 +126,24 @@ Fonctions :
 - **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles.
 - **Export horodaté** (`GET /rfid-scans/{id}/export`) : reconstruit le CSV 2 colonnes/`;`/sans en-tête à partir des lignes (éditées ou non), nom de fichier `export_rfid_AAAAMMJJ_HHMMSS.csv`.
 
-### 2.7 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
+### 2.7 Mise à jour des codes lieux (`/glpi-locations`)
+
+Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de la pièce** connu dans **GLPI**, pour détecter et corriger les écarts.
+
+- **Import GLPI** (`POST /glpi-locations`) : un fichier CSV par type de bien (`;`, avec en-tête) — **ordinateur, moniteur, périphérique, logiciel, imprimante**. Seules deux colonnes sont exploitées :
+
+  | Colonne GLPI | Usage |
+  |---|---|
+  | `Numéro d'inventaire` | Bien ID (clé de rapprochement avec l'inventaire) |
+  | `Numéro de la pièce` | Comparé au `local_numero` de l'inventaire |
+
+  Toutes les autres colonnes du fichier sont ignorées. **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+- **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI (Bien ID, désignation, numéro local actuel, numéro de la pièce GLPI).
+- **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
+- **Correction** : chaque ligne propose une liste déroulante des **désignations de local** connues dans l'inventaire (ex. `021-ENTREPOT`), présélectionnée sur la désignation actuelle du bien ; le choix détermine le numéro local correspondant.
+- **Génération d'un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, avec en-tête `Bien ID;Numéro local`) à partir des lignes cochées, avec le numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) — destiné à la mise à jour du logiciel de gestion d'inventaire.
+
+### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
 - Gabarit **d'en-tête** (une fois par lot) et **de ligne** (répétée par bien), avec substitution de placeholders `{{Placeholder}}` :
 
@@ -146,11 +163,11 @@ Fonctions :
 - Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple.
 - Le gabarit actif est toujours **le dernier enregistré** (historique conservé en base, une ligne par modification).
 
-### 2.8 Historique (`/history`)
+### 2.9 Historique (`/history`)
 
 - Journal de toutes les générations (`GENERATED`) et réimpressions (`REPRINTED`) de fichiers `.cmd`, avec utilisateur, date, nombre d'étiquettes.
 
-### 2.9 Gestion des utilisateurs et profils (`/admin/users`, administrateur uniquement)
+### 2.10 Gestion des utilisateurs et profils (`/admin/users`, administrateur uniquement)
 
 - Liste des comptes existants.
 - Création de compte (identifiant, mot de passe ≥ 8 caractères, profil).
@@ -168,7 +185,7 @@ Trois profils (champ `role` de la table `users`) :
 | Profil | Description |
 |---|---|
 | `administrateur` | Toutes les fonctions, y compris le modèle CMD, la gestion des utilisateurs/profils et la réinitialisation de la base. |
-| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID. **Sans** le modèle CMD, la gestion des utilisateurs, ni la réinitialisation de la base. |
+| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID, mise à jour des codes lieux (GLPI). **Sans** le modèle CMD, la gestion des utilisateurs, ni la réinitialisation de la base. |
 | `lecteur` | Consultation de l'inventaire uniquement (`/assets`). Toute autre page renvoie une erreur 403. Les boutons d'export/création de lot y sont désactivés. |
 
 ### Matrice d'accès (pages Web)
@@ -183,6 +200,7 @@ Trois profils (champ `role` de la table `users`) :
 | Lots (liste, détail, génération CMD, export PDF/CSV) | ✅ | ✅ | ❌ |
 | Historique | ✅ | ✅ | ❌ |
 | Fichiers RFID | ✅ | ✅ | ❌ |
+| Mise à jour des codes lieux (GLPI) | ✅ | ✅ | ❌ |
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
@@ -229,7 +247,8 @@ rfid-printing/
     │   │   ├── print_job_line_model.py    print_job_lines
     │   │   ├── print_history_model.py     print_history
     │   │   ├── cmd_template_model.py      cmd_templates
-    │   │   └── rfid_scan_model.py         rfid_scan_files, rfid_scan_lines
+    │   │   ├── rfid_scan_model.py         rfid_scan_files, rfid_scan_lines
+    │   │   └── glpi_asset_model.py         glpi_imports, glpi_assets
     │   │
     │   ├── routers/
     │   │   ├── web_router.py          Pages Jinja2 (UI), auth cookie — la quasi-totalité
@@ -247,6 +266,7 @@ rfid-printing/
     │   │   ├── cmd_generator.py            Moteur de gabarits à placeholders
     │   │   ├── cmd_template_service.py    Lecture/mise à jour du gabarit courant
     │   │   ├── rfid_scan_service.py       Parsing/export des fichiers lecteur RFID
+    │   │   ├── glpi_service.py             Import GLPI (5 types), rapprochement codes lieux
     │   │   └── user_service.py            CRUD utilisateurs, garde-fous last-admin
     │   │
     │   ├── templates/                 Pages Jinja2 (étendent base.html)
@@ -258,6 +278,7 @@ rfid-printing/
     │   │   ├── jobs.html, job_detail.html
     │   │   ├── history.html
     │   │   ├── rfid_scans.html, rfid_scan_detail.html
+    │   │   ├── glpi_locations.html         Mise à jour des codes lieux
     │   │   ├── cmd_template.html
     │   │   └── users.html                 Gestion des utilisateurs
     │   │
@@ -270,7 +291,7 @@ rfid-printing/
     └── tests/                         Suite de tests automatisés (pytest)
         ├── conftest.py                 Fixtures partagées (client de test, base de test,
         │                                utilisateurs admin_user/manager_user/standard_user)
-        └── test_*.py                   ~30 fichiers de tests (API, pages Web, services)
+        └── test_*.py                   ~20 fichiers de tests (API, pages Web, services)
 ```
 
 ### 4.2 Principe de fonctionnement
@@ -297,6 +318,8 @@ rfid-printing/
 | `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `header_template`, `line_template`, `updated_by`, `updated_at` |
 | `rfid_scan_files` | Fichiers de scan RFID chargés | `id`, `filename`, `imported_by`, `imported_at` |
 | `rfid_scan_lines` | Lignes d'un fichier de scan | `id`, `scan_file_id` (FK), `lieu_numero`, `bien_id` |
+| `glpi_imports` | Historique des imports GLPI | `id`, `glpi_type`, `filename`, `imported_by`, `imported_at`, `total_rows`, `added_count`, `updated_count` |
+| `glpi_assets` | Numéro de la pièce GLPI par Bien ID (unique, mis à jour à chaque import) | `id`, `bien_id` (unique), `numero_piece`, `glpi_type`, `import_id` (FK → `glpi_imports`), `updated_at` |
 
 Schéma versionné avec Alembic (`backend/alembic/versions/`) ; aucune modification manuelle du schéma ne doit être faite hors migration.
 
@@ -395,6 +418,9 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/rfid-scans/{id}/lines/{line_id}` | Modification d'une ligne |
 | `POST` | `/rfid-scans/{id}/lines/{line_id}/delete` | Suppression d'une ligne |
 | `GET` | `/rfid-scans/{id}/export` | Export horodaté du fichier de scan |
+| `GET` | `/glpi-locations` | Page de mise à jour des codes lieux (import GLPI + tableau des écarts) |
+| `POST` | `/glpi-locations` | Chargement d'un export GLPI (un des 5 types) |
+| `POST` | `/glpi-locations/export-csv` | Export CSV des corrections de numéro local pour les lignes sélectionnées |
 
 ---
 

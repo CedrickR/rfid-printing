@@ -85,6 +85,13 @@
             </a>
         </li>
 
+        <li class="nav-item {% if request.url.path == '/glpi-locations' %}active{% endif %}">
+            <a class="nav-link" href="/glpi-locations">
+                <i class="fas fa-fw fa-map-marker-alt"></i>
+                <span>Codes lieux</span>
+            </a>
+        </li>
+
         {% endif %}
 
         {% if request.state.role == 'administrateur' %}

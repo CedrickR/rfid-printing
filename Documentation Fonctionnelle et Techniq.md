@@ -127,7 +127,7 @@ Fonctions :
 - **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles ; l'ajout ou la modification d'une ligne vers un Bien ID déjà utilisé par une autre ligne est refusé.
 - **Export horodaté** (`GET /rfid-scans/{id}/export`) : reconstruit le CSV 2 colonnes/`;`/sans en-tête à partir des lignes (éditées ou non), nom de fichier `export_rfid_AAAAMMJJ_HHMMSS.csv`.
 
-### 2.7 Mise à jour des codes lieux (`/glpi-locations`)
+### 2.7 Mise à jour des codes lieux (`/glpi-locations`, administrateur uniquement)
 
 Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de la pièce** connu dans **GLPI**, pour détecter et corriger les écarts.
 
@@ -147,6 +147,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   - **Générer un fichier CSV (avec colonnes de lieu)** (`POST /glpi-locations/export-csv-complet`, `;`, en-tête `Bien ID;Numéro local;Immeuble;Niveau;Local`) : ajoute les colonnes immeuble/niveau/local correspondant au numéro local retenu (celui du lieu corrigé, pas celui — potentiellement obsolète — du bien).
 
   Destinés à la mise à jour du logiciel de gestion d'inventaire.
+- **Vider la table des données GLPI** (`POST /glpi-locations/reset`, zone sensible) : supprime définitivement tous les imports et biens GLPI chargés (les 5 types). N'affecte pas l'inventaire ni les autres données de l'application. Action irréversible, confirmation JavaScript obligatoire.
 
 ### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
@@ -190,7 +191,7 @@ Trois profils (champ `role` de la table `users`) :
 | Profil | Description |
 |---|---|
 | `administrateur` | Toutes les fonctions, y compris le modèle CMD, la gestion des utilisateurs/profils et la réinitialisation de la base. |
-| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID, mise à jour des codes lieux (GLPI). **Sans** le modèle CMD, la gestion des utilisateurs, ni la réinitialisation de la base. |
+| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID. **Sans** le modèle CMD, la mise à jour des codes lieux (GLPI), la gestion des utilisateurs, ni la réinitialisation de la base. |
 | `lecteur` | Consultation de l'inventaire uniquement (`/assets`). Toute autre page renvoie une erreur 403. Les boutons d'export/création de lot y sont désactivés. |
 
 ### Matrice d'accès (pages Web)
@@ -205,7 +206,7 @@ Trois profils (champ `role` de la table `users`) :
 | Lots (liste, détail, génération CMD, export PDF/CSV) | ✅ | ✅ | ❌ |
 | Historique | ✅ | ✅ | ❌ |
 | Fichiers RFID | ✅ | ✅ | ❌ |
-| Mise à jour des codes lieux (GLPI) | ✅ | ✅ | ❌ |
+| Mise à jour des codes lieux (GLPI) | ✅ | ❌ | ❌ |
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
@@ -427,6 +428,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/glpi-locations` | Chargement d'un export GLPI (un des 5 types) |
 | `POST` | `/glpi-locations/export-csv` | Export CSV (Bien ID, numéro local) des corrections pour les lignes sélectionnées |
 | `POST` | `/glpi-locations/export-csv-complet` | Idem, avec en plus les colonnes immeuble/niveau/local du lieu retenu |
+| `POST` | `/glpi-locations/reset` | Vide les données GLPI importées (administrateur) |
 
 ---
 

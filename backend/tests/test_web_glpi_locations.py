@@ -62,7 +62,7 @@ def test_glpi_locations_page_requires_login(client):
     assert response.headers["location"].startswith("/login")
 
 
-def test_glpi_locations_page_requires_manager_role(client, standard_user):
+def test_glpi_locations_page_requires_admin_role(client, standard_user):
 
     client.post(
         "/login",
@@ -78,7 +78,11 @@ def test_glpi_locations_page_requires_manager_role(client, standard_user):
     assert response.status_code == 403
 
 
-def test_glpi_locations_page_accessible_to_manager(client, manager_user):
+def test_glpi_locations_page_denies_manager_role(client, manager_user):
+    """
+    Réservé aux administrateurs : un gestionnaire d'inventaire ne doit
+    plus pouvoir accéder à la mise à jour des codes lieux.
+    """
 
     client.post(
         "/login",
@@ -91,7 +95,7 @@ def test_glpi_locations_page_accessible_to_manager(client, manager_user):
 
     response = client.get("/glpi-locations")
 
-    assert response.status_code == 200
+    assert response.status_code == 403
 
 
 def test_upload_adds_new_bien_id(client, admin_user):
@@ -363,13 +367,32 @@ def test_export_csv_complet_requires_selection(client, admin_user):
     assert response.headers["location"] == "/glpi-locations?error=no_selection"
 
 
-def test_export_csv_complet_requires_manager_role(client, standard_user):
+def test_export_csv_complet_requires_admin_role(client, standard_user):
 
     client.post(
         "/login",
         data={
             "username": "employe",
             "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/glpi-locations/export-csv-complet",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 403
+
+
+def test_export_csv_complet_denies_manager_role(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
             "next": "/dashboard"
         }
     )
@@ -395,7 +418,7 @@ def test_glpi_locations_page_has_second_export_button(client, admin_user):
     assert "avec colonnes de lieu" in response.text
 
 
-def test_glpi_locations_requires_manager_role_for_upload(client, standard_user):
+def test_glpi_locations_requires_admin_role_for_upload(client, standard_user):
 
     client.post(
         "/login",
@@ -411,7 +434,23 @@ def test_glpi_locations_requires_manager_role_for_upload(client, standard_user):
     assert response.status_code == 403
 
 
-def test_glpi_locations_requires_manager_role_for_export(client, standard_user):
+def test_glpi_locations_denies_manager_role_for_upload(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = _upload_glpi(client, "20260001", "01100099")
+
+    assert response.status_code == 403
+
+
+def test_glpi_locations_requires_admin_role_for_export(client, standard_user):
 
     client.post(
         "/login",
@@ -428,3 +467,106 @@ def test_glpi_locations_requires_manager_role_for_export(client, standard_user):
     )
 
     assert response.status_code == 403
+
+
+def test_glpi_locations_denies_manager_role_for_export(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/glpi-locations/export-csv",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 403
+
+
+def test_glpi_locations_reset_requires_login(client):
+
+    response = client.post("/glpi-locations/reset", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_glpi_locations_reset_requires_admin_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post("/glpi-locations/reset")
+
+    assert response.status_code == 403
+
+
+def test_glpi_locations_reset_denies_manager_role(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post("/glpi-locations/reset")
+
+    assert response.status_code == 403
+
+
+def test_glpi_locations_reset_clears_glpi_data(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.post(
+        "/glpi-locations/reset",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/glpi-locations?reset=1"
+
+    listing = client.get("/glpi-locations?reset=1")
+
+    assert listing.status_code == 200
+    assert "Données GLPI réinitialisées" in listing.text
+    assert "Aucun import" in listing.text
+    assert "Aucun écart détecté" in listing.text
+
+
+def test_glpi_locations_reset_does_not_affect_inventory(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    client.post("/glpi-locations/reset")
+
+    assets = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    )
+
+    assert len(assets.json()) == 2

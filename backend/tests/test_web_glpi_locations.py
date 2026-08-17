@@ -196,6 +196,34 @@ def test_discrepancy_shown_when_numero_differs(client, admin_user):
     assert "01100099" in response.text
 
 
+def test_upload_pads_numero_piece_to_eight_characters(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "600001")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "<td>00600001</td>" in response.text
+    assert "<td>600001</td>" not in response.text
+
+
+def test_local_choice_dropdown_shows_numero_and_designation(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "01100021 - 021-ENTREPOT" in response.text
+    assert "01100023 - 023-REPRO" in response.text
+
+
 def test_no_discrepancy_when_numero_matches(client, admin_user):
 
     _login(client)

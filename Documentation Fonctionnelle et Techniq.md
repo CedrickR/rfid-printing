@@ -138,10 +138,10 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   | `Numéro d'inventaire` | Bien ID (clé de rapprochement avec l'inventaire) |
   | `Numéro de la pièce` | Comparé au `local_numero` de l'inventaire |
 
-  Toutes les autres colonnes du fichier sont ignorées. **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+  Toutes les autres colonnes du fichier sont ignorées. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
 - **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI (Bien ID, désignation, numéro local actuel, numéro de la pièce GLPI).
 - **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
-- **Correction** : chaque ligne propose une liste déroulante des **désignations de local** connues dans l'inventaire (ex. `021-ENTREPOT`), présélectionnée sur la désignation actuelle du bien ; le choix détermine le numéro local correspondant.
+- **Correction** : chaque ligne propose une liste déroulante des lieux connus dans l'inventaire, affichant à la fois le **numéro local et sa désignation** (ex. `01100021 - 021-ENTREPOT`), présélectionnée sur le lieu actuel du bien ; le choix détermine le numéro local correspondant.
 - **Génération d'un fichier CSV**, deux formats au choix, à partir des lignes cochées et du numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) :
   - **Générer un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, en-tête `Bien ID;Numéro local`).
   - **Générer un fichier CSV (avec colonnes de lieu)** (`POST /glpi-locations/export-csv-complet`, `;`, en-tête `Bien ID;Numéro local;Immeuble;Niveau;Local`) : ajoute les colonnes immeuble/niveau/local correspondant au numéro local retenu (celui du lieu corrigé, pas celui — potentiellement obsolète — du bien).

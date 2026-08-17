@@ -127,9 +127,31 @@ def get_current_user(
 
     return payload
 
+
+# Profils applicatifs : l'administrateur gère toutes les fonctions, le
+# gestionnaire d'inventaire couvre l'usage courant (import, biens, lots,
+# historique, fichiers RFID) sans les fonctions sensibles (modèle CMD,
+# utilisateurs, réinitialisation de la base), et le lecteur n'a accès
+# qu'à la consultation de l'inventaire.
+ROLE_ADMIN = "administrateur"
+ROLE_MANAGER = "gestionnaire"
+ROLE_READER = "lecteur"
+
+ROLES = (ROLE_ADMIN, ROLE_MANAGER, ROLE_READER)
+
+
+def require_admin(user):
+
+    if user["role"] != ROLE_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Accès refusé"
+        )
+
+
 def require_manager(user):
 
-    if user["role"] != "gestionnaire":
+    if user["role"] not in (ROLE_ADMIN, ROLE_MANAGER):
         raise HTTPException(
             status_code=403,
             detail="Accès refusé"
@@ -156,6 +178,10 @@ def get_current_user_web(request: Request):
 
     if not payload:
         raise WebAuthRequired(next_path=request.url.path)
+
+    # Rendu disponible aux templates (base.html) sans devoir l'ajouter
+    # au contexte de chaque route individuellement.
+    request.state.role = payload.get("role")
 
     return payload
 

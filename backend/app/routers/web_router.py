@@ -34,9 +34,12 @@ from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
 from app.auth import authenticate_user
 from app.auth import create_access_token
 from app.auth import get_current_user_web
+from app.auth import require_admin
 from app.auth import require_manager
 from app.auth import set_auth_cookie
 from app.auth import clear_auth_cookie
+from app.auth import ROLE_READER
+from app.auth import ROLES
 
 from app.services.print_job_service import (
     PrintJobService,
@@ -62,6 +65,16 @@ from app.services.rfid_scan_service import (
     NoValidLineError,
     format_lieu_code,
     format_bien_code,
+)
+from app.services.user_service import (
+    UserService,
+    MIN_PASSWORD_LENGTH,
+    DuplicateUsernameError,
+    InvalidRoleError,
+    WeakPasswordError,
+    UserNotFoundError,
+    LastAdminError,
+    SelfDeleteError,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -121,7 +134,13 @@ def login_submit(
         }
     )
 
-    redirect_to = next if next.startswith("/") else "/dashboard"
+    if user.role == ROLE_READER:
+        # Le profil lecteur n'a accès qu'à l'inventaire : "next" (page
+        # d'origine, souvent /dashboard) ne lui est de toute façon pas
+        # accessible.
+        redirect_to = "/assets"
+    else:
+        redirect_to = next if next.startswith("/") else "/dashboard"
 
     response = RedirectResponse(
         url=redirect_to,
@@ -152,6 +171,8 @@ def dashboard(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     imports_count = (
         db.query(Import)
@@ -197,10 +218,10 @@ def reset_database(
     """
     Vide les données métier (biens, imports, lots, historique). Les
     comptes utilisateurs sont conservés pour ne pas bloquer l'accès.
-    Réservé aux gestionnaires : action irréversible.
+    Réservé aux administrateurs : action irréversible.
     """
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     db.query(PrintHistory).delete()
     db.query(PrintJobLine).delete()
@@ -217,6 +238,227 @@ def reset_database(
 
     return RedirectResponse(
         url="/dashboard?reset=1",
+        status_code=303
+    )
+
+
+def _render_users_page(
+    request: Request,
+    db: Session,
+    error: str = None,
+    status_code: int = 200
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="users.html",
+        context={
+            "users": UserService.list_users(db),
+            "roles": ROLES,
+            "error": error
+        },
+        status_code=status_code
+    )
+
+
+def _user_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, DuplicateUsernameError):
+        return "Identifiant déjà utilisé ou invalide."
+
+    if isinstance(exc, InvalidRoleError):
+        return "Profil invalide."
+
+    if isinstance(exc, WeakPasswordError):
+        return (
+            "Le mot de passe doit contenir au moins "
+            f"{MIN_PASSWORD_LENGTH} caractères."
+        )
+
+    if isinstance(exc, LastAdminError):
+        return "Impossible : il doit rester au moins un administrateur."
+
+    if isinstance(exc, SelfDeleteError):
+        return "Impossible de supprimer votre propre compte."
+
+    return "Action impossible."
+
+
+@router.get("/admin/users")
+def users_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    return _render_users_page(request, db)
+
+
+@router.post("/admin/users")
+def users_create(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    role: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        UserService.create_user(db, username, password, role)
+
+    except (
+        DuplicateUsernameError,
+        InvalidRoleError,
+        WeakPasswordError
+    ) as e:
+
+        return _render_users_page(
+            request,
+            db,
+            error=_user_error_message(e),
+            status_code=400
+        )
+
+    logger.warning(
+        "Utilisateur '%s' créé (profil %s) par %s",
+        username.strip(),
+        role,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/users?created=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/users/{user_id}/role")
+def users_update_role(
+    user_id: int,
+    request: Request,
+    role: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        UserService.update_role(db, user_id, role)
+
+    except UserNotFoundError:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Utilisateur introuvable"
+        )
+
+    except (InvalidRoleError, LastAdminError) as e:
+
+        return _render_users_page(
+            request,
+            db,
+            error=_user_error_message(e),
+            status_code=400
+        )
+
+    logger.warning(
+        "Profil de l'utilisateur #%s changé pour %s par %s",
+        user_id,
+        role,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/users?updated=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/users/{user_id}/password")
+def users_reset_password(
+    user_id: int,
+    request: Request,
+    password: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        UserService.reset_password(db, user_id, password)
+
+    except UserNotFoundError:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Utilisateur introuvable"
+        )
+
+    except WeakPasswordError as e:
+
+        return _render_users_page(
+            request,
+            db,
+            error=_user_error_message(e),
+            status_code=400
+        )
+
+    logger.warning(
+        "Mot de passe de l'utilisateur #%s réinitialisé par %s",
+        user_id,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/users?password_reset=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/users/{user_id}/delete")
+def users_delete(
+    user_id: int,
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        UserService.delete_user(db, user_id, current_user["sub"])
+
+    except UserNotFoundError:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Utilisateur introuvable"
+        )
+
+    except (SelfDeleteError, LastAdminError) as e:
+
+        return _render_users_page(
+            request,
+            db,
+            error=_user_error_message(e),
+            status_code=400
+        )
+
+    logger.warning(
+        "Utilisateur #%s supprimé par %s",
+        user_id,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/users?deleted=1",
         status_code=303
     )
 
@@ -252,7 +494,7 @@ def cmd_template_page(
     db: Session = Depends(get_db)
 ):
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     template = CmdTemplateService.get_current(db)
 
@@ -278,7 +520,7 @@ def cmd_template_update(
     db: Session = Depends(get_db)
 ):
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     if not line_template.strip():
 
@@ -321,7 +563,7 @@ def cmd_template_preview(
     db: Session = Depends(get_db)
 ):
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     sample_asset = _sample_asset_for_preview(db)
 
@@ -373,6 +615,8 @@ def import_page(
     current_user=Depends(get_current_user_web)
 ):
 
+    require_manager(current_user)
+
     return templates.TemplateResponse(
         request=request,
         name="import.html",
@@ -390,6 +634,8 @@ async def import_preview(
     Aperçu du CSV (colonnes détectées, compteurs) sans écriture en base.
     Appelé en Ajax depuis la page d'import.
     """
+
+    require_manager(current_user)
 
     if not file.filename.lower().endswith(".csv"):
         return JSONResponse(
@@ -423,6 +669,8 @@ async def import_submit(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     if not file.filename.lower().endswith(".csv"):
 
@@ -604,6 +852,8 @@ def create_job_from_inventory(
     Création d'un lot à partir des biens cochés.
     """
 
+    require_manager(current_user)
+
     if not asset_ids:
 
         # Aucun bien coché : retour à l'inventaire
@@ -665,6 +915,8 @@ def export_immateriel(
     en-tête) à partir des biens cochés dans l'inventaire, au même format
     que les fichiers issus d'un lecteur RFID.
     """
+
+    require_manager(current_user)
 
     if not asset_ids:
 
@@ -729,6 +981,8 @@ def export_rfid_reader(
     uniquement.
     """
 
+    require_manager(current_user)
+
     assets_list = (
         db.query(Asset)
         .filter(
@@ -776,6 +1030,8 @@ def jobs_search_and_view(
     ne pas être capturée par ce pattern.
     """
 
+    require_manager(current_user)
+
     if not bien_id:
         return RedirectResponse(url="/jobs", status_code=303)
 
@@ -814,6 +1070,8 @@ def job_detail(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     job = (
         db.query(PrintJob)
@@ -870,6 +1128,8 @@ def jobs(
     db: Session = Depends(get_db)
 ):
 
+    require_manager(current_user)
+
     query = db.query(PrintJob)
 
     if bien_id:
@@ -908,6 +1168,8 @@ def history(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     history_list = (
         db.query(PrintHistory)
@@ -1030,6 +1292,8 @@ def rfid_scans_page(
     db: Session = Depends(get_db)
 ):
 
+    require_manager(current_user)
+
     return _render_rfid_scan_list(request, db)
 
 
@@ -1040,6 +1304,8 @@ async def rfid_scans_upload(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     if not file.filename.lower().endswith(".csv"):
 
@@ -1090,6 +1356,8 @@ def rfid_scan_detail(
     db: Session = Depends(get_db)
 ):
 
+    require_manager(current_user)
+
     scan_file = (
         db.query(RfidScanFile)
         .filter(
@@ -1136,6 +1404,8 @@ def rfid_scan_line_add(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     scan_file = (
         db.query(RfidScanFile)
@@ -1188,6 +1458,8 @@ def rfid_scan_line_update(
     db: Session = Depends(get_db)
 ):
 
+    require_manager(current_user)
+
     line = (
         db.query(RfidScanLine)
         .filter(
@@ -1233,6 +1505,8 @@ def rfid_scan_line_delete(
     db: Session = Depends(get_db)
 ):
 
+    require_manager(current_user)
+
     (
         db.query(RfidScanLine)
         .filter(
@@ -1256,6 +1530,8 @@ def rfid_scan_export(
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
+
+    require_manager(current_user)
 
     scan_file = (
         db.query(RfidScanFile)

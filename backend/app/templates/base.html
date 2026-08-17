@@ -26,7 +26,7 @@
     <!-- Sidebar -->
     <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
 
-        <a class="sidebar-brand d-flex align-items-center justify-content-center" href="/dashboard">
+        <a class="sidebar-brand d-flex align-items-center justify-content-center" href="{% if request.state.role == 'lecteur' %}/assets{% else %}/dashboard{% endif %}">
             <div class="sidebar-brand-icon">
                 <i class="fas fa-tags"></i>
             </div>
@@ -34,6 +34,8 @@
         </a>
 
         <hr class="sidebar-divider my-0">
+
+        {% if request.state.role != 'lecteur' %}
 
         <li class="nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">
             <a class="nav-link" href="/dashboard">
@@ -51,12 +53,16 @@
             </a>
         </li>
 
+        {% endif %}
+
         <li class="nav-item {% if request.url.path == '/assets' %}active{% endif %}">
             <a class="nav-link" href="/assets">
                 <i class="fas fa-fw fa-boxes"></i>
                 <span>Inventaire</span>
             </a>
         </li>
+
+        {% if request.state.role != 'lecteur' %}
 
         <li class="nav-item {% if request.url.path.startswith('/jobs') %}active{% endif %}">
             <a class="nav-link" href="/jobs">
@@ -79,6 +85,10 @@
             </a>
         </li>
 
+        {% endif %}
+
+        {% if request.state.role == 'administrateur' %}
+
         <hr class="sidebar-divider">
 
         <li class="nav-item {% if request.url.path == '/settings/cmd-template' %}active{% endif %}">
@@ -87,6 +97,15 @@
                 <span>Modèle CMD</span>
             </a>
         </li>
+
+        <li class="nav-item {% if request.url.path == '/admin/users' %}active{% endif %}">
+            <a class="nav-link" href="/admin/users">
+                <i class="fas fa-fw fa-users-cog"></i>
+                <span>Utilisateurs</span>
+            </a>
+        </li>
+
+        {% endif %}
 
         <hr class="sidebar-divider d-none d-md-block">
 

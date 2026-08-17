@@ -160,9 +160,15 @@
             </h6>
 
             <div>
+                {% if request.state.role == 'lecteur' %}
+                <button type="button" class="btn btn-outline-primary btn-sm" disabled title="Réservé aux gestionnaires et administrateurs">
+                    <i class="fas fa-wifi fa-sm"></i> Export lecteur RFID
+                </button>
+                {% else %}
                 <a href="/assets/export-rfid-reader" class="btn btn-outline-primary btn-sm">
                     <i class="fas fa-wifi fa-sm"></i> Export lecteur RFID
                 </a>
+                {% endif %}
                 <button type="button" id="clear-selection" class="btn btn-outline-secondary btn-sm">
                     Vider la sélection
                 </button>
@@ -171,10 +177,15 @@
                     formaction="/assets/export-immateriel"
                     formmethod="post"
                     class="btn btn-info btn-sm"
+                    {% if request.state.role == 'lecteur' %}disabled title="Réservé aux gestionnaires et administrateurs"{% endif %}
                 >
                     <i class="fas fa-file-csv fa-sm"></i> Inventaire immatériel
                 </button>
-                <button type="submit" class="btn btn-success btn-sm">
+                <button
+                    type="submit"
+                    class="btn btn-success btn-sm"
+                    {% if request.state.role == 'lecteur' %}disabled title="Réservé aux gestionnaires et administrateurs"{% endif %}
+                >
                     <i class="fas fa-plus fa-sm"></i> Créer un lot d'impression
                 </button>
             </div>

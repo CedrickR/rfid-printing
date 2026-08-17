@@ -23,6 +23,7 @@ from app.models import print_job_line_model  # noqa: E402,F401
 from app.models import print_history_model  # noqa: E402,F401
 from app.models import cmd_template_model  # noqa: E402,F401
 from app.models import rfid_scan_model  # noqa: E402,F401
+from app.models import glpi_asset_model  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

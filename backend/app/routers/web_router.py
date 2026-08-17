@@ -30,6 +30,7 @@ from app.models.print_job_model import PrintJob
 from app.models.print_history_model import PrintHistory
 from app.models.print_job_line_model import PrintJobLine
 from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
+from app.models.glpi_asset_model import GlpiImport, GlpiAsset
 
 from app.auth import authenticate_user
 from app.auth import create_access_token
@@ -75,6 +76,14 @@ from app.services.user_service import (
     UserNotFoundError,
     LastAdminError,
     SelfDeleteError,
+)
+from app.services.glpi_service import (
+    GlpiImportService,
+    GLPI_TYPES,
+    InvalidEncodingError as GlpiInvalidEncodingError,
+    InvalidGlpiTypeError,
+    MissingColumnsError as GlpiMissingColumnsError,
+    DuplicateBienIdError as GlpiDuplicateBienIdError,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -1724,6 +1733,247 @@ def rfid_scan_export(
 
     return Response(
         content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+def _glpi_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, GlpiInvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, GlpiMissingColumnsError):
+        return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
+
+    if isinstance(exc, GlpiDuplicateBienIdError):
+        shown = exc.duplicated_ids[:20]
+        suffix = (
+            f" (et {len(exc.duplicated_ids) - 20} de plus)"
+            if len(exc.duplicated_ids) > 20
+            else ""
+        )
+        return (
+            "Numéro d'inventaire en doublon dans le fichier : "
+            f"{', '.join(shown)}{suffix}"
+        )
+
+    return "Fichier GLPI invalide."
+
+
+def _local_options(db: Session):
+    """
+    Paires (numéro local, désignation) distinctes connues dans
+    l'inventaire, pour la liste déroulante de correction.
+    """
+
+    return (
+        db.query(Asset.local_numero, Asset.local_libelle)
+        .filter(Asset.local_numero.isnot(None))
+        .filter(Asset.local_numero != "")
+        .filter(Asset.local_libelle.isnot(None))
+        .filter(Asset.local_libelle != "")
+        .distinct()
+        .order_by(Asset.local_libelle)
+        .all()
+    )
+
+
+def _glpi_discrepancies(db: Session):
+    """
+    Biens connus à la fois dans l'inventaire et dans un import GLPI,
+    dont le numéro local (inventaire) diffère du numéro de la pièce
+    (GLPI).
+    """
+
+    rows = (
+        db.query(Asset, GlpiAsset)
+        .join(
+            GlpiAsset,
+            GlpiAsset.bien_id == Asset.bien_id
+        )
+        .order_by(
+            Asset.bien_id
+        )
+        .all()
+    )
+
+    return [
+        (asset, glpi_asset)
+        for asset, glpi_asset in rows
+        if (asset.local_numero or "").strip()
+        != (glpi_asset.numero_piece or "").strip()
+    ]
+
+
+def _render_glpi_locations(
+    request: Request,
+    db: Session,
+    error: str = None,
+    status_code: int = 200
+):
+
+    imports_by_type = {
+        glpi_type: (
+            db.query(GlpiImport)
+            .filter(GlpiImport.glpi_type == glpi_type)
+            .order_by(GlpiImport.imported_at.desc())
+            .first()
+        )
+        for glpi_type in GLPI_TYPES
+    }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="glpi_locations.html",
+        context={
+            "glpi_types": GLPI_TYPES,
+            "imports_by_type": imports_by_type,
+            "discrepancies": _glpi_discrepancies(db),
+            "local_options": _local_options(db),
+            "error": error
+        },
+        status_code=status_code
+    )
+
+
+@router.get("/glpi-locations")
+def glpi_locations_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    return _render_glpi_locations(request, db)
+
+
+@router.post("/glpi-locations")
+async def glpi_locations_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    glpi_type: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    if glpi_type not in GLPI_TYPES:
+
+        return _render_glpi_locations(
+            request,
+            db,
+            error="Type GLPI invalide.",
+            status_code=400
+        )
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return _render_glpi_locations(
+            request,
+            db,
+            error="Le fichier doit être un CSV",
+            status_code=400
+        )
+
+    content = await file.read()
+
+    try:
+        rows = GlpiImportService.parse(content)
+
+    except (
+        GlpiInvalidEncodingError,
+        GlpiMissingColumnsError,
+        GlpiDuplicateBienIdError
+    ) as e:
+
+        return _render_glpi_locations(
+            request,
+            db,
+            error=_glpi_error_message(e),
+            status_code=400
+        )
+
+    glpi_import = GlpiImportService.commit(
+        db,
+        rows,
+        glpi_type,
+        file.filename,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url=(
+            "/glpi-locations?imported=1"
+            f"&added={glpi_import.added_count}"
+            f"&updated={glpi_import.updated_count}"
+        ),
+        status_code=303
+    )
+
+
+@router.post("/glpi-locations/export-csv")
+async def glpi_locations_export_csv(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Génère un fichier CSV (';', avec en-tête) Bien ID / numéro local
+    corrigé, à partir des lignes cochées et de la correction choisie
+    dans la liste déroulante de chaque ligne.
+    """
+
+    require_manager(current_user)
+
+    form = await request.form()
+
+    asset_ids = form.getlist("asset_ids")
+
+    if not asset_ids:
+
+        return RedirectResponse(
+            url="/glpi-locations?error=no_selection",
+            status_code=303
+        )
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(["Bien ID", "Numéro local"])
+
+    for asset_id in asset_ids:
+
+        asset = (
+            db.query(Asset)
+            .filter(
+                Asset.id == int(asset_id)
+            )
+            .first()
+        )
+
+        if not asset:
+            continue
+
+        corrected = form.get(f"local_choice_{asset_id}")
+
+        writer.writerow(
+            [
+                asset.bien_id,
+                corrected or asset.local_numero or ""
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"codes_lieux_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
         media_type="text/csv",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"'

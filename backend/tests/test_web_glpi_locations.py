@@ -271,6 +271,102 @@ def test_export_csv_uses_corrected_choice_when_provided(client, admin_user):
     assert "20260001;01100023" in response.text
 
 
+def test_export_csv_complet_uses_current_location_by_default(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.post(
+        "/glpi-locations/export-csv-complet",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "codes_lieux_complet_" in response.headers["content-disposition"]
+    assert response.text == (
+        "Bien ID;Numéro local;Immeuble;Niveau;Local\n"
+        "20260001;01100021;SIEGE;REZ DE CHAUSSEE;021-ENTREPOT\n"
+    )
+
+
+def test_export_csv_complet_uses_location_of_corrected_numero(
+    client, admin_user
+):
+    """
+    Les colonnes de lieu doivent correspondre au numéro local corrigé
+    (celui choisi dans la liste déroulante), pas au lieu actuel
+    (potentiellement obsolète) du bien.
+    """
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.post(
+        "/glpi-locations/export-csv-complet",
+        data={
+            "asset_ids": ["1"],
+            "local_choice_1": "01100023"
+        }
+    )
+
+    assert response.status_code == 200
+    assert response.text == (
+        "Bien ID;Numéro local;Immeuble;Niveau;Local\n"
+        "20260001;01100023;SIEGE;REZ DE CHAUSSEE;023-REPRO\n"
+    )
+
+
+def test_export_csv_complet_requires_selection(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.post(
+        "/glpi-locations/export-csv-complet",
+        data={},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/glpi-locations?error=no_selection"
+
+
+def test_export_csv_complet_requires_manager_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/glpi-locations/export-csv-complet",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 403
+
+
+def test_glpi_locations_page_has_second_export_button(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "/glpi-locations/export-csv-complet" in response.text
+    assert "avec colonnes de lieu" in response.text
+
+
 def test_glpi_locations_requires_manager_role_for_upload(client, standard_user):
 
     client.post(

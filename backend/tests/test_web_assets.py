@@ -275,3 +275,64 @@ def test_export_immateriel_skips_assets_without_local_numero(
 
     assert response.status_code == 303
     assert response.headers["location"] == "/assets?error=no_location"
+
+
+def test_export_rfid_reader_requires_login(client):
+
+    response = client.get("/assets/export-rfid-reader", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_export_rfid_reader_contains_only_active_assets(client, admin_user):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets/export-rfid-reader")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "lecteur_rfid_" in response.headers["content-disposition"]
+    assert response.text == "1001;PC actif\n"
+
+
+def test_export_rfid_reader_is_semicolon_separated_bien_id_and_designation(
+    client, admin_user
+):
+
+    _login_and_seed_locations(client)
+
+    response = client.get("/assets/export-rfid-reader")
+
+    assert response.status_code == 200
+    assert "10001;PC Portable\n" in response.text
+    assert "10002;Ecran\n" in response.text
+    assert "10003;Imprimante\n" in response.text
+
+
+def test_export_rfid_reader_empty_when_no_active_assets(client, admin_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    csv_content = (
+        "numero;libelle;sortie\n"
+        "1001;PC sorti;2024-01-15\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    response = client.get("/assets/export-rfid-reader")
+
+    assert response.status_code == 200
+    assert response.text == ""

@@ -141,7 +141,11 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 - **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI (Bien ID, désignation, numéro local actuel, numéro de la pièce GLPI).
 - **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
 - **Correction** : chaque ligne propose une liste déroulante des **désignations de local** connues dans l'inventaire (ex. `021-ENTREPOT`), présélectionnée sur la désignation actuelle du bien ; le choix détermine le numéro local correspondant.
-- **Génération d'un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, avec en-tête `Bien ID;Numéro local`) à partir des lignes cochées, avec le numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) — destiné à la mise à jour du logiciel de gestion d'inventaire.
+- **Génération d'un fichier CSV**, deux formats au choix, à partir des lignes cochées et du numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) :
+  - **Générer un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, en-tête `Bien ID;Numéro local`).
+  - **Générer un fichier CSV (avec colonnes de lieu)** (`POST /glpi-locations/export-csv-complet`, `;`, en-tête `Bien ID;Numéro local;Immeuble;Niveau;Local`) : ajoute les colonnes immeuble/niveau/local correspondant au numéro local retenu (celui du lieu corrigé, pas celui — potentiellement obsolète — du bien).
+
+  Destinés à la mise à jour du logiciel de gestion d'inventaire.
 
 ### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
@@ -420,7 +424,8 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `GET` | `/rfid-scans/{id}/export` | Export horodaté du fichier de scan |
 | `GET` | `/glpi-locations` | Page de mise à jour des codes lieux (import GLPI + tableau des écarts) |
 | `POST` | `/glpi-locations` | Chargement d'un export GLPI (un des 5 types) |
-| `POST` | `/glpi-locations/export-csv` | Export CSV des corrections de numéro local pour les lignes sélectionnées |
+| `POST` | `/glpi-locations/export-csv` | Export CSV (Bien ID, numéro local) des corrections pour les lignes sélectionnées |
+| `POST` | `/glpi-locations/export-csv-complet` | Idem, avec en plus les colonnes immeuble/niveau/local du lieu retenu |
 
 ---
 

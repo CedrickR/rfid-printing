@@ -1781,6 +1781,40 @@ def _local_options(db: Session):
     )
 
 
+def _location_details_by_numero(db: Session):
+    """
+    Pour chaque numéro local distinct connu dans l'inventaire, ses
+    autres colonnes de lieu (désignation, immeuble, niveau) — pour
+    reconstituer les colonnes de lieu complètes du numéro local choisi
+    lors de la correction, plutôt que celles (potentiellement obsolètes)
+    du bien lui-même.
+    """
+
+    rows = (
+        db.query(
+            Asset.local_numero,
+            Asset.local_libelle,
+            Asset.immeuble_libelle,
+            Asset.niveau_libelle
+        )
+        .filter(Asset.local_numero.isnot(None))
+        .filter(Asset.local_numero != "")
+        .all()
+    )
+
+    details = {}
+
+    for numero, libelle, immeuble, niveau in rows:
+        if numero not in details:
+            details[numero] = {
+                "local_libelle": libelle,
+                "immeuble_libelle": immeuble,
+                "niveau_libelle": niveau
+            }
+
+    return details
+
+
 def _glpi_discrepancies(db: Session):
     """
     Biens connus à la fois dans l'inventaire et dans un import GLPI,
@@ -1971,6 +2005,85 @@ async def glpi_locations_export_csv(
 
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"codes_lieux_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.post("/glpi-locations/export-csv-complet")
+async def glpi_locations_export_csv_complet(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Comme /glpi-locations/export-csv, mais avec en plus les colonnes de
+    lieu (immeuble, niveau, local) correspondant au numéro local
+    corrigé, plutôt que le seul numéro.
+    """
+
+    require_manager(current_user)
+
+    form = await request.form()
+
+    asset_ids = form.getlist("asset_ids")
+
+    if not asset_ids:
+
+        return RedirectResponse(
+            url="/glpi-locations?error=no_selection",
+            status_code=303
+        )
+
+    location_details = _location_details_by_numero(db)
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(["Bien ID", "Numéro local", "Immeuble", "Niveau", "Local"])
+
+    for asset_id in asset_ids:
+
+        asset = (
+            db.query(Asset)
+            .filter(
+                Asset.id == int(asset_id)
+            )
+            .first()
+        )
+
+        if not asset:
+            continue
+
+        corrected = form.get(f"local_choice_{asset_id}") or asset.local_numero or ""
+
+        details = location_details.get(
+            corrected,
+            {
+                "local_libelle": asset.local_libelle,
+                "immeuble_libelle": asset.immeuble_libelle,
+                "niveau_libelle": asset.niveau_libelle
+            }
+        )
+
+        writer.writerow(
+            [
+                asset.bien_id,
+                corrected,
+                details["immeuble_libelle"] or "",
+                details["niveau_libelle"] or "",
+                details["local_libelle"] or ""
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"codes_lieux_complet_{timestamp}.csv"
 
     return Response(
         content=buffer.getvalue(),

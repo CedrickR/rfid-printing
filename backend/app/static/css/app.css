@@ -35,3 +35,29 @@ body {
 .table {
     background-color: white;
 }
+
+@media print {
+
+    .sidebar,
+    .topbar,
+    .sticky-footer,
+    .no-print {
+        display: none !important;
+    }
+
+    #content-wrapper,
+    #content,
+    .container-fluid {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    body {
+        background-color: white !important;
+    }
+
+    .card {
+        box-shadow: none !important;
+    }
+}

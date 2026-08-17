@@ -43,6 +43,8 @@ def create_print_job(
     Création d'un lot d'impression RFID
     """
 
+    require_manager(current_user)
+
     if not request.asset_ids:
         raise HTTPException(
             status_code=400,

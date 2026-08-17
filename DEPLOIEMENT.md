@@ -19,7 +19,7 @@ Ces questions bloquent plusieurs sections plus bas — à clarifier en premier.
 | 0.1 | Où l'application va-t-elle tourner ? (VM interne, serveur physique existant, poste dédié...) | Détermine toutes les étapes d'installation système (§1-4) |
 | 0.2 | **Comment le logiciel d'impression RFID récupère-t-il les fichiers `.cmd` générés ?** Lit-il un dossier réseau partagé, une clé/chemin local, ou faut-il qu'il interroge l'API (`GET /api/print/jobs/{id}/file`) ? | C'est le point d'intégration final de tout le projet — sans réponse, les étiquettes ne sortent jamais de l'imprimante. Voir §6. |
 | 0.3 | Nom de domaine ou adresse interne pour accéder à l'application (ex. `rfid.mondomaine.local`) | Nécessaire pour le certificat HTTPS et la configuration du reverse proxy (§4) |
-| 0.4 | Qui sont les utilisateurs réels et quels rôles (`gestionnaire` / `employe`) leur attribuer ? | Il n'existe pas d'interface de création de compte — les comptes sont créés par script (§8) |
+| 0.4 | Qui sont les utilisateurs réels et quels profils (`administrateur` / `gestionnaire` / `lecteur`) leur attribuer ? | Le premier compte administrateur est créé par script, les suivants via la page Utilisateurs de l'application (§8) |
 
 ---
 
@@ -186,7 +186,7 @@ Toute la donnée métier vit dans un seul fichier SQLite (`backend/rfid.db`) plu
 
 *(vous)*
 
-Il n'existe pas d'interface de création de compte dans l'application — uniquement `seed.py` comme modèle. Créer les comptes réels de l'équipe avant l'ouverture, par exemple :
+La gestion des comptes se fait désormais dans l'application, page **Utilisateurs** (`/admin/users`, réservée au profil `administrateur`) : création de compte, changement de profil, réinitialisation de mot de passe et suppression. `seed.py` ne sert plus qu'à amorcer le tout premier compte administrateur d'une installation neuve :
 
 ```bash
 cd /opt/rfid-printing/backend
@@ -197,15 +197,19 @@ from app.models.user_model import User
 from app.auth import hash_password
 
 db = SessionLocal()
-db.add(User(username='j.dupont', password_hash=hash_password('UnMotDePasseFort!'), role='gestionnaire'))
+db.add(User(username='j.dupont', password_hash=hash_password('UnMotDePasseFort!'), role='administrateur'))
 db.commit()
 print('Compte créé')
 "
 ```
 
-- Rôle `gestionnaire` : accès complet, y compris génération/suppression de lot, modèle CMD, et le bouton **« Vider la base de données »** (action irréversible, réservée à ce rôle — informer les gestionnaires de sa portée avant l'ouverture).
-- Rôle `employe` : consultation et sélection uniquement.
-- Décider avec l'équipe qui a besoin de quel rôle, et documenter la procédure de création de compte ci-dessus dans un espace accessible aux administrateurs futurs (elle n'est, à ce stade, écrite que dans ce fichier).
+Trois profils :
+
+- `administrateur` : accès complet, y compris le modèle CMD, la gestion des utilisateurs/profils et le bouton **« Vider la base de données »** (action irréversible — informer les administrateurs de sa portée avant l'ouverture).
+- `gestionnaire` : usage courant (import, inventaire, lots, historique, fichiers RFID), sans le modèle CMD, la gestion des utilisateurs ni la réinitialisation de la base.
+- `lecteur` : uniquement la page Inventaire, en lecture — les boutons d'export et de création de lot y sont désactivés.
+
+Se connecter avec le compte administrateur créé ci-dessus pour créer ensuite les comptes réels de l'équipe via `/admin/users`.
 
 ---
 

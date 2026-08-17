@@ -24,9 +24,25 @@ def _seed_assets(client):
     )
 
 
-def test_reset_database_requires_manager_role(client, standard_user):
+def test_reset_database_requires_admin_role(client, standard_user):
 
     _login_web(client, "employe", "Employe123!")
+
+    response = client.post(
+        "/admin/reset-database",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_database_denies_manager_role(client, manager_user):
+    """
+    Réservé aux administrateurs : un gestionnaire d'inventaire ne doit
+    plus pouvoir vider la base.
+    """
+
+    _login_web(client, "gestionnaire", "Gestionnaire123!")
 
     response = client.post(
         "/admin/reset-database",

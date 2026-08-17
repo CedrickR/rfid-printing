@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Utilisateurs et profils
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+{% if request.query_params.get('created') == '1' %}
+<div class="alert alert-success">
+    Utilisateur créé.
+</div>
+{% elif request.query_params.get('updated') == '1' %}
+<div class="alert alert-success">
+    Profil mis à jour.
+</div>
+{% elif request.query_params.get('password_reset') == '1' %}
+<div class="alert alert-success">
+    Mot de passe réinitialisé.
+</div>
+{% elif request.query_params.get('deleted') == '1' %}
+<div class="alert alert-success">
+    Utilisateur supprimé.
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Comptes existants
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+
+                    <tr>
+                        <th>Identifiant</th>
+                        <th>Profil</th>
+                        <th>Changer le profil</th>
+                        <th>Réinitialiser le mot de passe</th>
+                        <th></th>
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    {% for user in users %}
+
+                    <tr>
+
+                        <td class="align-middle">{{ user.username }}</td>
+
+                        <td class="align-middle">
+                            <span class="badge badge-secondary">{{ user.role }}</span>
+                        </td>
+
+                        <td>
+                            <form
+                                method="post"
+                                action="/admin/users/{{ user.id }}/role"
+                                class="form-inline"
+                            >
+                                <select
+                                    class="form-control form-control-sm mr-2"
+                                    name="role"
+                                >
+                                    {% for role_option in roles %}
+                                    <option value="{{ role_option }}" {% if role_option == user.role %}selected{% endif %}>
+                                        {{ role_option }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-save fa-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+
+                        <td>
+                            <form
+                                method="post"
+                                action="/admin/users/{{ user.id }}/password"
+                                class="form-inline"
+                            >
+                                <input
+                                    type="password"
+                                    class="form-control form-control-sm mr-2"
+                                    style="max-width: 180px;"
+                                    name="password"
+                                    placeholder="Nouveau mot de passe"
+                                    minlength="8"
+                                    required
+                                >
+                                <button type="submit" class="btn btn-secondary btn-sm">
+                                    <i class="fas fa-key fa-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+
+                        <td>
+                            <form
+                                method="post"
+                                action="/admin/users/{{ user.id }}/delete"
+                                onsubmit="return confirm('Supprimer définitivement l\'utilisateur {{ user.username }} ?');"
+                            >
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-trash fa-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Créer un utilisateur
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <form method="post" action="/admin/users" class="form-inline">
+
+            <label class="mr-2 mb-2" for="username">
+                Identifiant
+            </label>
+            <input
+                type="text"
+                class="form-control mr-3 mb-2"
+                id="username"
+                name="username"
+                required
+            >
+
+            <label class="mr-2 mb-2" for="password">
+                Mot de passe
+            </label>
+            <input
+                type="password"
+                class="form-control mr-3 mb-2"
+                id="password"
+                name="password"
+                minlength="8"
+                required
+            >
+
+            <label class="mr-2 mb-2" for="role">
+                Profil
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                id="role"
+                name="role"
+            >
+                {% for role_option in roles %}
+                <option value="{{ role_option }}">{{ role_option }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="btn btn-success mb-2">
+                <i class="fas fa-user-plus fa-sm"></i> Créer
+            </button>
+
+        </form>
+
+        <p class="text-muted small mb-0 mt-2">
+            Profils : <strong>administrateur</strong> (toutes les
+            fonctions), <strong>gestionnaire</strong> (usage courant,
+            sans le modèle CMD, la gestion des utilisateurs ni la
+            réinitialisation de la base), <strong>lecteur</strong>
+            (consultation de l'inventaire uniquement).
+        </p>
+
+    </div>
+
+</div>
+
+{% endblock %}

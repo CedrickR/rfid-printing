@@ -21,9 +21,22 @@ def test_cmd_template_page_requires_login(client):
     assert response.headers["location"].startswith("/login")
 
 
-def test_cmd_template_page_requires_manager_role(client, standard_user):
+def test_cmd_template_page_requires_admin_role(client, standard_user):
 
     _login(client, "employe", "Employe123!")
+
+    response = client.get("/settings/cmd-template")
+
+    assert response.status_code == 403
+
+
+def test_cmd_template_page_denies_manager_role(client, manager_user):
+    """
+    Réservé aux administrateurs : un gestionnaire d'inventaire ne doit
+    plus pouvoir consulter/modifier le modèle CMD.
+    """
+
+    _login(client, "gestionnaire", "Gestionnaire123!")
 
     response = client.get("/settings/cmd-template")
 

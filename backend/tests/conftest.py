@@ -64,6 +64,27 @@ def admin_user():
         password_hash=hash_password(
             "Admin123!"
         ),
+        role="administrateur"
+    )
+
+    db.add(user)
+    db.commit()
+
+    yield user
+
+    db.close()
+
+
+@pytest.fixture
+def manager_user():
+
+    db = TestingSessionLocal()
+
+    user = User(
+        username="gestionnaire",
+        password_hash=hash_password(
+            "Gestionnaire123!"
+        ),
         role="gestionnaire"
     )
 
@@ -85,7 +106,7 @@ def standard_user():
         password_hash=hash_password(
             "Employe123!"
         ),
-        role="employe"
+        role="lecteur"
     )
 
     db.add(user)

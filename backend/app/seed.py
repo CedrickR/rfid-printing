@@ -10,7 +10,7 @@ db = SessionLocal()
 admin = User(
     username="admin",
     password_hash=hash_password("Admin123!"),
-    role="gestionnaire"
+    role="administrateur"
 )
 
 db.add(admin)

@@ -839,6 +839,14 @@ def assets(
         .all()
     )
 
+    last_import = (
+        db.query(Import)
+        .order_by(
+            Import.imported_at.desc()
+        )
+        .first()
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="assets.html",
@@ -856,7 +864,8 @@ def assets(
             "local_options": _distinct_values(db, Asset.local_libelle),
             "page": page,
             "total": total,
-            "page_size": page_size
+            "page_size": page_size,
+            "last_import": last_import
         }
     )
 

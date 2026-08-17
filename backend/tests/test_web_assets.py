@@ -411,3 +411,74 @@ def test_export_csv_accessible_to_reader_role(client, standard_user):
     response = client.get("/assets/export-csv")
 
     assert response.status_code == 200
+
+
+def test_assets_page_shows_no_last_import_when_database_empty(
+    client, admin_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Dernière importation" not in response.text
+
+
+def test_assets_page_shows_last_import_date_and_user(client, admin_user):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Dernière importation" in response.text
+    assert "par admin" in response.text
+
+
+def test_assets_page_shows_most_recent_import_when_several(
+    client, admin_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "premier.csv",
+                "numero;libelle;sortie\n1001;Bien 1;\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "second.csv",
+                "numero;libelle;sortie\n1002;Bien 2;\n",
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert response.text.count("Dernière importation") == 1

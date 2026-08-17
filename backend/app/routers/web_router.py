@@ -718,6 +718,52 @@ def export_immateriel(
     )
 
 
+@router.get("/assets/export-rfid-reader")
+def export_rfid_reader(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Génère le fichier CSV (';', sans en-tête) destiné à alimenter le
+    lecteur RFID : tous les biens actifs, Bien ID et désignation
+    uniquement.
+    """
+
+    assets_list = (
+        db.query(Asset)
+        .filter(
+            Asset.is_active == True
+        )
+        .order_by(
+            Asset.bien_id
+        )
+        .all()
+    )
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    for asset in assets_list:
+        writer.writerow(
+            [
+                asset.bien_id,
+                asset.bien_designation
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"lecteur_rfid_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
 @router.get("/jobs/search")
 def jobs_search_and_view(
     bien_id: str = Query(default=""),

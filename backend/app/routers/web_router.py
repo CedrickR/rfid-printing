@@ -734,24 +734,16 @@ def _distinct_values(db: Session, column):
     )
 
 
-@router.get("/assets")
-def assets(
-    request: Request,
-    q: str = Query(default=""),
-    active_only: bool = False,
-    bien_id_from: str = Query(default=""),
-    bien_id_to: str = Query(default=""),
-    immeuble: str = Query(default=""),
-    niveau: str = Query(default=""),
-    local: str = Query(default=""),
-    page: int = 1,
-    page_size: int = Query(default=10),
-    current_user=Depends(get_current_user_web),
-    db: Session = Depends(get_db)
+def _filtered_assets_query(
+    db: Session,
+    q: str,
+    active_only: bool,
+    bien_id_from: str,
+    bien_id_to: str,
+    immeuble: str,
+    niveau: str,
+    local: str
 ):
-
-    if page_size not in (10, 25, 50):
-        page_size = 10
 
     query = db.query(Asset)
 
@@ -810,6 +802,32 @@ def assets(
             Asset.local_libelle == local
         )
 
+    return query
+
+
+@router.get("/assets")
+def assets(
+    request: Request,
+    q: str = Query(default=""),
+    active_only: bool = False,
+    bien_id_from: str = Query(default=""),
+    bien_id_to: str = Query(default=""),
+    immeuble: str = Query(default=""),
+    niveau: str = Query(default=""),
+    local: str = Query(default=""),
+    page: int = 1,
+    page_size: int = Query(default=10),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    if page_size not in (10, 25, 50):
+        page_size = 10
+
+    query = _filtered_assets_query(
+        db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local
+    )
+
     total = query.count()
 
     assets_list = (
@@ -841,6 +859,72 @@ def assets(
             "page_size": page_size
         }
     )
+
+
+@router.get("/assets/export-csv")
+def export_assets_csv(
+    q: str = Query(default=""),
+    active_only: bool = False,
+    bien_id_from: str = Query(default=""),
+    bien_id_to: str = Query(default=""),
+    immeuble: str = Query(default=""),
+    niveau: str = Query(default=""),
+    local: str = Query(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Exporte en CSV (';', avec en-tête) l'ensemble des biens correspondant
+    aux critères de recherche courants (pas seulement la page affichée).
+    """
+
+    assets_list = (
+        _filtered_assets_query(
+            db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local
+        )
+        .all()
+    )
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(
+        [
+            "Bien ID",
+            "Désignation",
+            "Numéro local",
+            "Immeuble",
+            "Niveau",
+            "Local",
+            "Actif"
+        ]
+    )
+
+    for asset in assets_list:
+        writer.writerow(
+            [
+                asset.bien_id,
+                asset.bien_designation,
+                asset.local_numero or "",
+                asset.immeuble_libelle or "",
+                asset.niveau_libelle or "",
+                asset.local_libelle or "",
+                "Actif" if asset.is_active else "Exclu"
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"inventaire_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
 
 @router.post("/jobs/create")
 def create_job_from_inventory(

@@ -336,3 +336,78 @@ def test_export_rfid_reader_empty_when_no_active_assets(client, admin_user):
 
     assert response.status_code == 200
     assert response.text == ""
+
+
+def test_export_csv_requires_login(client):
+
+    response = client.get("/assets/export-csv", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_export_csv_contains_header_and_all_matching_rows(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "inventaire_" in response.headers["content-disposition"]
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;Actif"
+    )
+    assert len(lines) == 4  # en-tête + 3 biens
+    assert "1001;PC actif;;;;;Actif" in lines
+    assert "1002;Ecran sorti tot;;;;;Exclu" in lines
+
+
+def test_export_csv_respects_search_filters(client, admin_user):
+
+    _login_and_seed(client)
+
+    response = client.get(
+        "/assets/export-csv",
+        params={"bien_id_from": "1002", "bien_id_to": "1003"}
+    )
+
+    assert response.status_code == 200
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert len(lines) == 3  # en-tête + 2 biens
+    assert "PC actif" not in response.text
+    assert "Ecran sorti tot" in response.text
+    assert "Imprimante sortie tard" in response.text
+
+
+def test_export_csv_is_not_limited_by_page_size(client, admin_user):
+
+    _login_and_seed_many(client, 30)
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+    assert response.text.count("Bien numero ") == 30
+
+
+def test_export_csv_accessible_to_reader_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200

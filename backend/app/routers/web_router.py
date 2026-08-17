@@ -1204,6 +1204,73 @@ def job_detail(
         }
     )
 
+
+@router.get("/jobs/{job_id}/export-csv")
+def export_job_csv(
+    job_id: int,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Exporte en CSV (';', avec en-tête) la liste des biens associés au lot.
+    """
+
+    require_manager(current_user)
+
+    job = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.id == job_id
+        )
+        .first()
+    )
+
+    if not job:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Lot introuvable"
+        )
+
+    lines = (
+        db.query(PrintJobLine)
+        .filter(
+            PrintJobLine.job_id == job.id
+        )
+        .all()
+    )
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(["Bien ID", "Désignation"])
+
+    for line in lines:
+
+        asset = (
+            db.query(Asset)
+            .filter(
+                Asset.id == line.asset_id
+            )
+            .first()
+        )
+
+        if asset:
+            writer.writerow([asset.bien_id, asset.bien_designation])
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"lot_{job_id}_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
 @router.get("/jobs")
 def jobs(
     request: Request,

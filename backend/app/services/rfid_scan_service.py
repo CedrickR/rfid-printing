@@ -73,7 +73,12 @@ class RfidScanService:
 
         reader = csv.reader(StringIO(raw_text), delimiter=";")
 
-        valid_lines = []
+        # bien_id -> lieu_numero : un lecteur RFID peut relire la même
+        # étiquette plusieurs fois dans une même passe (contrairement à
+        # un export administratif où un doublon signale une erreur) ;
+        # on ne conserve que la dernière lecture au lieu de faire
+        # échouer l'import.
+        seen = {}
         invalid_rows = 0
 
         for row in reader:
@@ -92,7 +97,12 @@ class RfidScanService:
                 invalid_rows += 1
                 continue
 
-            valid_lines.append((lieu_numero, bien_id))
+            seen[bien_id] = lieu_numero
+
+        valid_lines = [
+            (lieu_numero, bien_id)
+            for bien_id, lieu_numero in seen.items()
+        ]
 
         if not valid_lines:
             raise NoValidLineError()
@@ -100,7 +110,13 @@ class RfidScanService:
         return valid_lines, invalid_rows
 
     @staticmethod
-    def commit(db, valid_lines, filename: str, username: str) -> RfidScanFile:
+    def commit(db, valid_lines, filename: str, username: str):
+        """
+        Un Bien ID déjà présent en base (chargé via un fichier
+        précédent) est mis à jour avec son nouveau numéro de lieu au
+        lieu d'être dupliqué — le bien vient d'être relu, à un autre
+        endroit. Retourne (scan_file, added_count, updated_count).
+        """
 
         scan_file = RfidScanFile(
             filename=filename,
@@ -112,19 +128,39 @@ class RfidScanService:
         db.commit()
         db.refresh(scan_file)
 
+        added_count = 0
+        updated_count = 0
+
         for lieu_numero, bien_id in valid_lines:
 
-            db.add(
-                RfidScanLine(
-                    scan_file_id=scan_file.id,
-                    lieu_numero=lieu_numero,
-                    bien_id=bien_id
-                )
+            existing = (
+                db.query(RfidScanLine)
+                .filter(RfidScanLine.bien_id == bien_id)
+                .first()
             )
+
+            if existing:
+
+                existing.lieu_numero = lieu_numero
+                existing.scan_file_id = scan_file.id
+
+                updated_count += 1
+
+            else:
+
+                db.add(
+                    RfidScanLine(
+                        scan_file_id=scan_file.id,
+                        lieu_numero=lieu_numero,
+                        bien_id=bien_id
+                    )
+                )
+
+                added_count += 1
 
         db.commit()
 
-        return scan_file
+        return scan_file, added_count, updated_count
 
     @staticmethod
     def export_csv(lines) -> str:

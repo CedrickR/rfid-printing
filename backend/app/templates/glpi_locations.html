@@ -20,6 +20,11 @@
     {{ request.query_params.get('added') }} bien(s) ajouté(s),
     {{ request.query_params.get('updated') }} mis à jour.
 </div>
+{% elif request.query_params.get('reset') == '1' %}
+<div class="alert alert-success">
+    Données GLPI réinitialisées : tous les imports et biens GLPI ont
+    été supprimés. L'inventaire n'est pas affecté.
+</div>
 {% endif %}
 
 <div class="card shadow mb-4">
@@ -118,6 +123,36 @@
 
 </div>
 
+<div class="card shadow border-left-danger mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-danger">
+            Zone sensible
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <p class="mb-3">
+            Supprime définitivement tous les imports et biens GLPI
+            chargés (les 5 types). L'inventaire n'est pas affecté.
+            Cette action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/glpi-locations/reset"
+            onsubmit="return confirm('Supprimer définitivement toutes les données GLPI chargées (imports et biens) ? Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Vider la table des données GLPI
+            </button>
+        </form>
+
+    </div>
+
+</div>
+
 <form method="post" action="/glpi-locations/export-csv" id="glpi-form">
 
     <div class="card shadow mb-4">
@@ -195,7 +230,7 @@
                                         value="{{ numero }}"
                                         {% if numero == asset.local_numero %}selected{% endif %}
                                     >
-                                        {{ libelle }}
+                                        {{ numero }} - {{ libelle }}
                                     </option>
                                     {% endfor %}
                                 </select>

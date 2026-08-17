@@ -18,6 +18,20 @@ BIEN_ID_COLUMN = "Numéro d'inventaire"
 NUMERO_PIECE_COLUMN = "Numéro de la pièce"
 REQUIRED_COLUMNS = [BIEN_ID_COLUMN, NUMERO_PIECE_COLUMN]
 
+# Le numéro de la pièce est toujours sur 8 caractères dans l'inventaire
+# (ex. "00600001") ; GLPI l'exporte parfois sans les zéros non
+# significatifs (ex. "600001") : on complète à gauche pour rester
+# comparable au numéro local de l'inventaire.
+NUMERO_PIECE_LENGTH = 8
+
+
+def pad_numero_piece(numero_piece: str) -> str:
+
+    if not numero_piece:
+        return numero_piece
+
+    return numero_piece.zfill(NUMERO_PIECE_LENGTH)
+
 
 class InvalidEncodingError(Exception):
     pass
@@ -80,7 +94,9 @@ class GlpiImportService:
         for row in reader:
 
             bien_id = (row.get(BIEN_ID_COLUMN) or "").strip()
-            numero_piece = (row.get(NUMERO_PIECE_COLUMN) or "").strip()
+            numero_piece = pad_numero_piece(
+                (row.get(NUMERO_PIECE_COLUMN) or "").strip()
+            )
 
             if not bien_id:
                 continue

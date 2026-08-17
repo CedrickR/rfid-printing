@@ -5,6 +5,7 @@ from app.services.glpi_service import (
     InvalidEncodingError,
     MissingColumnsError,
     DuplicateBienIdError,
+    pad_numero_piece,
 )
 
 
@@ -32,6 +33,37 @@ def test_parse_extracts_bien_id_and_numero_piece():
     rows = GlpiImportService.parse(content)
 
     assert rows == [("20260001", "01100021")]
+
+
+def test_pad_numero_piece_completes_to_eight_characters():
+
+    assert pad_numero_piece("600001") == "00600001"
+    assert pad_numero_piece("1101043") == "01101043"
+    assert pad_numero_piece("00600001") == "00600001"
+
+
+def test_pad_numero_piece_leaves_empty_value_untouched():
+
+    assert pad_numero_piece("") == ""
+    assert pad_numero_piece(None) is None
+
+
+def test_parse_pads_numero_piece_to_eight_characters():
+
+    content = (HEADER + _row("20260001", "600001")).encode("utf-8")
+
+    rows = GlpiImportService.parse(content)
+
+    assert rows == [("20260001", "00600001")]
+
+
+def test_parse_leaves_empty_numero_piece_untouched():
+
+    content = (HEADER + _row("20260001", "")).encode("utf-8")
+
+    rows = GlpiImportService.parse(content)
+
+    assert rows == [("20260001", "")]
 
 
 def test_parse_skips_rows_without_bien_id():

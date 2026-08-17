@@ -1497,17 +1497,20 @@ async def rfid_scans_upload(
             error=_rfid_scan_error_message(e)
         )
 
-    scan_file = RfidScanService.commit(
+    scan_file, added_count, updated_count = RfidScanService.commit(
         db,
         valid_lines,
         file.filename,
         current_user["sub"]
     )
 
-    redirect_url = f"/rfid-scans/{scan_file.id}"
+    redirect_url = (
+        f"/rfid-scans/{scan_file.id}"
+        f"?added={added_count}&updated={updated_count}"
+    )
 
     if invalid_rows:
-        redirect_url += f"?invalid={invalid_rows}"
+        redirect_url += f"&invalid={invalid_rows}"
 
     return RedirectResponse(
         url=redirect_url,
@@ -1521,6 +1524,8 @@ def rfid_scan_detail(
     scan_file_id: int,
     error: str = Query(default=None),
     invalid: int = Query(default=0),
+    added: int = Query(default=None),
+    updated: int = Query(default=None),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
@@ -1560,7 +1565,9 @@ def rfid_scan_detail(
             "scan_file": scan_file,
             "lines": lines,
             "error": error,
-            "invalid": invalid
+            "invalid": invalid,
+            "added": added,
+            "updated": updated
         }
     )
 
@@ -1598,6 +1605,21 @@ def rfid_scan_line_add(
 
         return RedirectResponse(
             url=f"/rfid-scans/{scan_file_id}?error=missing_fields",
+            status_code=303
+        )
+
+    duplicate = (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.bien_id == bien_id
+        )
+        .first()
+    )
+
+    if duplicate:
+
+        return RedirectResponse(
+            url=f"/rfid-scans/{scan_file_id}?error=duplicate_bien_id",
             status_code=303
         )
 
@@ -1652,6 +1674,22 @@ def rfid_scan_line_update(
 
         return RedirectResponse(
             url=f"/rfid-scans/{scan_file_id}?error=missing_fields",
+            status_code=303
+        )
+
+    duplicate = (
+        db.query(RfidScanLine)
+        .filter(
+            RfidScanLine.bien_id == bien_id,
+            RfidScanLine.id != line.id
+        )
+        .first()
+    )
+
+    if duplicate:
+
+        return RedirectResponse(
+            url=f"/rfid-scans/{scan_file_id}?error=duplicate_bien_id",
             status_code=303
         )
 
@@ -1880,7 +1918,7 @@ def glpi_locations_page(
     db: Session = Depends(get_db)
 ):
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     return _render_glpi_locations(request, db)
 
@@ -1894,7 +1932,7 @@ async def glpi_locations_upload(
     db: Session = Depends(get_db)
 ):
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     if glpi_type not in GLPI_TYPES:
 
@@ -1962,7 +2000,7 @@ async def glpi_locations_export_csv(
     dans la liste déroulante de chaque ligne.
     """
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     form = await request.form()
 
@@ -2027,7 +2065,7 @@ async def glpi_locations_export_csv_complet(
     corrigé, plutôt que le seul numéro.
     """
 
-    require_manager(current_user)
+    require_admin(current_user)
 
     form = await request.form()
 
@@ -2091,4 +2129,33 @@ async def glpi_locations_export_csv_complet(
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"'
         }
+    )
+
+
+@router.post("/glpi-locations/reset")
+def glpi_locations_reset(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Vide les données GLPI importées (glpi_assets, glpi_imports).
+    N'affecte pas l'inventaire ni les autres données de l'application.
+    Réservé aux administrateurs : action irréversible.
+    """
+
+    require_admin(current_user)
+
+    db.query(GlpiAsset).delete()
+    db.query(GlpiImport).delete()
+
+    db.commit()
+
+    logger.warning(
+        "Données GLPI réinitialisées par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/glpi-locations?reset=1",
+        status_code=303
     )

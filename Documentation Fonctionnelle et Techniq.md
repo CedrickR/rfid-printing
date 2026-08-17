@@ -122,11 +122,12 @@ Gestion des fichiers CSV bruts **issus d'un lecteur RFID physique** : 2 colonnes
 
 Fonctions :
 
-- **Chargement** d'un fichier (`POST /rfid-scans`) : les lignes valides sont enregistrées en base ; les lignes dont un des deux préfixes est absent sont ignorées et comptabilisées (l'import du reste n'échoue pas).
-- **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles.
+- **Chargement** d'un fichier (`POST /rfid-scans`) : les lignes valides sont enregistrées en base ; les lignes dont un des deux préfixes est absent sont ignorées et comptabilisées (l'import du reste n'échoue pas). Une même étiquette relue plusieurs fois dans un seul fichier ne produit qu'une seule ligne (dernière lecture retenue).
+- **Jamais de doublon de Bien ID** : un Bien ID déjà présent en base (chargé via un fichier précédent, quel qu'il soit) est **mis à jour** avec son nouveau numéro de lieu — au lieu d'être dupliqué — et rattaché au fichier qui vient de le fournir. Le compte-rendu après chargement indique le nombre de biens ajoutés et mis à jour.
+- **Édition** des lignes d'un fichier chargé (`/rfid-scans/{id}`) : ajout, modification, suppression de lignes individuelles ; l'ajout ou la modification d'une ligne vers un Bien ID déjà utilisé par une autre ligne est refusé.
 - **Export horodaté** (`GET /rfid-scans/{id}/export`) : reconstruit le CSV 2 colonnes/`;`/sans en-tête à partir des lignes (éditées ou non), nom de fichier `export_rfid_AAAAMMJJ_HHMMSS.csv`.
 
-### 2.7 Mise à jour des codes lieux (`/glpi-locations`)
+### 2.7 Mise à jour des codes lieux (`/glpi-locations`, administrateur uniquement)
 
 Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de la pièce** connu dans **GLPI**, pour détecter et corriger les écarts.
 
@@ -137,15 +138,16 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   | `Numéro d'inventaire` | Bien ID (clé de rapprochement avec l'inventaire) |
   | `Numéro de la pièce` | Comparé au `local_numero` de l'inventaire |
 
-  Toutes les autres colonnes du fichier sont ignorées. **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+  Toutes les autres colonnes du fichier sont ignorées. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
 - **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI (Bien ID, désignation, numéro local actuel, numéro de la pièce GLPI).
 - **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
-- **Correction** : chaque ligne propose une liste déroulante des **désignations de local** connues dans l'inventaire (ex. `021-ENTREPOT`), présélectionnée sur la désignation actuelle du bien ; le choix détermine le numéro local correspondant.
+- **Correction** : chaque ligne propose une liste déroulante des lieux connus dans l'inventaire, affichant à la fois le **numéro local et sa désignation** (ex. `01100021 - 021-ENTREPOT`), présélectionnée sur le lieu actuel du bien ; le choix détermine le numéro local correspondant.
 - **Génération d'un fichier CSV**, deux formats au choix, à partir des lignes cochées et du numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) :
   - **Générer un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, en-tête `Bien ID;Numéro local`).
   - **Générer un fichier CSV (avec colonnes de lieu)** (`POST /glpi-locations/export-csv-complet`, `;`, en-tête `Bien ID;Numéro local;Immeuble;Niveau;Local`) : ajoute les colonnes immeuble/niveau/local correspondant au numéro local retenu (celui du lieu corrigé, pas celui — potentiellement obsolète — du bien).
 
   Destinés à la mise à jour du logiciel de gestion d'inventaire.
+- **Vider la table des données GLPI** (`POST /glpi-locations/reset`, zone sensible) : supprime définitivement tous les imports et biens GLPI chargés (les 5 types). N'affecte pas l'inventaire ni les autres données de l'application. Action irréversible, confirmation JavaScript obligatoire.
 
 ### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
@@ -189,7 +191,7 @@ Trois profils (champ `role` de la table `users`) :
 | Profil | Description |
 |---|---|
 | `administrateur` | Toutes les fonctions, y compris le modèle CMD, la gestion des utilisateurs/profils et la réinitialisation de la base. |
-| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID, mise à jour des codes lieux (GLPI). **Sans** le modèle CMD, la gestion des utilisateurs, ni la réinitialisation de la base. |
+| `gestionnaire` | Usage courant : import, inventaire, lots, historique, fichiers RFID. **Sans** le modèle CMD, la mise à jour des codes lieux (GLPI), la gestion des utilisateurs, ni la réinitialisation de la base. |
 | `lecteur` | Consultation de l'inventaire uniquement (`/assets`). Toute autre page renvoie une erreur 403. Les boutons d'export/création de lot y sont désactivés. |
 
 ### Matrice d'accès (pages Web)
@@ -204,7 +206,7 @@ Trois profils (champ `role` de la table `users`) :
 | Lots (liste, détail, génération CMD, export PDF/CSV) | ✅ | ✅ | ❌ |
 | Historique | ✅ | ✅ | ❌ |
 | Fichiers RFID | ✅ | ✅ | ❌ |
-| Mise à jour des codes lieux (GLPI) | ✅ | ✅ | ❌ |
+| Mise à jour des codes lieux (GLPI) | ✅ | ❌ | ❌ |
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
@@ -426,6 +428,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/glpi-locations` | Chargement d'un export GLPI (un des 5 types) |
 | `POST` | `/glpi-locations/export-csv` | Export CSV (Bien ID, numéro local) des corrections pour les lignes sélectionnées |
 | `POST` | `/glpi-locations/export-csv-complet` | Idem, avec en plus les colonnes immeuble/niveau/local du lieu retenu |
+| `POST` | `/glpi-locations/reset` | Vide les données GLPI importées (administrateur) |
 
 ---
 

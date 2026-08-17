@@ -40,7 +40,9 @@ def test_upload_redirects_to_detail_with_invalid_count(client, admin_user):
     response = _upload_sample(client)
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/rfid-scans/1?invalid=1"
+    assert response.headers["location"] == (
+        "/rfid-scans/1?added=2&updated=0&invalid=1"
+    )
 
 
 def test_upload_rejects_non_csv_file(client, admin_user):
@@ -204,3 +206,137 @@ def test_export_missing_file_returns_404(client, admin_user):
     response = client.get("/rfid-scans/999/export")
 
     assert response.status_code == 404
+
+
+def test_reupload_same_bien_id_updates_instead_of_duplicating(
+    client, admin_user
+):
+    """
+    Un Bien ID déjà chargé (fichier précédent) est mis à jour avec son
+    nouveau numéro de lieu au lieu d'être dupliqué.
+    """
+
+    _login(client)
+    _upload_sample(client)  # fichier 1 : 00000001/20260001, 00000002/20260002
+
+    second_upload = client.post(
+        "/rfid-scans",
+        files={
+            "file": (
+                "scan2.csv",
+                "L26100000099;26120260001\n",  # même Bien ID, nouveau lieu
+                "text/csv"
+            )
+        },
+        follow_redirects=False
+    )
+
+    assert second_upload.status_code == 303
+    assert second_upload.headers["location"] == "/rfid-scans/2?added=0&updated=1"
+
+    # Le bien apparaît désormais avec son nouveau lieu dans le fichier 2...
+    detail_2 = client.get("/rfid-scans/2")
+    assert "00000099" in detail_2.text
+    assert "20260001" in detail_2.text
+
+    # ...et n'est plus rattaché au fichier 1 (pas de doublon).
+    detail_1 = client.get("/rfid-scans/1")
+    assert "20260001" not in detail_1.text
+    assert "20260002" in detail_1.text
+
+
+def test_upload_deduplicates_repeated_bien_id_within_same_file(
+    client, admin_user
+):
+    """
+    Une même étiquette relue plusieurs fois dans un seul fichier ne
+    doit produire qu'une seule ligne (la dernière lecture gagne).
+    """
+
+    _login(client)
+
+    response = client.post(
+        "/rfid-scans",
+        files={
+            "file": (
+                "scan.csv",
+                (
+                    "L26100000001;26120260001\n"
+                    "L26100000099;26120260001\n"
+                ),
+                "text/csv"
+            )
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/rfid-scans/1?added=1&updated=0"
+
+    detail = client.get("/rfid-scans/1")
+    assert "00000099" in detail.text
+    assert "00000001" not in detail.text
+
+
+def test_add_line_rejects_duplicate_bien_id(client, admin_user):
+
+    _login(client)
+    _upload_sample(client)
+
+    response = client.post(
+        "/rfid-scans/1/lines",
+        data={"lieu_numero": "00000099", "bien_id": "20260001"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/rfid-scans/1?error=duplicate_bien_id"
+    )
+
+    detail = client.get("/rfid-scans/1?error=duplicate_bien_id")
+    assert "existe déjà" in detail.text
+
+
+def test_edit_line_rejects_duplicate_bien_id(client, admin_user):
+
+    _login(client)
+    _upload_sample(client)
+
+    # La ligne 2 (bien_id=20260002) tente de reprendre le Bien ID de la
+    # ligne 1 (20260001) : doit être refusé.
+    response = client.post(
+        "/rfid-scans/1/lines/2",
+        data={"lieu_numero": "00000002", "bien_id": "20260001"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/rfid-scans/1?error=duplicate_bien_id"
+    )
+
+    detail = client.get("/rfid-scans/1")
+    assert "20260002" in detail.text
+
+
+def test_edit_line_allows_keeping_its_own_bien_id(client, admin_user):
+    """
+    Modifier une ligne sans changer son propre Bien ID ne doit pas être
+    bloqué par la vérification de doublon.
+    """
+
+    _login(client)
+    _upload_sample(client)
+
+    response = client.post(
+        "/rfid-scans/1/lines/1",
+        data={"lieu_numero": "00000050", "bien_id": "20260001"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/rfid-scans/1"
+
+    detail = client.get("/rfid-scans/1")
+    assert "00000050" in detail.text

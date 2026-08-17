@@ -2,9 +2,20 @@
 
 {% block content %}
 
-<h1 class="h3 mb-2 text-gray-800">
-    Inventaire
-</h1>
+<div class="d-flex justify-content-between align-items-center mb-2">
+
+    <h1 class="h3 mb-0 text-gray-800">
+        Inventaire
+    </h1>
+
+    {% if last_import %}
+    <span class="text-muted small">
+        Dernière importation : {{ last_import.imported_at }}
+        par {{ last_import.imported_by }}
+    </span>
+    {% endif %}
+
+</div>
 
 {% if request.query_params.get('error') == 'no_selection' %}
 <div class="alert alert-warning">

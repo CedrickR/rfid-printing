@@ -68,8 +68,11 @@
                 class="btn btn-outline-secondary btn-sm"
                 onclick="window.print()"
             >
-                <i class="fas fa-file-pdf fa-sm"></i> Imprimer / Exporter en PDF
+                <i class="fas fa-file-pdf fa-sm"></i> Exporter en PDF
             </button>
+            <a href="/jobs/{{ job.id }}/export-csv" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-file-csv fa-sm"></i> Exporter en CSV
+            </a>
             <form action="/jobs/{{ job.id }}/generate" method="post" class="d-inline m-0">
                 <button class="btn btn-success btn-sm" type="submit">
                     <i class="fas fa-cog fa-sm"></i> Générer CMD

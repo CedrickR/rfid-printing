@@ -287,7 +287,7 @@ def _seed_active_and_excluded_discrepancies(client):
     )
 
 
-def test_actif_column_header_shows_filter_toggle_button(client, admin_user):
+def test_actif_column_header_shows_filter_buttons(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
@@ -295,16 +295,18 @@ def test_actif_column_header_shows_filter_toggle_button(client, admin_user):
     response = client.get("/glpi-locations")
 
     assert response.status_code == 200
-    assert "Actifs uniquement" in response.text
-    assert 'href="/glpi-locations?active_only=1"' in response.text
+    assert 'href="/glpi-locations?active_filter=actif"' in response.text
+    assert 'href="/glpi-locations?active_filter=exclu"' in response.text
 
 
-def test_active_only_filter_hides_excluded_assets(client, admin_user):
+def test_actif_filter_shows_only_active_assets(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
 
-    response = client.get("/glpi-locations", params={"active_only": "1"})
+    response = client.get(
+        "/glpi-locations", params={"active_filter": "actif"}
+    )
 
     assert response.status_code == 200
     assert "20260001" in response.text
@@ -312,17 +314,19 @@ def test_active_only_filter_hides_excluded_assets(client, admin_user):
     assert '<span class="badge badge-danger">' not in response.text
 
 
-def test_active_only_filter_shows_toggle_back_to_all(client, admin_user):
+def test_exclu_filter_shows_only_excluded_assets(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
 
-    response = client.get("/glpi-locations", params={"active_only": "1"})
+    response = client.get(
+        "/glpi-locations", params={"active_filter": "exclu"}
+    )
 
     assert response.status_code == 200
-    assert "Tous" in response.text
-    assert "Actifs uniquement" not in response.text
-    assert 'href="/glpi-locations"' in response.text
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+    assert '<span class="badge badge-success">' not in response.text
 
 
 def test_without_filter_shows_both_active_and_excluded_assets(
@@ -747,3 +751,133 @@ def test_glpi_locations_reset_does_not_affect_inventory(client, admin_user):
     )
 
     assert len(assets.json()) == 2
+
+
+def _seed_discrepancies_with_distinct_glpi_fields(client):
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Un;;01100021\n"
+        "20260002;PC Deux;;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099", statut="Z-Statut")
+        + _glpi_row("20260002", "01100050", statut="A-Statut")
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+
+def test_numero_piece_filter_hides_non_matching_rows(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"numero_piece": "01100050"}
+    )
+
+    assert response.status_code == 200
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+
+
+def test_statut_filter_hides_non_matching_rows(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"statut": "A-Statut"}
+    )
+
+    assert response.status_code == 200
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+
+
+def test_filters_are_repopulated_and_reset_link_shown(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"numero_piece": "01100050"}
+    )
+
+    assert response.status_code == 200
+    assert 'value="01100050"' in response.text
+    assert "Réinitialiser les filtres" in response.text
+
+
+def test_sort_by_numero_piece_orders_rows_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"sort": "numero_piece"}
+    )
+
+    assert response.status_code == 200
+    assert response.text.index("20260002") < response.text.index("20260001")
+
+
+def test_sort_by_statut_orders_rows_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"sort": "statut"}
+    )
+
+    assert response.status_code == 200
+    assert response.text.index("20260002") < response.text.index("20260001")
+
+
+def test_default_sort_is_by_bien_id_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert response.text.index("20260001") < response.text.index("20260002")
+
+
+def test_glpi_locations_page_shows_selected_count(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert 'id="glpi-selected-count"' in response.text
+    assert "sélectionné" in response.text
+
+
+def test_glpi_locations_page_local_choice_has_auto_select_class(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "glpi-local-choice" in response.text

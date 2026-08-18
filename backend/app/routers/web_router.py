@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from io import StringIO
 from types import SimpleNamespace
 from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -1853,7 +1854,48 @@ def _location_details_by_numero(db: Session):
     return details
 
 
-def _glpi_discrepancies(db: Session, active_only: bool = False):
+GLPI_ACTIVE_FILTERS = {"tous", "actif", "exclu"}
+GLPI_SORT_COLUMNS = {"bien_id", "numero_piece", "statut"}
+
+
+def _glpi_locations_url(
+    active_filter: str,
+    numero_piece_filter: str,
+    statut_filter: str,
+    sort: str,
+    direction: str
+) -> str:
+
+    params = {}
+
+    if active_filter and active_filter != "tous":
+        params["active_filter"] = active_filter
+
+    if numero_piece_filter:
+        params["numero_piece"] = numero_piece_filter
+
+    if statut_filter:
+        params["statut"] = statut_filter
+
+    if sort and sort != "bien_id":
+        params["sort"] = sort
+
+    if direction and direction != "asc":
+        params["dir"] = direction
+
+    query = urlencode(params)
+
+    return f"/glpi-locations?{query}" if query else "/glpi-locations"
+
+
+def _glpi_discrepancies(
+    db: Session,
+    active_filter: str = "tous",
+    numero_piece_filter: str = "",
+    statut_filter: str = "",
+    sort: str = "bien_id",
+    direction: str = "asc"
+):
     """
     Biens connus à la fois dans l'inventaire et dans un import GLPI,
     dont le numéro local (inventaire) diffère du numéro de la pièce
@@ -1868,11 +1910,10 @@ def _glpi_discrepancies(db: Session, active_only: bool = False):
         )
     )
 
-    if active_only:
-
-        query = query.filter(
-            Asset.is_active == True
-        )
+    if active_filter == "actif":
+        query = query.filter(Asset.is_active == True)
+    elif active_filter == "exclu":
+        query = query.filter(Asset.is_active == False)
 
     rows = (
         query
@@ -1882,12 +1923,41 @@ def _glpi_discrepancies(db: Session, active_only: bool = False):
         .all()
     )
 
-    return [
+    discrepancies = [
         (asset, glpi_asset)
         for asset, glpi_asset in rows
         if (asset.local_numero or "").strip()
         != (glpi_asset.numero_piece or "").strip()
     ]
+
+    if numero_piece_filter:
+        needle = numero_piece_filter.strip().lower()
+        discrepancies = [
+            (asset, glpi_asset)
+            for asset, glpi_asset in discrepancies
+            if needle in (glpi_asset.numero_piece or "").lower()
+        ]
+
+    if statut_filter:
+        needle = statut_filter.strip().lower()
+        discrepancies = [
+            (asset, glpi_asset)
+            for asset, glpi_asset in discrepancies
+            if needle in (glpi_asset.statut or "").lower()
+        ]
+
+    sort_keys = {
+        "bien_id": lambda pair: (pair[0].bien_id or ""),
+        "numero_piece": lambda pair: (pair[1].numero_piece or ""),
+        "statut": lambda pair: (pair[1].statut or "")
+    }
+
+    discrepancies.sort(
+        key=sort_keys.get(sort, sort_keys["bien_id"]),
+        reverse=(direction == "desc")
+    )
+
+    return discrepancies
 
 
 def _render_glpi_locations(
@@ -1895,7 +1965,11 @@ def _render_glpi_locations(
     db: Session,
     error: str = None,
     status_code: int = 200,
-    active_only: bool = False
+    active_filter: str = "tous",
+    numero_piece_filter: str = "",
+    statut_filter: str = "",
+    sort: str = "bien_id",
+    direction: str = "asc"
 ):
 
     imports_by_type = {
@@ -1908,16 +1982,52 @@ def _render_glpi_locations(
         for glpi_type in GLPI_TYPES
     }
 
+    active_filter_links = {
+        value: _glpi_locations_url(
+            value, numero_piece_filter, statut_filter, sort, direction
+        )
+        for value in GLPI_ACTIVE_FILTERS
+    }
+
+    sort_links = {
+        column: _glpi_locations_url(
+            active_filter,
+            numero_piece_filter,
+            statut_filter,
+            column,
+            "desc" if sort == column and direction == "asc" else "asc"
+        )
+        for column in ("numero_piece", "statut")
+    }
+
+    reset_filters_link = _glpi_locations_url(
+        active_filter, "", "", sort, direction
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="glpi_locations.html",
         context={
             "glpi_types": GLPI_TYPES,
             "imports_by_type": imports_by_type,
-            "discrepancies": _glpi_discrepancies(db, active_only),
+            "discrepancies": _glpi_discrepancies(
+                db,
+                active_filter,
+                numero_piece_filter,
+                statut_filter,
+                sort,
+                direction
+            ),
             "local_options": _local_options(db),
             "error": error,
-            "active_only": active_only
+            "active_filter": active_filter,
+            "numero_piece_filter": numero_piece_filter,
+            "statut_filter": statut_filter,
+            "sort": sort,
+            "direction": direction,
+            "active_filter_links": active_filter_links,
+            "sort_links": sort_links,
+            "reset_filters_link": reset_filters_link
         },
         status_code=status_code
     )
@@ -1926,14 +2036,35 @@ def _render_glpi_locations(
 @router.get("/glpi-locations")
 def glpi_locations_page(
     request: Request,
-    active_only: bool = Query(default=False),
+    active_filter: str = Query(default="tous"),
+    numero_piece: str = Query(default=""),
+    statut: str = Query(default=""),
+    sort: str = Query(default="bien_id"),
+    sort_dir: str = Query(default="asc", alias="dir"),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
     require_admin(current_user)
 
-    return _render_glpi_locations(request, db, active_only=active_only)
+    if active_filter not in GLPI_ACTIVE_FILTERS:
+        active_filter = "tous"
+
+    if sort not in GLPI_SORT_COLUMNS:
+        sort = "bien_id"
+
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "asc"
+
+    return _render_glpi_locations(
+        request,
+        db,
+        active_filter=active_filter,
+        numero_piece_filter=numero_piece,
+        statut_filter=statut,
+        sort=sort,
+        direction=sort_dir
+    )
 
 
 @router.post("/glpi-locations")

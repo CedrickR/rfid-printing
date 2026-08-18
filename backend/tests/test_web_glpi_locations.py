@@ -7,10 +7,10 @@ GLPI_HEADER = (
 )
 
 
-def _glpi_row(inventaire, piece):
+def _glpi_row(inventaire, piece, lieu="SIEGE > 021-ENTREPOT", statut="En service"):
 
     return (
-        '"PC-01";"Entité";"Statut";"Ordinateur";"Modèle";"Lieu";'
+        f'"PC-01";"Entité";"{statut}";"Ordinateur";"Modèle";"{lieu}";'
         f'"user";"usager";"{inventaire}";"";"SN123";"";"{piece}"\n'
     )
 
@@ -198,6 +198,67 @@ def test_discrepancy_shown_when_numero_differs(client, admin_user):
     assert "20260001" in response.text
     assert "01100021" in response.text
     assert "01100099" in response.text
+
+
+def test_discrepancy_shows_lieu_and_statut_columns_from_glpi(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_inventory(client)
+
+    content = GLPI_HEADER + _glpi_row(
+        "20260001",
+        "01100099",
+        lieu="Bâtiment A - Bureau 021",
+        statut="En panne"
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "Bâtiment A - Bureau 021" in response.text
+    assert "En panne" in response.text
+
+
+def test_discrepancy_shows_actif_badge(client, admin_user):
+
+    _login(client)
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Actif;;01100021\n"
+        "20260002;PC Exclu;2024-01-01;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260002", "01100098")
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert '<span class="badge badge-success">' in response.text
+    assert '<span class="badge badge-danger">' in response.text
 
 
 def test_upload_pads_numero_piece_to_eight_characters(client, admin_user):

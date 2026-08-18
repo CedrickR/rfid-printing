@@ -18,21 +18,23 @@ HEADER = (
 )
 
 
-def _row(inventaire, piece):
+def _row(inventaire, piece, lieu="Bâtiment A > Bureau 021", statut="En service"):
 
     return (
-        '"PC-01";"Entité";"Statut";"Ordinateur";"Modèle";"Lieu";'
+        f'"PC-01";"Entité";"{statut}";"Ordinateur";"Modèle";"{lieu}";'
         f'"user";"usager";"{inventaire}";"";"SN123";"";"{piece}"\n'
     )
 
 
-def test_parse_extracts_bien_id_and_numero_piece():
+def test_parse_extracts_bien_id_numero_piece_lieu_and_statut():
 
     content = (HEADER + _row("20260001", "01100021")).encode("utf-8")
 
     rows = GlpiImportService.parse(content)
 
-    assert rows == [("20260001", "01100021")]
+    assert rows == [
+        ("20260001", "01100021", "Bâtiment A > Bureau 021", "En service")
+    ]
 
 
 def test_pad_numero_piece_completes_to_eight_characters():
@@ -54,7 +56,7 @@ def test_parse_pads_numero_piece_to_eight_characters():
 
     rows = GlpiImportService.parse(content)
 
-    assert rows == [("20260001", "00600001")]
+    assert rows[0][1] == "00600001"
 
 
 def test_parse_leaves_empty_numero_piece_untouched():
@@ -63,7 +65,18 @@ def test_parse_leaves_empty_numero_piece_untouched():
 
     rows = GlpiImportService.parse(content)
 
-    assert rows == [("20260001", "")]
+    assert rows[0][1] == ""
+
+
+def test_parse_leaves_empty_lieu_and_statut_untouched():
+
+    content = (
+        HEADER + _row("20260001", "01100021", lieu="", statut="")
+    ).encode("utf-8")
+
+    rows = GlpiImportService.parse(content)
+
+    assert rows == [("20260001", "01100021", "", "")]
 
 
 def test_parse_skips_rows_without_bien_id():
@@ -81,7 +94,8 @@ def test_parse_strips_utf8_bom():
 
     rows = GlpiImportService.parse(content)
 
-    assert rows == [("20260001", "01100021")]
+    assert rows[0][0] == "20260001"
+    assert rows[0][1] == "01100021"
 
 
 def test_parse_raises_on_missing_columns():

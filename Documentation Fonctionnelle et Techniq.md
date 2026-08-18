@@ -131,15 +131,17 @@ Fonctions :
 
 Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de la pièce** connu dans **GLPI**, pour détecter et corriger les écarts.
 
-- **Import GLPI** (`POST /glpi-locations`) : un fichier CSV par type de bien (`;`, avec en-tête) — **ordinateur, moniteur, périphérique, logiciel, imprimante**. Seules deux colonnes sont exploitées :
+- **Import GLPI** (`POST /glpi-locations`) : un fichier CSV par type de bien (`;`, avec en-tête) — **ordinateur, moniteur, périphérique, logiciel, imprimante**. Colonnes exploitées :
 
   | Colonne GLPI | Usage |
   |---|---|
   | `Numéro d'inventaire` | Bien ID (clé de rapprochement avec l'inventaire) |
   | `Numéro de la pièce` | Comparé au `local_numero` de l'inventaire |
+  | `Lieu` | Affichage uniquement (informatif) |
+  | `Statut` | Affichage uniquement (informatif) |
 
-  Toutes les autres colonnes du fichier sont ignorées. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), sa valeur est **mise à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
-- **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI (Bien ID, désignation, numéro local actuel, numéro de la pièce GLPI).
+  Toutes les autres colonnes du fichier sont ignorées ; `Lieu`/`Statut` n'entrent pas dans la comparaison et restent vides s'ils sont absents du fichier. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+- **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI, avec Bien ID, désignation, numéro local actuel, statut actif/exclu, lieu GLPI, numéro de la pièce GLPI et statut GLPI.
 - **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
 - **Correction** : chaque ligne propose une liste déroulante des lieux connus dans l'inventaire, affichant à la fois le **numéro local et sa désignation** (ex. `01100021 - 021-ENTREPOT`), présélectionnée sur le lieu actuel du bien ; le choix détermine le numéro local correspondant.
 - **Génération d'un fichier CSV**, deux formats au choix, à partir des lignes cochées et du numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) :
@@ -325,7 +327,7 @@ rfid-printing/
 | `rfid_scan_files` | Fichiers de scan RFID chargés | `id`, `filename`, `imported_by`, `imported_at` |
 | `rfid_scan_lines` | Lignes d'un fichier de scan | `id`, `scan_file_id` (FK), `lieu_numero`, `bien_id` |
 | `glpi_imports` | Historique des imports GLPI | `id`, `glpi_type`, `filename`, `imported_by`, `imported_at`, `total_rows`, `added_count`, `updated_count` |
-| `glpi_assets` | Numéro de la pièce GLPI par Bien ID (unique, mis à jour à chaque import) | `id`, `bien_id` (unique), `numero_piece`, `glpi_type`, `import_id` (FK → `glpi_imports`), `updated_at` |
+| `glpi_assets` | Informations GLPI par Bien ID (unique, mises à jour à chaque import) | `id`, `bien_id` (unique), `numero_piece`, `lieu`, `statut`, `glpi_type`, `import_id` (FK → `glpi_imports`), `updated_at` |
 
 Schéma versionné avec Alembic (`backend/alembic/versions/`) ; aucune modification manuelle du schéma ne doit être faite hors migration.
 

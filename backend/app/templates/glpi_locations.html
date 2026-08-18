@@ -74,9 +74,11 @@
         <small class="form-text text-muted">
             Fichier CSV (';', avec en-tête) issu de GLPI. Colonnes
             utilisées : <code>Numéro d'inventaire</code> (Bien ID) et
-            <code>Numéro de la pièce</code>. Un import ultérieur pour un
-            Bien ID déjà connu met à jour son numéro de pièce (jamais de
-            doublon).
+            <code>Numéro de la pièce</code> (comparaison avec
+            l'inventaire), ainsi que <code>Lieu</code> et
+            <code>Statut</code> (affichage uniquement). Un import
+            ultérieur pour un Bien ID déjà connu met à jour ses
+            informations (jamais de doublon).
         </small>
 
         <div class="table-responsive mt-4">
@@ -195,7 +197,10 @@
                             <th>Bien ID</th>
                             <th>Désignation</th>
                             <th>Numéro local (inventaire)</th>
+                            <th>Actif</th>
+                            <th>Lieu (GLPI)</th>
                             <th>Numéro de la pièce (GLPI)</th>
+                            <th>Statut (GLPI)</th>
                             <th>Corriger vers</th>
                         </tr>
                     </thead>
@@ -217,7 +222,28 @@
                             <td>{{ asset.bien_id }}</td>
                             <td>{{ asset.bien_designation }}</td>
                             <td>{{ asset.local_numero or "" }}</td>
+
+                            <td>
+
+                                {% if asset.is_active %}
+
+                                    <span class="badge badge-success">
+                                        Actif
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="badge badge-danger">
+                                        Exclu
+                                    </span>
+
+                                {% endif %}
+
+                            </td>
+
+                            <td>{{ glpi_asset.lieu or "" }}</td>
                             <td>{{ glpi_asset.numero_piece or "" }}</td>
+                            <td>{{ glpi_asset.statut or "" }}</td>
 
                             <td>
                                 <select
@@ -241,7 +267,7 @@
                         {% else %}
 
                         <tr>
-                            <td colspan="6" class="text-center text-muted">
+                            <td colspan="9" class="text-center text-muted">
                                 Aucun écart détecté.
                             </td>
                         </tr>

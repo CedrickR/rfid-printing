@@ -86,8 +86,30 @@ from app.services.glpi_service import (
     MissingColumnsError as GlpiMissingColumnsError,
     DuplicateBienIdError as GlpiDuplicateBienIdError,
 )
+from app.services.backup_service import (
+    BackupService,
+    BackupNotFoundError,
+    BACKUP_SOURCES,
+)
 
 logger = logging.getLogger("rfid_printing")
+
+
+def _auto_backup(db: Session, source: str, created_by: str):
+    """
+    Sauvegarde automatique déclenchée après un import CSV. Ne doit
+    jamais faire échouer l'import lui-même : un problème de sauvegarde
+    (disque plein, permissions) est seulement journalisé.
+    """
+
+    try:
+        BackupService.create_backup(db, source=source, created_by=created_by)
+
+    except Exception:
+        logger.exception(
+            "Échec de la sauvegarde automatique (%s)",
+            source
+        )
 
 router = APIRouter(
     tags=["Web"]
@@ -248,6 +270,127 @@ def reset_database(
 
     return RedirectResponse(
         url="/dashboard?reset=1",
+        status_code=303
+    )
+
+
+def _render_backups_page(
+    request: Request,
+    db: Session,
+    error: str = None,
+    status_code: int = 200
+):
+
+    return templates.TemplateResponse(
+        request=request,
+        name="backups.html",
+        context={
+            "backups": BackupService.list_backups(db),
+            "backup_sources": BACKUP_SOURCES,
+            "error": error
+        },
+        status_code=status_code
+    )
+
+
+@router.get("/admin/backups")
+def backups_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    return _render_backups_page(request, db)
+
+
+@router.post("/admin/backups")
+def backups_create(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Sauvegarde manuelle, déclenchée depuis la page de gestion (en plus
+    des sauvegardes automatiques après chaque import CSV).
+    """
+
+    require_admin(current_user)
+
+    BackupService.create_backup(
+        db,
+        source="manuel",
+        created_by=current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/backups?created=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/backups/{filename}/restore")
+def backups_restore(
+    request: Request,
+    filename: str,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Remplace la base active par le contenu de la sauvegarde choisie.
+    Action irréversible : confirmation requise côté interface.
+    """
+
+    require_admin(current_user)
+
+    try:
+        BackupService.restore_backup(db, filename)
+
+    except BackupNotFoundError:
+
+        return _render_backups_page(
+            request,
+            db,
+            error="Sauvegarde introuvable.",
+            status_code=404
+        )
+
+    logger.warning(
+        "Base de données restaurée depuis %s par %s",
+        filename,
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/admin/backups?restored=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/backups/{filename}/delete")
+def backups_delete(
+    request: Request,
+    filename: str,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        BackupService.delete_backup(db, filename)
+
+    except BackupNotFoundError:
+
+        return _render_backups_page(
+            request,
+            db,
+            error="Sauvegarde introuvable.",
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url="/admin/backups?deleted=1",
         status_code=303
     )
 
@@ -716,6 +859,8 @@ async def import_submit(
         file.filename,
         current_user["sub"]
     )
+
+    _auto_backup(db, "import_inventaire", current_user["sub"])
 
     return RedirectResponse(
         url=(
@@ -1505,6 +1650,8 @@ async def rfid_scans_upload(
         current_user["sub"]
     )
 
+    _auto_backup(db, "import_rfid_scan", current_user["sub"])
+
     redirect_url = (
         f"/rfid-scans/{scan_file.id}"
         f"?added={added_count}&updated={updated_count}"
@@ -2204,6 +2351,8 @@ async def glpi_locations_upload(
         file.filename,
         current_user["sub"]
     )
+
+    _auto_backup(db, "import_glpi", current_user["sub"])
 
     return RedirectResponse(
         url=(

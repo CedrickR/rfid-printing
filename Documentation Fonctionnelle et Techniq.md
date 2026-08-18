@@ -190,6 +190,17 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 - Suppression d'un compte.
 - Garde-fous : impossible de supprimer son propre compte, impossible de supprimer/rétrograder le **dernier administrateur restant** (empêche de couper l'accès à la gestion des utilisateurs).
 
+### 2.11 Sauvegardes de la base de données (`/admin/backups`, administrateur uniquement)
+
+- **Sauvegarde automatique** : une copie complète de la base SQLite active est créée après chaque import CSV réussi (inventaire, fichier de scan RFID, ou GLPI), via l'API `backup()` de sqlite3 (cohérente même avec des écritures concurrentes). Un échec de sauvegarde est journalisé mais **n'interrompt jamais** l'import lui-même.
+- **Historique limité à 2 sauvegardes** : seules les 2 plus récentes sont conservées, toutes origines confondues (imports automatiques et sauvegardes manuelles) ; les plus anciennes sont supprimées automatiquement dès qu'une nouvelle est créée.
+- **Sauvegarde manuelle** : bouton « Créer une sauvegarde maintenant » dans l'en-tête du tableau.
+- **Tableau des sauvegardes** : date, origine (import inventaire / scan RFID / GLPI / manuelle), auteur, taille, avec pour chaque ligne :
+  - **Restaurer** (`POST /admin/backups/{fichier}/restore`) : remplace intégralement la base active par le contenu de cette sauvegarde. Confirmation obligatoire ; action irréversible.
+  - **Supprimer** (`POST /admin/backups/{fichier}/delete`) : supprime définitivement cette sauvegarde. Confirmation obligatoire.
+- **Zone sensible** : bouton « Vider la base de données » (même action que sur le tableau de bord, `POST /admin/reset-database`), avec confirmation obligatoire — regroupé ici avec les sauvegardes qui en sont le filet de sécurité.
+- Les fichiers de sauvegarde (`.db`) et leurs métadonnées (`.json`) sont stockés hors de la base elle-même (dossier `backend/backups/`, non versionné), pour rester disponibles et cohérents même après une restauration.
+
 ---
 
 ## 3. Profils utilisateurs et droits d'accès
@@ -217,6 +228,7 @@ Trois profils (champ `role` de la table `users`) :
 | Mise à jour des codes lieux (GLPI) | ✅ | ❌ | ❌ |
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
+| Sauvegardes de la base de données | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
 
 Chaque restriction est appliquée **côté serveur** (403 explicite), l'affichage conditionnel du menu et des boutons n'étant qu'un confort d'usage, pas la seule protection.
@@ -409,6 +421,10 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/admin/users/{id}/role` | Changement de profil (administrateur) |
 | `POST` | `/admin/users/{id}/password` | Réinitialisation de mot de passe (administrateur) |
 | `POST` | `/admin/users/{id}/delete` | Suppression d'un utilisateur (administrateur) |
+| `GET` | `/admin/backups` | Liste des sauvegardes de la base (administrateur) |
+| `POST` | `/admin/backups` | Sauvegarde manuelle (administrateur) |
+| `POST` | `/admin/backups/{fichier}/restore` | Restauration d'une sauvegarde (administrateur) |
+| `POST` | `/admin/backups/{fichier}/delete` | Suppression d'une sauvegarde (administrateur) |
 | `GET`/`POST` | `/settings/cmd-template` | Consultation/mise à jour du gabarit CMD (administrateur) |
 | `POST` | `/settings/cmd-template/preview` | Aperçu Ajax du gabarit (administrateur) |
 | `GET` | `/import` | Page d'import CSV |

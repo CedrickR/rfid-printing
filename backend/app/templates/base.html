@@ -112,6 +112,13 @@
             </a>
         </li>
 
+        <li class="nav-item {% if request.url.path == '/admin/backups' %}active{% endif %}">
+            <a class="nav-link" href="/admin/backups">
+                <i class="fas fa-fw fa-database"></i>
+                <span>Sauvegardes</span>
+            </a>
+        </li>
+
         {% endif %}
 
         <hr class="sidebar-divider d-none d-md-block">

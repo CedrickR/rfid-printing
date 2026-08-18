@@ -287,7 +287,7 @@ def _seed_active_and_excluded_discrepancies(client):
     )
 
 
-def test_actif_column_header_shows_filter_toggle_button(client, admin_user):
+def test_actif_column_header_shows_filter_buttons(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
@@ -295,16 +295,18 @@ def test_actif_column_header_shows_filter_toggle_button(client, admin_user):
     response = client.get("/glpi-locations")
 
     assert response.status_code == 200
-    assert "Actifs uniquement" in response.text
-    assert 'href="/glpi-locations?active_only=1"' in response.text
+    assert 'href="/glpi-locations?active_filter=actif"' in response.text
+    assert 'href="/glpi-locations?active_filter=exclu"' in response.text
 
 
-def test_active_only_filter_hides_excluded_assets(client, admin_user):
+def test_actif_filter_shows_only_active_assets(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
 
-    response = client.get("/glpi-locations", params={"active_only": "1"})
+    response = client.get(
+        "/glpi-locations", params={"active_filter": "actif"}
+    )
 
     assert response.status_code == 200
     assert "20260001" in response.text
@@ -312,17 +314,19 @@ def test_active_only_filter_hides_excluded_assets(client, admin_user):
     assert '<span class="badge badge-danger">' not in response.text
 
 
-def test_active_only_filter_shows_toggle_back_to_all(client, admin_user):
+def test_exclu_filter_shows_only_excluded_assets(client, admin_user):
 
     _login(client)
     _seed_active_and_excluded_discrepancies(client)
 
-    response = client.get("/glpi-locations", params={"active_only": "1"})
+    response = client.get(
+        "/glpi-locations", params={"active_filter": "exclu"}
+    )
 
     assert response.status_code == 200
-    assert "Tous" in response.text
-    assert "Actifs uniquement" not in response.text
-    assert 'href="/glpi-locations"' in response.text
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+    assert '<span class="badge badge-success">' not in response.text
 
 
 def test_without_filter_shows_both_active_and_excluded_assets(
@@ -337,43 +341,6 @@ def test_without_filter_shows_both_active_and_excluded_assets(
     assert response.status_code == 200
     assert "20260001" in response.text
     assert "20260002" in response.text
-
-
-def test_discrepancy_shows_exclude_button_only_for_active_assets(
-    client, admin_user
-):
-
-    _login(client)
-
-    csv_content = (
-        "numero;libelle;sortie;local_numero\n"
-        "20260001;PC Actif;;01100021\n"
-        "20260002;PC Exclu;2024-01-01;01100023\n"
-    )
-
-    client.post(
-        "/import",
-        files={"file": ("inventaire.csv", csv_content, "text/csv")}
-    )
-
-    content = (
-        GLPI_HEADER
-        + _glpi_row("20260001", "01100099")
-        + _glpi_row("20260002", "01100098")
-    )
-
-    client.post(
-        "/glpi-locations",
-        data={"glpi_type": "ordinateur"},
-        files={"file": ("glpi.csv", content, "text/csv")}
-    )
-
-    response = client.get("/glpi-locations")
-
-    assert response.status_code == 200
-    assert response.text.count("Exclure") == 1
-    assert '/glpi-locations/assets/1/exclude' in response.text
-    assert '/glpi-locations/assets/2/exclude' not in response.text
 
 
 def test_discrepancy_tooltip_shows_local_libelle(client, admin_user):
@@ -412,82 +379,6 @@ def test_discrepancy_no_tooltip_when_no_local_libelle(client, admin_user):
     # toujours présent en bas de page ; seule l'absence du <span>
     # d'infobulle sur la ligne du tableau est significative ici.
     assert "cursor: help" not in response.text
-
-
-def test_exclude_asset_requires_login(client):
-
-    response = client.post(
-        "/glpi-locations/assets/1/exclude",
-        follow_redirects=False
-    )
-
-    assert response.status_code == 303
-    assert response.headers["location"].startswith("/login")
-
-
-def test_exclude_asset_requires_admin_role(client, standard_user):
-
-    client.post(
-        "/login",
-        data={
-            "username": "employe",
-            "password": "Employe123!",
-            "next": "/dashboard"
-        }
-    )
-
-    response = client.post("/glpi-locations/assets/1/exclude")
-
-    assert response.status_code == 403
-
-
-def test_exclude_asset_denies_manager_role(client, manager_user):
-
-    client.post(
-        "/login",
-        data={
-            "username": "gestionnaire",
-            "password": "Gestionnaire123!",
-            "next": "/dashboard"
-        }
-    )
-
-    response = client.post("/glpi-locations/assets/1/exclude")
-
-    assert response.status_code == 403
-
-
-def test_exclude_asset_missing_asset_returns_404(client, admin_user):
-
-    _login(client)
-
-    response = client.post("/glpi-locations/assets/999/exclude")
-
-    assert response.status_code == 404
-
-
-def test_exclude_asset_marks_asset_inactive(client, admin_user):
-
-    _login(client)
-    _seed_inventory(client)
-    _upload_glpi(client, "20260001", "01100099")
-
-    response = client.post(
-        "/glpi-locations/assets/1/exclude",
-        follow_redirects=False
-    )
-
-    assert response.status_code == 303
-    assert response.headers["location"] == "/glpi-locations?excluded=1"
-
-    listing = client.get("/glpi-locations?excluded=1")
-
-    assert listing.status_code == 200
-    assert "Bien exclu." in listing.text
-
-    # Le badge doit maintenant afficher "Exclu" pour ce bien et le
-    # bouton "Exclure" doit avoir disparu pour cette ligne.
-    assert '/glpi-locations/assets/1/exclude' not in listing.text
 
 
 def test_upload_pads_numero_piece_to_eight_characters(client, admin_user):
@@ -860,3 +751,133 @@ def test_glpi_locations_reset_does_not_affect_inventory(client, admin_user):
     )
 
     assert len(assets.json()) == 2
+
+
+def _seed_discrepancies_with_distinct_glpi_fields(client):
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Un;;01100021\n"
+        "20260002;PC Deux;;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099", statut="Z-Statut")
+        + _glpi_row("20260002", "01100050", statut="A-Statut")
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+
+def test_numero_piece_filter_hides_non_matching_rows(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"numero_piece": "01100050"}
+    )
+
+    assert response.status_code == 200
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+
+
+def test_statut_filter_hides_non_matching_rows(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"statut": "A-Statut"}
+    )
+
+    assert response.status_code == 200
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+
+
+def test_filters_are_repopulated_and_reset_link_shown(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"numero_piece": "01100050"}
+    )
+
+    assert response.status_code == 200
+    assert 'value="01100050"' in response.text
+    assert "Réinitialiser les filtres" in response.text
+
+
+def test_sort_by_numero_piece_orders_rows_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"sort": "numero_piece"}
+    )
+
+    assert response.status_code == 200
+    assert response.text.index("20260002") < response.text.index("20260001")
+
+
+def test_sort_by_statut_orders_rows_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get(
+        "/glpi-locations", params={"sort": "statut"}
+    )
+
+    assert response.status_code == 200
+    assert response.text.index("20260002") < response.text.index("20260001")
+
+
+def test_default_sort_is_by_bien_id_ascending(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert response.text.index("20260001") < response.text.index("20260002")
+
+
+def test_glpi_locations_page_shows_selected_count(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert 'id="glpi-selected-count"' in response.text
+    assert "sélectionné" in response.text
+
+
+def test_glpi_locations_page_local_choice_has_auto_select_class(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "glpi-local-choice" in response.text

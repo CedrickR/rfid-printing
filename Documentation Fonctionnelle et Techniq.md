@@ -141,10 +141,13 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   | `Statut` | Affichage uniquement (informatif) |
 
   Toutes les autres colonnes du fichier sont ignorées ; `Lieu`/`Statut` n'entrent pas dans la comparaison et restent vides s'ils sont absents du fichier. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
-- **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI, avec Bien ID, désignation, numéro local actuel (survolé, une infobulle affiche la désignation du local), statut actif/exclu, lieu GLPI, numéro de la pièce GLPI et statut GLPI. Un bouton dans l'en-tête de la colonne « Actif » (`?active_only=1`) filtre l'affichage aux seuls biens actifs, avec un bouton « Tous » pour revenir à la liste complète.
-- **Exclure un bien** (`POST /glpi-locations/assets/{id}/exclude`) : bouton « Exclure » affiché à côté du badge « Actif », pour marquer directement un bien comme exclu (confirmation obligatoire) sans repasser par l'import inventaire.
-- **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »).
-- **Correction** : chaque ligne propose une liste déroulante des lieux connus dans l'inventaire, affichant à la fois le **numéro local et sa désignation** (ex. `01100021 - 021-ENTREPOT`), présélectionnée sur le lieu actuel du bien ; le choix détermine le numéro local correspondant.
+- **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI, avec Bien ID, désignation, numéro local actuel (survolé, une infobulle affiche la désignation du local), statut actif/exclu, lieu GLPI, numéro de la pièce GLPI et statut GLPI.
+  - **Filtre Actif** : trois boutons dans l'en-tête de la colonne « Actif » — « Tous » (`?active_filter=tous`, défaut), « Actif » (`?active_filter=actif`, uniquement les biens actifs) et « Exclu » (`?active_filter=exclu`, uniquement les biens exclus).
+  - **Filtre texte** sur « Numéro de la pièce (GLPI) » et « Statut (GLPI) » (recherche insensible à la casse, sous-chaîne), via un formulaire au-dessus du tableau (`GET /glpi-locations?numero_piece=...&statut=...`), avec un lien « Réinitialiser les filtres ».
+  - **Tri** : cliquer sur l'en-tête « Numéro de la pièce (GLPI) » ou « Statut (GLPI) » trie le tableau par cette colonne (`?sort=numero_piece` ou `?sort=statut`), un second clic inverse le sens (`&dir=desc`). Par défaut, tri par Bien ID croissant.
+  - Ces filtres et ce tri se combinent et restent actifs lors de la navigation (chaque lien conserve les autres paramètres en cours).
+- **Sélection multiple** des lignes (case à cocher par ligne + « tout sélectionner »). Le nombre de lignes sélectionnées sur le nombre total s'affiche à côté du titre du tableau (ex. « 2 / 5 sélectionné(s) »).
+- **Correction** : chaque ligne propose une liste déroulante des lieux connus dans l'inventaire, affichant à la fois le **numéro local et sa désignation** (ex. `01100021 - 021-ENTREPOT`), présélectionnée sur le lieu actuel du bien ; le choix détermine le numéro local correspondant. Modifier cette liste déroulante coche automatiquement la ligne correspondante.
 - **Génération d'un fichier CSV**, deux formats au choix, à partir des lignes cochées et du numéro local corrigé (ou l'actuel si la liste déroulante n'a pas été changée) :
   - **Générer un fichier CSV** (`POST /glpi-locations/export-csv`, `;`, en-tête `Bien ID;Numéro local`).
   - **Générer un fichier CSV (avec colonnes de lieu)** (`POST /glpi-locations/export-csv-complet`, `;`, en-tête `Bien ID;Numéro local;Immeuble;Niveau;Local`) : ajoute les colonnes immeuble/niveau/local correspondant au numéro local retenu (celui du lieu corrigé, pas celui — potentiellement obsolète — du bien).
@@ -432,7 +435,6 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/glpi-locations/export-csv` | Export CSV (Bien ID, numéro local) des corrections pour les lignes sélectionnées |
 | `POST` | `/glpi-locations/export-csv-complet` | Idem, avec en plus les colonnes immeuble/niveau/local du lieu retenu |
 | `POST` | `/glpi-locations/reset` | Vide les données GLPI importées (administrateur) |
-| `POST` | `/glpi-locations/assets/{id}/exclude` | Marque un bien comme exclu (administrateur) |
 
 ---
 

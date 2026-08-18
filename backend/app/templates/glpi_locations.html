@@ -25,10 +25,6 @@
     Données GLPI réinitialisées : tous les imports et biens GLPI ont
     été supprimés. L'inventaire n'est pas affecté.
 </div>
-{% elif request.query_params.get('excluded') == '1' %}
-<div class="alert alert-success">
-    Bien exclu.
-</div>
 {% endif %}
 
 <div class="card shadow mb-4">
@@ -159,6 +155,56 @@
 
 </div>
 
+<div class="card shadow mb-2">
+
+    <div class="card-body py-3">
+
+        <form method="get" action="/glpi-locations" class="form-inline">
+
+            <input type="hidden" name="active_filter" value="{{ active_filter }}">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="dir" value="{{ direction }}">
+
+            <label class="mr-2 mb-2" for="numero_piece_filter">
+                Numéro de la pièce (GLPI)
+            </label>
+            <input
+                type="text"
+                class="form-control form-control-sm mr-3 mb-2"
+                id="numero_piece_filter"
+                name="numero_piece"
+                value="{{ numero_piece_filter }}"
+                placeholder="Filtrer..."
+            >
+
+            <label class="mr-2 mb-2" for="statut_filter">
+                Statut (GLPI)
+            </label>
+            <input
+                type="text"
+                class="form-control form-control-sm mr-3 mb-2"
+                id="statut_filter"
+                name="statut"
+                value="{{ statut_filter }}"
+                placeholder="Filtrer..."
+            >
+
+            <button type="submit" class="btn btn-outline-primary btn-sm mb-2">
+                <i class="fas fa-filter fa-sm"></i> Filtrer
+            </button>
+
+            {% if numero_piece_filter or statut_filter %}
+            <a href="{{ reset_filters_link }}" class="btn btn-outline-secondary btn-sm mb-2 ml-2">
+                Réinitialiser les filtres
+            </a>
+            {% endif %}
+
+        </form>
+
+    </div>
+
+</div>
+
 <form method="post" action="/glpi-locations/export-csv" id="glpi-form">
 
     <div class="card shadow mb-4">
@@ -168,7 +214,7 @@
             <h6 class="m-0 font-weight-bold text-primary">
                 Écarts numéro local / numéro de la pièce (GLPI)
                 <span class="badge badge-primary ml-2">
-                    {{ discrepancies | length }}
+                    <span id="glpi-selected-count">0</span> / {{ discrepancies | length }} sélectionné(s)
                 </span>
             </h6>
 
@@ -203,27 +249,51 @@
                             <th>Numéro local (inventaire)</th>
                             <th>
                                 Actif
-                                {% if active_only %}
-                                <a
-                                    href="/glpi-locations"
-                                    class="btn btn-outline-secondary btn-sm ml-1"
-                                    title="Afficher tous les biens (actifs et exclus)"
-                                >
-                                    Tous
-                                </a>
-                                {% else %}
-                                <a
-                                    href="/glpi-locations?active_only=1"
-                                    class="btn btn-outline-primary btn-sm ml-1"
-                                    title="N'afficher que les biens actifs"
-                                >
-                                    Actifs uniquement
-                                </a>
-                                {% endif %}
+                                <div class="btn-group btn-group-sm ml-1" role="group">
+                                    <a
+                                        href="{{ active_filter_links.tous }}"
+                                        class="btn btn-outline-secondary {% if active_filter == 'tous' %}active{% endif %}"
+                                        title="Afficher tous les biens (actifs et exclus)"
+                                    >
+                                        Tous
+                                    </a>
+                                    <a
+                                        href="{{ active_filter_links.actif }}"
+                                        class="btn btn-outline-secondary {% if active_filter == 'actif' %}active{% endif %}"
+                                        title="N'afficher que les biens actifs"
+                                    >
+                                        Actif
+                                    </a>
+                                    <a
+                                        href="{{ active_filter_links.exclu }}"
+                                        class="btn btn-outline-secondary {% if active_filter == 'exclu' %}active{% endif %}"
+                                        title="N'afficher que les biens exclus"
+                                    >
+                                        Exclu
+                                    </a>
+                                </div>
                             </th>
                             <th>Lieu (GLPI)</th>
-                            <th>Numéro de la pièce (GLPI)</th>
-                            <th>Statut (GLPI)</th>
+                            <th>
+                                <a href="{{ sort_links.numero_piece }}" class="text-dark">
+                                    Numéro de la pièce (GLPI)
+                                    {% if sort == 'numero_piece' %}
+                                    <i class="fas fa-sort-{{ 'up' if direction == 'asc' else 'down' }}"></i>
+                                    {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
+                            <th>
+                                <a href="{{ sort_links.statut }}" class="text-dark">
+                                    Statut (GLPI)
+                                    {% if sort == 'statut' %}
+                                    <i class="fas fa-sort-{{ 'up' if direction == 'asc' else 'down' }}"></i>
+                                    {% else %}
+                                    <i class="fas fa-sort text-muted"></i>
+                                    {% endif %}
+                                </a>
+                            </th>
                             <th>Corriger vers</th>
                         </tr>
                     </thead>
@@ -267,17 +337,6 @@
                                         Actif
                                     </span>
 
-                                    <button
-                                        type="submit"
-                                        formaction="/glpi-locations/assets/{{ asset.id }}/exclude"
-                                        formmethod="post"
-                                        formnovalidate
-                                        class="btn btn-outline-danger btn-sm ml-1"
-                                        onclick="return confirm('Marquer ce bien comme exclu ?');"
-                                    >
-                                        Exclure
-                                    </button>
-
                                 {% else %}
 
                                     <span class="badge badge-danger">
@@ -294,7 +353,7 @@
 
                             <td>
                                 <select
-                                    class="form-control form-control-sm"
+                                    class="form-control form-control-sm glpi-local-choice"
                                     name="local_choice_{{ asset.id }}"
                                 >
                                     <option value="">-- Choisir --</option>
@@ -336,19 +395,60 @@
 <script>
 (function () {
 
-    var selectAll = document.getElementById("select-all-glpi");
+    var checkboxes = document.querySelectorAll('input[name="asset_ids"]');
+    var countSpan = document.getElementById("glpi-selected-count");
 
-    if (!selectAll) {
-        return;
+    function updateSelectedCount() {
+
+        if (!countSpan) {
+            return;
+        }
+
+        var count = 0;
+
+        checkboxes.forEach(function (checkbox) {
+            if (checkbox.checked) {
+                count += 1;
+            }
+        });
+
+        countSpan.textContent = count;
     }
 
-    var checkboxes = document.querySelectorAll('input[name="asset_ids"]');
+    var selectAll = document.getElementById("select-all-glpi");
 
-    selectAll.addEventListener("change", function () {
-        checkboxes.forEach(function (checkbox) {
-            checkbox.checked = selectAll.checked;
+    if (selectAll) {
+        selectAll.addEventListener("change", function () {
+            checkboxes.forEach(function (checkbox) {
+                checkbox.checked = selectAll.checked;
+            });
+            updateSelectedCount();
+        });
+    }
+
+    checkboxes.forEach(function (checkbox) {
+        checkbox.addEventListener("change", updateSelectedCount);
+    });
+
+    document.querySelectorAll(".glpi-local-choice").forEach(function (select) {
+        select.addEventListener("change", function () {
+
+            var row = select.closest("tr");
+
+            if (!row) {
+                return;
+            }
+
+            var checkbox = row.querySelector('input[name="asset_ids"]');
+
+            if (checkbox) {
+                checkbox.checked = true;
+                updateSelectedCount();
+            }
         });
     });
+
+    updateSelectedCount();
 
 })();
 

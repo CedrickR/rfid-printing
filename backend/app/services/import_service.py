@@ -195,12 +195,11 @@ class ImportService:
     @staticmethod
     def validate(content: bytes, db):
         """
-        Décode, parse et valide le CSV (lecture seule sur la base, pour
-        écarter les bien_id déjà importés). Retourne (df_à_importer,
-        résumé) où résumé contient les colonnes détectées et les
-        compteurs de lignes. df_à_importer ne contient que les lignes
-        réellement nouvelles : import incrémental, aucun bien_id déjà en
-        base n'est réinséré.
+        Décode, parse et valide le CSV. Retourne (df_à_traiter, résumé)
+        où résumé contient les colonnes détectées et les compteurs de
+        lignes. df_à_traiter contient toutes les lignes valides
+        (nouvelles ou déjà connues) : import incrémental, un bien_id
+        déjà en base est mis à jour plutôt que réinséré en double.
         """
 
         raw_text = ImportService.decode(content)
@@ -216,11 +215,10 @@ class ImportService:
             for (bien_id,) in db.query(Asset.bien_id).all()
         }
 
-        already_existing_mask = df["bien_id"].isin(existing_bien_ids)
+        is_new_mask = ~df["bien_id"].isin(existing_bien_ids)
 
-        already_existing = int(already_existing_mask.sum())
-
-        df = df[~already_existing_mask]
+        added_count = int(is_new_mask.sum())
+        updated_count = len(df) - added_count
 
         total_rows = len(df)
 
@@ -236,16 +234,19 @@ class ImportService:
             "active_assets": active_assets,
             "excluded_assets": excluded_assets,
             "invalid_rows": invalid_rows,
-            "already_existing": already_existing
+            "added_count": added_count,
+            "updated_count": updated_count
         }
 
         return df, summary
 
     @staticmethod
-    def commit(db, df: pd.DataFrame, filename: str, username: str) -> Import:
+    def commit(db, df: pd.DataFrame, filename: str, username: str):
         """
         Enregistre l'import et les biens en base à partir d'un DataFrame
-        déjà validé par validate().
+        déjà validé par validate() : ajoute les bien_id inconnus, met à
+        jour ceux déjà présents (jamais de doublon). Retourne
+        (import, added_count, updated_count).
         """
 
         total_rows = len(df)
@@ -269,46 +270,78 @@ class ImportService:
         db.commit()
         db.refresh(new_import)
 
+        added_count = 0
+        updated_count = 0
+
         for _, row in df.iterrows():
 
             is_active = pd.isna(
                 row["bien_amort_date_sortie"]
             )
 
-            asset = Asset(
-                bien_id=row["bien_id"],
-                bien_designation=row["bien_designation"],
-                bien_amort_date_sortie=(
-                    None
-                    if pd.isna(row["bien_amort_date_sortie"])
-                    else str(row["bien_amort_date_sortie"])
-                ),
-                local_numero=(
-                    None
-                    if pd.isna(row["local_numero"])
-                    else str(row["local_numero"])
-                ),
-                immeuble_libelle=(
-                    None
-                    if pd.isna(row["immeuble_libelle"])
-                    else str(row["immeuble_libelle"])
-                ),
-                niveau_libelle=(
-                    None
-                    if pd.isna(row["niveau_libelle"])
-                    else str(row["niveau_libelle"])
-                ),
-                local_libelle=(
-                    None
-                    if pd.isna(row["local_libelle"])
-                    else str(row["local_libelle"])
-                ),
-                is_active=is_active,
-                import_id=new_import.id
+            bien_amort_date_sortie = (
+                None
+                if pd.isna(row["bien_amort_date_sortie"])
+                else str(row["bien_amort_date_sortie"])
+            )
+            local_numero = (
+                None
+                if pd.isna(row["local_numero"])
+                else str(row["local_numero"])
+            )
+            immeuble_libelle = (
+                None
+                if pd.isna(row["immeuble_libelle"])
+                else str(row["immeuble_libelle"])
+            )
+            niveau_libelle = (
+                None
+                if pd.isna(row["niveau_libelle"])
+                else str(row["niveau_libelle"])
+            )
+            local_libelle = (
+                None
+                if pd.isna(row["local_libelle"])
+                else str(row["local_libelle"])
             )
 
-            db.add(asset)
+            existing = (
+                db.query(Asset)
+                .filter(Asset.bien_id == row["bien_id"])
+                .first()
+            )
+
+            if existing:
+
+                existing.bien_designation = row["bien_designation"]
+                existing.bien_amort_date_sortie = bien_amort_date_sortie
+                existing.local_numero = local_numero
+                existing.immeuble_libelle = immeuble_libelle
+                existing.niveau_libelle = niveau_libelle
+                existing.local_libelle = local_libelle
+                existing.is_active = is_active
+                existing.import_id = new_import.id
+
+                updated_count += 1
+
+            else:
+
+                db.add(
+                    Asset(
+                        bien_id=row["bien_id"],
+                        bien_designation=row["bien_designation"],
+                        bien_amort_date_sortie=bien_amort_date_sortie,
+                        local_numero=local_numero,
+                        immeuble_libelle=immeuble_libelle,
+                        niveau_libelle=niveau_libelle,
+                        local_libelle=local_libelle,
+                        is_active=is_active,
+                        import_id=new_import.id
+                    )
+                )
+
+                added_count += 1
 
         db.commit()
 
-        return new_import
+        return new_import, added_count, updated_count

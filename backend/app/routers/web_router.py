@@ -853,7 +853,7 @@ async def import_submit(
             status_code=400
         )
 
-    ImportService.commit(
+    _, added_count, updated_count = ImportService.commit(
         db,
         df,
         file.filename,
@@ -869,7 +869,8 @@ async def import_submit(
             f"&active={summary['active_assets']}"
             f"&excluded={summary['excluded_assets']}"
             f"&invalid={summary['invalid_rows']}"
-            f"&existing={summary['already_existing']}"
+            f"&added={added_count}"
+            f"&updated={updated_count}"
         ),
         status_code=303
     )

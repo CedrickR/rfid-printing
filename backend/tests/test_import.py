@@ -355,10 +355,14 @@ def test_import_csv_handles_real_export_format(client, admin_user):
     assert assets["19590002"]["bien_amort_date_sortie"] == "2024-10-07"
 
 
-def test_import_csv_skips_bien_ids_already_in_database(client, admin_user):
+def test_import_csv_updates_existing_bien_ids_instead_of_duplicating(
+    client, admin_user
+):
     """
     Import incrémental : un bien_id déjà présent en base (import
-    précédent) n'est pas réimporté ni dupliqué.
+    précédent) n'est jamais dupliqué. S'il réapparaît dans un nouvel
+    import, ses informations sont mises à jour ; sinon il n'est pas
+    touché.
     """
 
     token = _login(client)
@@ -377,11 +381,12 @@ def test_import_csv_skips_bien_ids_already_in_database(client, admin_user):
 
     assert first_response.status_code == 200
     assert first_response.json()["total_rows"] == 2
-    assert first_response.json()["already_existing"] == 0
+    assert first_response.json()["added_count"] == 2
+    assert first_response.json()["updated_count"] == 0
 
     second_csv = (
         "numero;libelle;sortie\n"
-        "10001;PC Portable;\n"
+        "10001;PC Portable Renomme;\n"
         "10003;Imprimante;\n"
     )
 
@@ -395,8 +400,9 @@ def test_import_csv_skips_bien_ids_already_in_database(client, admin_user):
 
     data = second_response.json()
 
-    assert data["total_rows"] == 1
-    assert data["already_existing"] == 1
+    assert data["total_rows"] == 2
+    assert data["added_count"] == 1
+    assert data["updated_count"] == 1
 
     assets_response = client.get(
         "/api/import/assets",
@@ -411,8 +417,13 @@ def test_import_csv_skips_bien_ids_already_in_database(client, admin_user):
     assert bien_ids.count("10001") == 1
     assert set(bien_ids) == {"10001", "10002", "10003"}
 
+    # 10001 a bien été mis à jour avec les nouvelles valeurs du fichier
+    asset_10001 = next(a for a in assets if a["bien_id"] == "10001")
 
-def test_import_preview_reports_already_existing_without_writing(
+    assert asset_10001["bien_designation"] == "PC Portable Renomme"
+
+
+def test_import_preview_reports_update_without_writing(
     client, admin_user
 ):
 
@@ -441,8 +452,9 @@ def test_import_preview_reports_already_existing_without_writing(
     )
 
     assert preview_response.status_code == 200
-    assert preview_response.json()["total_rows"] == 0
-    assert preview_response.json()["already_existing"] == 1
+    assert preview_response.json()["total_rows"] == 1
+    assert preview_response.json()["added_count"] == 0
+    assert preview_response.json()["updated_count"] == 1
 
     assets_response = client.get(
         "/api/import/assets",

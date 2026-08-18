@@ -107,3 +107,68 @@ def test_import_submit_shows_error_on_duplicate(client, admin_user):
 
     assert response.status_code == 400
     assert "doublon" in response.text
+
+
+def test_reimporting_existing_bien_id_updates_it_without_duplicating(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie\n1001;PC Portable;\n",
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie\n1001;PC Portable Renomme;2024-06-01\n",
+                "text/csv"
+            )
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/dashboard?imported=1&total=1&active=0&excluded=1"
+        "&invalid=0&added=0&updated=1"
+    )
+
+    assets_response = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": f"Bearer {_get_token(client)}"
+        }
+    )
+
+    assets = assets_response.json()
+
+    assert len(assets) == 1
+    assert assets[0]["bien_designation"] == "PC Portable Renomme"
+
+
+def test_dashboard_import_banner_shows_added_and_updated_counts(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = client.get(
+        "/dashboard"
+        "?imported=1&total=3&active=2&excluded=1&invalid=0&added=2&updated=1",
+    )
+
+    assert response.status_code == 200
+    assert "3 bien(s) traité(s)" in response.text
+    assert "2 ajouté(s)" in response.text
+    assert "1 mis à jour" in response.text

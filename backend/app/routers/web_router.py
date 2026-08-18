@@ -1853,19 +1853,29 @@ def _location_details_by_numero(db: Session):
     return details
 
 
-def _glpi_discrepancies(db: Session):
+def _glpi_discrepancies(db: Session, active_only: bool = False):
     """
     Biens connus à la fois dans l'inventaire et dans un import GLPI,
     dont le numéro local (inventaire) diffère du numéro de la pièce
     (GLPI).
     """
 
-    rows = (
+    query = (
         db.query(Asset, GlpiAsset)
         .join(
             GlpiAsset,
             GlpiAsset.bien_id == Asset.bien_id
         )
+    )
+
+    if active_only:
+
+        query = query.filter(
+            Asset.is_active == True
+        )
+
+    rows = (
+        query
         .order_by(
             Asset.bien_id
         )
@@ -1884,7 +1894,8 @@ def _render_glpi_locations(
     request: Request,
     db: Session,
     error: str = None,
-    status_code: int = 200
+    status_code: int = 200,
+    active_only: bool = False
 ):
 
     imports_by_type = {
@@ -1903,9 +1914,10 @@ def _render_glpi_locations(
         context={
             "glpi_types": GLPI_TYPES,
             "imports_by_type": imports_by_type,
-            "discrepancies": _glpi_discrepancies(db),
+            "discrepancies": _glpi_discrepancies(db, active_only),
             "local_options": _local_options(db),
-            "error": error
+            "error": error,
+            "active_only": active_only
         },
         status_code=status_code
     )
@@ -1914,13 +1926,14 @@ def _render_glpi_locations(
 @router.get("/glpi-locations")
 def glpi_locations_page(
     request: Request,
+    active_only: bool = Query(default=False),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
     require_admin(current_user)
 
-    return _render_glpi_locations(request, db)
+    return _render_glpi_locations(request, db, active_only=active_only)
 
 
 @router.post("/glpi-locations")

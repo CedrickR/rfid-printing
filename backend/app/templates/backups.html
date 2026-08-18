@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Sauvegardes de la base de données
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% elif request.query_params.get('created') == '1' %}
+<div class="alert alert-success">
+    Sauvegarde créée.
+</div>
+{% elif request.query_params.get('restored') == '1' %}
+<div class="alert alert-success">
+    Base de données restaurée à partir de la sauvegarde choisie.
+</div>
+{% elif request.query_params.get('deleted') == '1' %}
+<div class="alert alert-success">
+    Sauvegarde supprimée.
+</div>
+{% endif %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+
+        <h6 class="m-0 font-weight-bold text-primary">
+            Historique des sauvegardes
+            <span class="badge badge-primary ml-2">
+                {{ backups | length }} / 2
+            </span>
+        </h6>
+
+        <form method="post" action="/admin/backups">
+            <button type="submit" class="btn btn-success btn-sm">
+                <i class="fas fa-save fa-sm"></i> Créer une sauvegarde maintenant
+            </button>
+        </form>
+
+    </div>
+
+    <div class="card-body">
+
+        <small class="form-text text-muted mb-3">
+            Une sauvegarde est créée automatiquement après chaque import
+            de fichier CSV (inventaire, scan RFID ou GLPI). Seules les
+            2 sauvegardes les plus récentes sont conservées ; les plus
+            anciennes sont supprimées automatiquement.
+        </small>
+
+        <div class="table-responsive mt-3">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Origine</th>
+                        <th>Créée par</th>
+                        <th>Taille</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for backup in backups %}
+
+                    <tr>
+
+                        <td>{{ backup.created_at[:19].replace('T', ' ') }}</td>
+                        <td>{{ backup_sources.get(backup.source, backup.source) }}</td>
+                        <td>{{ backup.created_by }}</td>
+                        <td>
+                            {% if backup.size_bytes >= 1048576 %}
+                            {{ (backup.size_bytes / 1048576) | round(2) }} Mo
+                            {% else %}
+                            {{ (backup.size_bytes / 1024) | round(1) }} Ko
+                            {% endif %}
+                        </td>
+                        <td>
+
+                            <form
+                                method="post"
+                                action="/admin/backups/{{ backup.filename }}/restore"
+                                class="d-inline"
+                                onsubmit="return confirm('Restaurer cette sauvegarde ? Toutes les données actuelles seront remplacées par celles de cette sauvegarde. Cette action est irréversible.');"
+                            >
+                                <button type="submit" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-undo fa-sm"></i> Restaurer
+                                </button>
+                            </form>
+
+                            <form
+                                method="post"
+                                action="/admin/backups/{{ backup.filename }}/delete"
+                                class="d-inline"
+                                onsubmit="return confirm('Supprimer définitivement cette sauvegarde ?');"
+                            >
+                                <button type="submit" class="btn btn-outline-danger btn-sm ml-1">
+                                    <i class="fas fa-trash fa-sm"></i> Supprimer
+                                </button>
+                            </form>
+
+                        </td>
+
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            Aucune sauvegarde disponible.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="card shadow border-left-danger mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-danger">
+            Zone sensible
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <p class="mb-3">
+            Supprime définitivement tous les biens, imports, lots
+            d'impression et l'historique. Les comptes utilisateurs sont
+            conservés. Pensez à créer ou vérifier une sauvegarde avant
+            cette opération. Cette action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/admin/reset-database"
+            onsubmit="return confirm('Supprimer définitivement toutes les données (biens, imports, lots, historique) ? Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Vider la base de données
+            </button>
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}

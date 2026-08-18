@@ -201,7 +201,26 @@
                             <th>Bien ID</th>
                             <th>Désignation</th>
                             <th>Numéro local (inventaire)</th>
-                            <th>Actif</th>
+                            <th>
+                                Actif
+                                {% if active_only %}
+                                <a
+                                    href="/glpi-locations"
+                                    class="btn btn-outline-secondary btn-sm ml-1"
+                                    title="Afficher tous les biens (actifs et exclus)"
+                                >
+                                    Tous
+                                </a>
+                                {% else %}
+                                <a
+                                    href="/glpi-locations?active_only=1"
+                                    class="btn btn-outline-primary btn-sm ml-1"
+                                    title="N'afficher que les biens actifs"
+                                >
+                                    Actifs uniquement
+                                </a>
+                                {% endif %}
+                            </th>
                             <th>Lieu (GLPI)</th>
                             <th>Numéro de la pièce (GLPI)</th>
                             <th>Statut (GLPI)</th>

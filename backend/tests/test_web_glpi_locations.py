@@ -261,6 +261,84 @@ def test_discrepancy_shows_actif_badge(client, admin_user):
     assert '<span class="badge badge-danger">' in response.text
 
 
+def _seed_active_and_excluded_discrepancies(client):
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Actif;;01100021\n"
+        "20260002;PC Exclu;2024-01-01;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260002", "01100098")
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+
+def test_actif_column_header_shows_filter_toggle_button(client, admin_user):
+
+    _login(client)
+    _seed_active_and_excluded_discrepancies(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "Actifs uniquement" in response.text
+    assert 'href="/glpi-locations?active_only=1"' in response.text
+
+
+def test_active_only_filter_hides_excluded_assets(client, admin_user):
+
+    _login(client)
+    _seed_active_and_excluded_discrepancies(client)
+
+    response = client.get("/glpi-locations", params={"active_only": "1"})
+
+    assert response.status_code == 200
+    assert "20260001" in response.text
+    assert "20260002" not in response.text
+    assert '<span class="badge badge-danger">' not in response.text
+
+
+def test_active_only_filter_shows_toggle_back_to_all(client, admin_user):
+
+    _login(client)
+    _seed_active_and_excluded_discrepancies(client)
+
+    response = client.get("/glpi-locations", params={"active_only": "1"})
+
+    assert response.status_code == 200
+    assert "Tous" in response.text
+    assert "Actifs uniquement" not in response.text
+    assert 'href="/glpi-locations"' in response.text
+
+
+def test_without_filter_shows_both_active_and_excluded_assets(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_active_and_excluded_discrepancies(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "20260001" in response.text
+    assert "20260002" in response.text
+
+
 def test_discrepancy_shows_exclude_button_only_for_active_assets(
     client, admin_user
 ):

@@ -1856,6 +1856,8 @@ def _location_details_by_numero(db: Session):
 
 GLPI_ACTIVE_FILTERS = {"tous", "actif", "exclu"}
 GLPI_SORT_COLUMNS = {"bien_id", "numero_piece", "statut"}
+GLPI_PAGE_SIZES = [50, 100, 250]
+GLPI_DEFAULT_PAGE_SIZE = 50
 
 
 def _glpi_locations_url(
@@ -1863,7 +1865,9 @@ def _glpi_locations_url(
     numero_piece_filter: str,
     statut_filter: str,
     sort: str,
-    direction: str
+    direction: str,
+    page: int = 1,
+    page_size: int = GLPI_DEFAULT_PAGE_SIZE
 ) -> str:
 
     params = {}
@@ -1882,6 +1886,12 @@ def _glpi_locations_url(
 
     if direction and direction != "asc":
         params["dir"] = direction
+
+    if page and page != 1:
+        params["page"] = page
+
+    if page_size and page_size != GLPI_DEFAULT_PAGE_SIZE:
+        params["page_size"] = page_size
 
     query = urlencode(params)
 
@@ -1969,7 +1979,9 @@ def _render_glpi_locations(
     numero_piece_filter: str = "",
     statut_filter: str = "",
     sort: str = "bien_id",
-    direction: str = "asc"
+    direction: str = "asc",
+    page: int = 1,
+    page_size: int = GLPI_DEFAULT_PAGE_SIZE
 ):
 
     imports_by_type = {
@@ -1982,9 +1994,26 @@ def _render_glpi_locations(
         for glpi_type in GLPI_TYPES
     }
 
+    all_discrepancies = _glpi_discrepancies(
+        db,
+        active_filter,
+        numero_piece_filter,
+        statut_filter,
+        sort,
+        direction
+    )
+
+    total_count = len(all_discrepancies)
+    total_pages = max(1, -(-total_count // page_size))
+    page = min(max(page, 1), total_pages)
+
+    start = (page - 1) * page_size
+    discrepancies = all_discrepancies[start:start + page_size]
+
     active_filter_links = {
         value: _glpi_locations_url(
-            value, numero_piece_filter, statut_filter, sort, direction
+            value, numero_piece_filter, statut_filter, sort, direction,
+            page_size=page_size
         )
         for value in GLPI_ACTIVE_FILTERS
     }
@@ -1995,14 +2024,40 @@ def _render_glpi_locations(
             numero_piece_filter,
             statut_filter,
             column,
-            "desc" if sort == column and direction == "asc" else "asc"
+            "desc" if sort == column and direction == "asc" else "asc",
+            page_size=page_size
         )
         for column in ("numero_piece", "statut")
     }
 
     reset_filters_link = _glpi_locations_url(
-        active_filter, "", "", sort, direction
+        active_filter, "", "", sort, direction, page_size=page_size
     )
+
+    pagination_links = {
+        "prev": (
+            _glpi_locations_url(
+                active_filter, numero_piece_filter, statut_filter,
+                sort, direction, page - 1, page_size
+            )
+            if page > 1 else None
+        ),
+        "next": (
+            _glpi_locations_url(
+                active_filter, numero_piece_filter, statut_filter,
+                sort, direction, page + 1, page_size
+            )
+            if page < total_pages else None
+        )
+    }
+
+    page_size_links = {
+        size: _glpi_locations_url(
+            active_filter, numero_piece_filter, statut_filter,
+            sort, direction, 1, size
+        )
+        for size in GLPI_PAGE_SIZES
+    }
 
     return templates.TemplateResponse(
         request=request,
@@ -2010,14 +2065,8 @@ def _render_glpi_locations(
         context={
             "glpi_types": GLPI_TYPES,
             "imports_by_type": imports_by_type,
-            "discrepancies": _glpi_discrepancies(
-                db,
-                active_filter,
-                numero_piece_filter,
-                statut_filter,
-                sort,
-                direction
-            ),
+            "discrepancies": discrepancies,
+            "discrepancies_total": total_count,
             "local_options": _local_options(db),
             "error": error,
             "active_filter": active_filter,
@@ -2027,7 +2076,13 @@ def _render_glpi_locations(
             "direction": direction,
             "active_filter_links": active_filter_links,
             "sort_links": sort_links,
-            "reset_filters_link": reset_filters_link
+            "reset_filters_link": reset_filters_link,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "page_sizes": GLPI_PAGE_SIZES,
+            "pagination_links": pagination_links,
+            "page_size_links": page_size_links
         },
         status_code=status_code
     )
@@ -2041,6 +2096,8 @@ def glpi_locations_page(
     statut: str = Query(default=""),
     sort: str = Query(default="bien_id"),
     sort_dir: str = Query(default="asc", alias="dir"),
+    page: int = Query(default=1),
+    page_size: int = Query(default=GLPI_DEFAULT_PAGE_SIZE),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
@@ -2056,6 +2113,12 @@ def glpi_locations_page(
     if sort_dir not in ("asc", "desc"):
         sort_dir = "asc"
 
+    if page_size not in GLPI_PAGE_SIZES:
+        page_size = GLPI_DEFAULT_PAGE_SIZE
+
+    if page < 1:
+        page = 1
+
     return _render_glpi_locations(
         request,
         db,
@@ -2063,7 +2126,9 @@ def glpi_locations_page(
         numero_piece_filter=numero_piece,
         statut_filter=statut,
         sort=sort,
-        direction=sort_dir
+        direction=sort_dir,
+        page=page,
+        page_size=page_size
     )
 
 

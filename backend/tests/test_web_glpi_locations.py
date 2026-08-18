@@ -867,6 +867,120 @@ def test_glpi_locations_page_shows_selected_count(client, admin_user):
 
     assert response.status_code == 200
     assert 'id="glpi-selected-count"' in response.text
+
+
+def _seed_many_discrepancies(client, count):
+
+    inventory_lines = ["numero;libelle;sortie;local_numero"]
+    glpi_content = GLPI_HEADER
+
+    for i in range(1, count + 1):
+
+        bien_id = f"2026{i:04d}"
+        local_numero = str(i).zfill(8)
+        numero_piece = str(i + 900000).zfill(8)
+
+        inventory_lines.append(
+            f"{bien_id};PC {i};;{local_numero}"
+        )
+        glpi_content += _glpi_row(bien_id, numero_piece)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "\n".join(inventory_lines) + "\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", glpi_content, "text/csv")}
+    )
+
+
+def test_glpi_locations_page_shows_pagination_and_page_size_controls(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert 'id="glpi-page-size"' in response.text
+    assert "Page 1 / 1" in response.text
+    assert 'value="/glpi-locations?page_size=100"' in response.text
+    assert 'value="/glpi-locations?page_size=250"' in response.text
+
+
+def test_glpi_locations_pagination_splits_rows_across_pages(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_many_discrepancies(client, 51)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "Page 1 / 2" in response.text
+    assert "20260001" in response.text
+    assert "20260050" in response.text
+    assert "20260051" not in response.text
+    assert 'href="/glpi-locations?page=2"' in response.text
+
+    page_two = client.get("/glpi-locations", params={"page": 2})
+
+    assert page_two.status_code == 200
+    assert "Page 2 / 2" in page_two.text
+    assert "20260051" in page_two.text
+    assert "20260001" not in page_two.text
+    assert 'href="/glpi-locations"' in page_two.text
+
+
+def test_glpi_locations_page_size_100_shows_all_on_one_page(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_many_discrepancies(client, 51)
+
+    response = client.get("/glpi-locations", params={"page_size": 100})
+
+    assert response.status_code == 200
+    assert "Page 1 / 1" in response.text
+    assert "20260001" in response.text
+    assert "20260051" in response.text
+
+
+def test_glpi_locations_invalid_page_size_falls_back_to_default(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_many_discrepancies(client, 51)
+
+    response = client.get("/glpi-locations", params={"page_size": 999})
+
+    assert response.status_code == 200
+    assert "Page 1 / 2" in response.text
+
+
+def test_glpi_locations_out_of_range_page_is_clamped(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_fields(client)
+
+    response = client.get("/glpi-locations", params={"page": 99})
+
+    assert response.status_code == 200
+    assert "Page 1 / 1" in response.text
     assert "sélectionné" in response.text
 
 

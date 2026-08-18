@@ -25,10 +25,6 @@
     Données GLPI réinitialisées : tous les imports et biens GLPI ont
     été supprimés. L'inventaire n'est pas affecté.
 </div>
-{% elif request.query_params.get('excluded') == '1' %}
-<div class="alert alert-success">
-    Bien exclu.
-</div>
 {% endif %}
 
 <div class="card shadow mb-4">
@@ -266,17 +262,6 @@
                                     <span class="badge badge-success">
                                         Actif
                                     </span>
-
-                                    <button
-                                        type="submit"
-                                        formaction="/glpi-locations/assets/{{ asset.id }}/exclude"
-                                        formmethod="post"
-                                        formnovalidate
-                                        class="btn btn-outline-danger btn-sm ml-1"
-                                        onclick="return confirm('Marquer ce bien comme exclu ?');"
-                                    >
-                                        Exclure
-                                    </button>
 
                                 {% else %}
 

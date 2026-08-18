@@ -82,9 +82,9 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 
 - **Colonnes optionnelles** (utilisées si présentes dans le fichier, sans faire échouer l'import si absentes) : `local_numero`, `immeuble_libelle`, `niveau_libelle`, `local_libelle`.
 - Les autres colonnes du fichier sont ignorées.
-- **Import incrémental** : seuls les biens dont le Bien ID est absent de la base sont ajoutés ; les biens déjà présents sont comptabilisés (« déjà existants ») mais non réimportés/écrasés.
+- **Import incrémental sans doublon** : un Bien ID absent de la base est **ajouté** ; un Bien ID déjà présent est **mis à jour** (toutes ses colonnes, y compris le lieu et le statut actif/exclu) au lieu d'être réinséré en double ou silencieusement ignoré.
 - Aperçu Ajax avant import définitif (colonnes détectées, compteurs) via `POST /import/preview`.
-- Résumé après import : total de lignes, actifs, exclus, lignes invalides (Bien ID ou désignation manquants), doublons déjà en base.
+- Résumé après import : nombre de lignes valides traitées, actifs, exclus, lignes invalides (Bien ID ou désignation manquants), biens ajoutés et biens mis à jour.
 
 ### 2.4 Inventaire (`/assets`)
 

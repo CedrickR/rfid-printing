@@ -8,16 +8,14 @@
 
 {% if request.query_params.get('imported') == '1' %}
 <div class="alert alert-success">
-    Import terminé : {{ request.query_params.get('total') }} biens importés
-    ({{ request.query_params.get('active') }} actifs,
-    {{ request.query_params.get('excluded') }} exclus).
+    Import terminé : {{ request.query_params.get('total') }} bien(s) traité(s)
+    ({{ request.query_params.get('added') }} ajouté(s),
+    {{ request.query_params.get('updated') }} mis à jour) —
+    {{ request.query_params.get('active') }} actif(s),
+    {{ request.query_params.get('excluded') }} exclu(s).
     {% if request.query_params.get('invalid') and request.query_params.get('invalid') != '0' %}
     {{ request.query_params.get('invalid') }} ligne(s) ignorée(s)
     (bien_id ou désignation manquants).
-    {% endif %}
-    {% if request.query_params.get('existing') and request.query_params.get('existing') != '0' %}
-    {{ request.query_params.get('existing') }} bien(s) déjà présent(s) en
-    base, non réimporté(s).
     {% endif %}
 </div>
 {% endif %}

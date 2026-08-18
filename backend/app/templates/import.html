@@ -71,10 +71,11 @@
             </p>
 
             <ul class="list-unstyled mb-0">
-                <li>Nouveaux biens à importer : <strong id="preview-total"></strong></li>
+                <li>Lignes valides dans le fichier : <strong id="preview-total"></strong></li>
                 <li>dont actifs : <strong id="preview-active"></strong></li>
                 <li>dont exclus (déjà sortis) : <strong id="preview-excluded"></strong></li>
-                <li>Déjà présents en base (ignorés) : <strong id="preview-existing"></strong></li>
+                <li>Nouveaux biens à ajouter : <strong id="preview-added"></strong></li>
+                <li>Biens existants à mettre à jour : <strong id="preview-updated"></strong></li>
                 <li>Lignes ignorées (numero ou libelle manquant) : <strong id="preview-invalid"></strong></li>
             </ul>
 
@@ -139,8 +140,10 @@
                     result.data.excluded_assets;
                 document.getElementById("preview-invalid").textContent =
                     result.data.invalid_rows;
-                document.getElementById("preview-existing").textContent =
-                    result.data.already_existing;
+                document.getElementById("preview-added").textContent =
+                    result.data.added_count;
+                document.getElementById("preview-updated").textContent =
+                    result.data.updated_count;
 
                 resultBox.style.display = "block";
             })

@@ -995,3 +995,85 @@ def test_glpi_locations_page_local_choice_has_auto_select_class(
 
     assert response.status_code == 200
     assert "glpi-local-choice" in response.text
+
+
+def test_discrepancy_table_shows_type_glpi_column(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099", glpi_type="ordinateur")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert "Type (GLPI)" in response.text
+    assert "Ordinateurs" in response.text
+
+
+def test_type_filter_dropdown_lists_five_glpi_types(client, admin_user):
+
+    _login(client)
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert 'id="type_filter"' in response.text
+
+    for label in (
+        "Ordinateurs", "Moniteurs", "Périphériques", "Logiciels",
+        "Imprimantes"
+    ):
+        assert label in response.text
+
+
+def _seed_discrepancies_with_distinct_glpi_types(client):
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Un;;01100021\n"
+        "20260002;Logiciel Un;;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    _upload_glpi(client, "20260001", "01100099", glpi_type="ordinateur")
+    _upload_glpi(client, "20260002", "01100098", glpi_type="logiciel")
+
+
+def test_type_filter_shows_only_matching_type(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_types(client)
+
+    response = client.get("/glpi-locations", params={"type": "logiciel"})
+
+    assert response.status_code == 200
+    assert "20260002" in response.text
+    assert "20260001" not in response.text
+
+
+def test_invalid_type_filter_is_ignored(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_types(client)
+
+    response = client.get("/glpi-locations", params={"type": "bogus"})
+
+    assert response.status_code == 200
+    assert "20260001" in response.text
+    assert "20260002" in response.text
+
+
+def test_type_filter_combined_with_reset_filters_link(client, admin_user):
+
+    _login(client)
+    _seed_discrepancies_with_distinct_glpi_types(client)
+
+    response = client.get("/glpi-locations", params={"type": "logiciel"})
+
+    assert response.status_code == 200
+    assert "Réinitialiser les filtres" in response.text
+    assert 'href="/glpi-locations"' in response.text

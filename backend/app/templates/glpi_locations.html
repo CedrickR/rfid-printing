@@ -166,6 +166,25 @@
             <input type="hidden" name="dir" value="{{ direction }}">
             <input type="hidden" name="page_size" value="{{ page_size }}">
 
+            <label class="mr-2 mb-2" for="type_filter">
+                Type (GLPI)
+            </label>
+            <select
+                class="form-control form-control-sm mr-3 mb-2"
+                id="type_filter"
+                name="type"
+            >
+                <option value="">Tous les types</option>
+                {% for type_key, type_label in glpi_types.items() %}
+                <option
+                    value="{{ type_key }}"
+                    {% if type_key == type_filter %}selected{% endif %}
+                >
+                    {{ type_label }}
+                </option>
+                {% endfor %}
+            </select>
+
             <label class="mr-2 mb-2" for="numero_piece_filter">
                 Numéro de la pièce (GLPI)
             </label>
@@ -194,7 +213,7 @@
                 <i class="fas fa-filter fa-sm"></i> Filtrer
             </button>
 
-            {% if numero_piece_filter or statut_filter %}
+            {% if filters_active %}
             <a href="{{ reset_filters_link }}" class="btn btn-outline-secondary btn-sm mb-2 ml-2">
                 Réinitialiser les filtres
             </a>
@@ -274,6 +293,7 @@
                                     </a>
                                 </div>
                             </th>
+                            <th>Type (GLPI)</th>
                             <th>Lieu (GLPI)</th>
                             <th>
                                 <a href="{{ sort_links.numero_piece }}" class="text-dark">
@@ -348,6 +368,7 @@
 
                             </td>
 
+                            <td>{{ glpi_types.get(glpi_asset.glpi_type, glpi_asset.glpi_type) }}</td>
                             <td>{{ glpi_asset.lieu or "" }}</td>
                             <td>{{ glpi_asset.numero_piece or "" }}</td>
                             <td>{{ glpi_asset.statut or "" }}</td>
@@ -374,7 +395,7 @@
                         {% else %}
 
                         <tr>
-                            <td colspan="9" class="text-center text-muted">
+                            <td colspan="10" class="text-center text-muted">
                                 Aucun écart détecté.
                             </td>
                         </tr>

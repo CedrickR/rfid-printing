@@ -18,6 +18,12 @@ BIEN_ID_COLUMN = "Numéro d'inventaire"
 NUMERO_PIECE_COLUMN = "Numéro de la pièce"
 REQUIRED_COLUMNS = [BIEN_ID_COLUMN, NUMERO_PIECE_COLUMN]
 
+# Colonnes supplémentaires affichées dans le tableau des écarts,
+# récupérées si présentes dans le fichier GLPI sans faire échouer
+# l'import si elles sont absentes (variantes d'export possibles).
+LIEU_COLUMN = "Lieu"
+STATUT_COLUMN = "Statut"
+
 # Le numéro de la pièce est toujours sur 8 caractères dans l'inventaire
 # (ex. "00600001") ; GLPI l'exporte parfois sans les zéros non
 # significatifs (ex. "600001") : on complète à gauche pour rester
@@ -53,20 +59,21 @@ class DuplicateBienIdError(Exception):
 
 class GlpiImportService:
     """
-    Import des exports GLPI (';', avec en-tête). Seules les colonnes
-    "Numéro d'inventaire" (Bien ID) et "Numéro de la pièce" sont
-    conservées, pour comparaison avec le numéro local déjà connu dans
-    l'inventaire.
+    Import des exports GLPI (';', avec en-tête). Colonnes conservées :
+    "Numéro d'inventaire" (Bien ID) et "Numéro de la pièce" (pour
+    comparaison avec le numéro local déjà connu dans l'inventaire), et
+    "Lieu"/"Statut" (informations complémentaires affichées dans le
+    tableau des écarts, sans effet sur la comparaison).
     """
 
     @staticmethod
     def parse(content: bytes):
         """
         Décode et parse le CSV. Retourne une liste de (bien_id,
-        numero_piece). Lève DuplicateBienIdError si le fichier contient
-        plusieurs fois le même Bien ID (cohérent avec l'import
-        inventaire : on force un fichier propre plutôt que de choisir
-        silencieusement une occurrence).
+        numero_piece, lieu, statut). Lève DuplicateBienIdError si le
+        fichier contient plusieurs fois le même Bien ID (cohérent avec
+        l'import inventaire : on force un fichier propre plutôt que de
+        choisir silencieusement une occurrence).
         """
 
         try:
@@ -97,6 +104,8 @@ class GlpiImportService:
             numero_piece = pad_numero_piece(
                 (row.get(NUMERO_PIECE_COLUMN) or "").strip()
             )
+            lieu = (row.get(LIEU_COLUMN) or "").strip()
+            statut = (row.get(STATUT_COLUMN) or "").strip()
 
             if not bien_id:
                 continue
@@ -107,7 +116,7 @@ class GlpiImportService:
 
             seen_ids.add(bien_id)
 
-            rows.append((bien_id, numero_piece))
+            rows.append((bien_id, numero_piece, lieu, statut))
 
         if duplicated_ids:
             raise DuplicateBienIdError(duplicated_ids)
@@ -117,8 +126,8 @@ class GlpiImportService:
     @staticmethod
     def commit(db, rows, glpi_type: str, filename: str, username: str) -> GlpiImport:
         """
-        Ajoute les nouveaux Bien ID et met à jour le numéro de la pièce
-        des Bien ID déjà connus (jamais de doublon en base).
+        Ajoute les nouveaux Bien ID et met à jour les biens déjà connus
+        (jamais de doublon en base).
         """
 
         if glpi_type not in GLPI_TYPES:
@@ -139,7 +148,7 @@ class GlpiImportService:
         added_count = 0
         updated_count = 0
 
-        for bien_id, numero_piece in rows:
+        for bien_id, numero_piece, lieu, statut in rows:
 
             existing = (
                 db.query(GlpiAsset)
@@ -150,6 +159,8 @@ class GlpiImportService:
             if existing:
 
                 existing.numero_piece = numero_piece
+                existing.lieu = lieu
+                existing.statut = statut
                 existing.glpi_type = glpi_type
                 existing.import_id = glpi_import.id
                 existing.updated_at = datetime.now(UTC)
@@ -162,6 +173,8 @@ class GlpiImportService:
                     GlpiAsset(
                         bien_id=bien_id,
                         numero_piece=numero_piece,
+                        lieu=lieu,
+                        statut=statut,
                         glpi_type=glpi_type,
                         import_id=glpi_import.id,
                         updated_at=datetime.now(UTC)

@@ -85,6 +85,14 @@ class GlpiAsset(Base):
         String(100)
     )
 
+    lieu = Column(
+        String(255)
+    )
+
+    statut = Column(
+        String(100)
+    )
+
     glpi_type = Column(
         String(50),
         nullable=False

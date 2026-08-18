@@ -25,6 +25,10 @@
     Données GLPI réinitialisées : tous les imports et biens GLPI ont
     été supprimés. L'inventaire n'est pas affecté.
 </div>
+{% elif request.query_params.get('excluded') == '1' %}
+<div class="alert alert-success">
+    Bien exclu.
+</div>
 {% endif %}
 
 <div class="card shadow mb-4">
@@ -221,7 +225,20 @@
 
                             <td>{{ asset.bien_id }}</td>
                             <td>{{ asset.bien_designation }}</td>
-                            <td>{{ asset.local_numero or "" }}</td>
+
+                            <td>
+                                {% if asset.local_libelle %}
+                                <span
+                                    data-toggle="tooltip"
+                                    title="{{ asset.local_libelle }}"
+                                    style="cursor: help; border-bottom: 1px dotted #6c757d;"
+                                >
+                                    {{ asset.local_numero or "" }}
+                                </span>
+                                {% else %}
+                                {{ asset.local_numero or "" }}
+                                {% endif %}
+                            </td>
 
                             <td>
 
@@ -230,6 +247,17 @@
                                     <span class="badge badge-success">
                                         Actif
                                     </span>
+
+                                    <button
+                                        type="submit"
+                                        formaction="/glpi-locations/assets/{{ asset.id }}/exclude"
+                                        formmethod="post"
+                                        formnovalidate
+                                        class="btn btn-outline-danger btn-sm ml-1"
+                                        onclick="return confirm('Marquer ce bien comme exclu ?');"
+                                    >
+                                        Exclure
+                                    </button>
 
                                 {% else %}
 
@@ -304,6 +332,10 @@
     });
 
 })();
+
+if (window.jQuery) {
+    $('[data-toggle="tooltip"]').tooltip();
+}
 </script>
 
 {% endblock %}

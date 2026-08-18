@@ -261,6 +261,157 @@ def test_discrepancy_shows_actif_badge(client, admin_user):
     assert '<span class="badge badge-danger">' in response.text
 
 
+def test_discrepancy_shows_exclude_button_only_for_active_assets(
+    client, admin_user
+):
+
+    _login(client)
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC Actif;;01100021\n"
+        "20260002;PC Exclu;2024-01-01;01100023\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260002", "01100098")
+    )
+
+    client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert response.text.count("Exclure") == 1
+    assert '/glpi-locations/assets/1/exclude' in response.text
+    assert '/glpi-locations/assets/2/exclude' not in response.text
+
+
+def test_discrepancy_tooltip_shows_local_libelle(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    assert 'data-toggle="tooltip"' in response.text
+    assert 'title="021-ENTREPOT"' in response.text
+
+
+def test_discrepancy_no_tooltip_when_no_local_libelle(client, admin_user):
+
+    _login(client)
+
+    csv_content = (
+        "numero;libelle;sortie;local_numero\n"
+        "20260001;PC sans libellé;;01100021\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.get("/glpi-locations")
+
+    assert response.status_code == 200
+    # Le JS d'initialisation des infobulles (sélecteur jQuery) est
+    # toujours présent en bas de page ; seule l'absence du <span>
+    # d'infobulle sur la ligne du tableau est significative ici.
+    assert "cursor: help" not in response.text
+
+
+def test_exclude_asset_requires_login(client):
+
+    response = client.post(
+        "/glpi-locations/assets/1/exclude",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_exclude_asset_requires_admin_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post("/glpi-locations/assets/1/exclude")
+
+    assert response.status_code == 403
+
+
+def test_exclude_asset_denies_manager_role(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post("/glpi-locations/assets/1/exclude")
+
+    assert response.status_code == 403
+
+
+def test_exclude_asset_missing_asset_returns_404(client, admin_user):
+
+    _login(client)
+
+    response = client.post("/glpi-locations/assets/999/exclude")
+
+    assert response.status_code == 404
+
+
+def test_exclude_asset_marks_asset_inactive(client, admin_user):
+
+    _login(client)
+    _seed_inventory(client)
+    _upload_glpi(client, "20260001", "01100099")
+
+    response = client.post(
+        "/glpi-locations/assets/1/exclude",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/glpi-locations?excluded=1"
+
+    listing = client.get("/glpi-locations?excluded=1")
+
+    assert listing.status_code == 200
+    assert "Bien exclu." in listing.text
+
+    # Le badge doit maintenant afficher "Exclu" pour ce bien et le
+    # bouton "Exclure" doit avoir disparu pour cette ligne.
+    assert '/glpi-locations/assets/1/exclude' not in listing.text
+
+
 def test_upload_pads_numero_piece_to_eight_characters(client, admin_user):
 
     _login(client)

@@ -66,6 +66,8 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 ### 2.2 Tableau de bord (`/dashboard`)
 
 - Compteurs : nombre d'imports, de biens actifs, de lots, d'entrées d'historique.
+- **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
+- **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - Panneau **« Zone sensible »** (administrateur uniquement) : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés). Action irréversible, confirmation JavaScript obligatoire.
 
 ### 2.3 Import de l'inventaire (`/import`)

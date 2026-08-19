@@ -1242,6 +1242,37 @@ def _filtered_assets_query(
     return query
 
 
+def _bureau_by_codelieu(db: Session, codes):
+    """
+    Pour chaque code lieu demandé, la concaténation des champs
+    bâtiment/étage/bureau issus du fichier d'import bureaux (colonne
+    "Bureau" de l'inventaire), les parties vides étant ignorées.
+    """
+
+    if not codes:
+        return {}
+
+    mappings = (
+        db.query(BureauMapping)
+        .filter(BureauMapping.codelieu.in_(codes))
+        .all()
+    )
+
+    result = {}
+
+    for mapping in mappings:
+
+        parts = [
+            part
+            for part in (mapping.batiment, mapping.etage, mapping.bureau)
+            if part
+        ]
+
+        result[mapping.codelieu] = " - ".join(parts)
+
+    return result
+
+
 @router.get("/assets")
 def assets(
     request: Request,
@@ -1290,20 +1321,7 @@ def assets(
         if asset.local_numero
     }
 
-    bureau_by_codelieu = {}
-
-    if local_numeros:
-
-        mappings = (
-            db.query(BureauMapping)
-            .filter(BureauMapping.codelieu.in_(local_numeros))
-            .all()
-        )
-
-        bureau_by_codelieu = {
-            mapping.codelieu: mapping.bureau
-            for mapping in mappings
-        }
+    bureau_by_codelieu = _bureau_by_codelieu(db, local_numeros)
 
     destination_options = [
         destination.libelle
@@ -1394,6 +1412,14 @@ def export_assets_csv(
         .all()
     )
 
+    local_numeros = {
+        asset.local_numero
+        for asset in assets_list
+        if asset.local_numero
+    }
+
+    bureau_by_codelieu = _bureau_by_codelieu(db, local_numeros)
+
     buffer = StringIO()
 
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
@@ -1406,6 +1432,8 @@ def export_assets_csv(
             "Immeuble",
             "Niveau",
             "Local",
+            "Destination",
+            "Bureau",
             "Actif"
         ]
     )
@@ -1419,6 +1447,8 @@ def export_assets_csv(
                 asset.immeuble_libelle or "",
                 asset.niveau_libelle or "",
                 asset.local_libelle or "",
+                asset.destination or "",
+                bureau_by_codelieu.get(asset.local_numero, "") or "",
                 "Actif" if asset.is_active else "Exclu"
             ]
         )

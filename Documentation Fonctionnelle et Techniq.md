@@ -98,7 +98,7 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
 - Colonnes **Destination** et **Bureau** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
-  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le code lieu du fichier bureaux importé sur `/admin/destinations` (§2.12) ; vide si aucune correspondance.
+  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le code lieu du fichier bureaux importé sur `/admin/destinations` (§2.12) — affiche la **concaténation** des champs `batiment`, `etage` et `bureau` du fichier importé (séparés par « - », parties vides ignorées) ; vide si aucune correspondance.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -106,7 +106,7 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
   - **Inventaire immatériel** (`POST /assets/export-immateriel`) : génère un CSV (`;`, sans en-tête, 2 colonnes) à partir des biens cochés — colonne 1 = `L261` + numéro local, colonne 2 = `261` + Bien ID (biens sans numéro local ignorés). Même format que les fichiers de lecteur RFID (§2.6).
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
-  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Actif.
+  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Actif.
 - Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
 
 ### 2.5 Lots d'impression (`/jobs`)

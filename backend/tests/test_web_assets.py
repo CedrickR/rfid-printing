@@ -361,11 +361,12 @@ def test_export_csv_contains_header_and_all_matching_rows(
     lines = response.text.strip("\n").split("\n")
 
     assert lines[0] == (
-        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;Actif"
+        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
+        "Destination;Bureau;Actif"
     )
     assert len(lines) == 4  # en-tête + 3 biens
-    assert "1001;PC actif;;;;;Actif" in lines
-    assert "1002;Ecran sorti tot;;;;;Exclu" in lines
+    assert "1001;PC actif;;;;;;;Actif" in lines
+    assert "1002;Ecran sorti tot;;;;;;;Exclu" in lines
 
 
 def test_export_csv_respects_search_filters(client, admin_user):
@@ -411,6 +412,102 @@ def test_export_csv_accessible_to_reader_role(client, standard_user):
     response = client.get("/assets/export-csv")
 
     assert response.status_code == 200
+
+
+def test_export_csv_includes_destination_and_bureau(client, admin_user):
+
+    _login_and_seed(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "loc.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;PC actif;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post("/admin/destinations", data={"libelle": "Direction Info"})
+
+    client.post(
+        "/admin/destinations/bureaux",
+        files={
+            "file": (
+                "bureaux.csv",
+                "codelieu;batiment;etage;bureau\n"
+                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "text/csv"
+            )
+        }
+    )
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    client.post(
+        f"/assets/{asset_id}/destination",
+        data={"destination": "Direction Info"}
+    )
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
+        "Destination;Bureau;Actif"
+    )
+    assert (
+        "1001;PC actif;01100021;;;;Direction Info;"
+        "SIEGE - REZ DE CHAUSSEE - 021-A;Actif" in lines
+    )
+
+
+def test_assets_page_shows_bureau_as_concatenated_fields(client, admin_user):
+
+    _login_and_seed(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "loc.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;PC actif;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post(
+        "/admin/destinations/bureaux",
+        files={
+            "file": (
+                "bureaux.csv",
+                "codelieu;batiment;etage;bureau\n"
+                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "SIEGE - REZ DE CHAUSSEE - 021-A" in response.text
 
 
 def test_assets_page_shows_no_last_import_when_database_empty(

@@ -111,6 +111,58 @@
 
 </div>
 
+<div class="row">
+
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow h-100">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Répartition des biens actifs par destination
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                {% if destination_labels %}
+                <canvas id="destinationChart" height="220"></canvas>
+                {% else %}
+                <p class="text-muted mb-0">
+                    Aucun bien actif.
+                </p>
+                {% endif %}
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow h-100">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Biens avec étiquette générée
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                {% if assets_count %}
+                <canvas id="labelsGeneratedChart" height="220"></canvas>
+                {% else %}
+                <p class="text-muted mb-0">
+                    Aucun bien actif.
+                </p>
+                {% endif %}
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
 {% if role == "administrateur" %}
 <div class="card shadow border-left-danger mb-4">
 
@@ -142,5 +194,118 @@
 
 </div>
 {% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+if (window.Chart) {
+(function () {
+
+    var PALETTE = [
+        "#4e73df", "#1cc88a", "#36b9cc", "#f6c23e", "#e74a3b",
+        "#858796", "#2e59d9", "#17a673", "#2c9faf", "#dda20a"
+    ];
+
+    function colorAt(index) {
+        return PALETTE[index % PALETTE.length];
+    }
+
+    function percentLabels(chart, total) {
+
+        var data = chart.data;
+
+        return data.labels.map(function (label, i) {
+
+            var value = data.datasets[0].data[i];
+            var pct = total ? ((value / total) * 100).toFixed(1) : "0.0";
+
+            return {
+                text: label + " : " + value + " (" + pct + "%)",
+                fillStyle: data.datasets[0].backgroundColor[i],
+                index: i
+            };
+        });
+    }
+
+    var destinationCanvas = document.getElementById("destinationChart");
+
+    if (destinationCanvas) {
+
+        var destinationLabels = {{ destination_labels | tojson }};
+        var destinationValues = {{ destination_values | tojson }};
+        var destinationTotal = destinationValues.reduce(
+            function (a, b) { return a + b; }, 0
+        );
+
+        new Chart(destinationCanvas, {
+            type: "doughnut",
+            data: {
+                labels: destinationLabels,
+                datasets: [{
+                    data: destinationValues,
+                    backgroundColor: destinationLabels.map(function (_, i) {
+                        return colorAt(i);
+                    })
+                }]
+            },
+            options: {
+                plugins: {
+                    legend: {
+                        position: "right",
+                        labels: {
+                            generateLabels: function (chart) {
+                                return percentLabels(chart, destinationTotal);
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                var value = context.parsed;
+                                var pct = destinationTotal
+                                    ? ((value / destinationTotal) * 100).toFixed(1)
+                                    : "0.0";
+                                return context.label + " : " + value + " (" + pct + "%)";
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    var labelsGeneratedCanvas = document.getElementById("labelsGeneratedChart");
+
+    if (labelsGeneratedCanvas) {
+
+        new Chart(labelsGeneratedCanvas, {
+            type: "bar",
+            data: {
+                labels: ["Étiquette générée", "Pas encore générée"],
+                datasets: [{
+                    data: [
+                        {{ labels_generated_count }},
+                        {{ labels_not_generated_count }}
+                    ],
+                    backgroundColor: [colorAt(1), colorAt(4)]
+                }]
+            },
+            options: {
+                indexAxis: "y",
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+})();
+}
+</script>
 
 {% endblock %}

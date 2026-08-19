@@ -20,6 +20,7 @@ from fastapi.responses import Response
 from fastapi import HTTPException
 
 from sqlalchemy import cast
+from sqlalchemy import func
 from sqlalchemy import Integer
 from sqlalchemy.orm import Session
 
@@ -243,6 +244,37 @@ def dashboard(
         .count()
     )
 
+    destination_counts = (
+        db.query(
+            Asset.destination,
+            func.count(Asset.id)
+        )
+        .filter(Asset.is_active == True)
+        .group_by(Asset.destination)
+        .all()
+    )
+
+    destination_counts.sort(key=lambda row: row[1], reverse=True)
+
+    destination_labels = [
+        destination or "Sans destination"
+        for destination, _ in destination_counts
+    ]
+
+    destination_values = [count for _, count in destination_counts]
+
+    labels_generated_count = (
+        db.query(PrintJobLine.asset_id)
+        .join(PrintJob, PrintJob.id == PrintJobLine.job_id)
+        .filter(PrintJob.status == "GENERATED")
+        .distinct()
+        .count()
+    )
+
+    labels_not_generated_count = max(
+        assets_count - labels_generated_count, 0
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -251,6 +283,10 @@ def dashboard(
             "assets_count": assets_count,
             "jobs_count": jobs_count,
             "history_count": history_count,
+            "destination_labels": destination_labels,
+            "destination_values": destination_values,
+            "labels_generated_count": labels_generated_count,
+            "labels_not_generated_count": labels_not_generated_count,
             "role": current_user["role"]
         }
     )

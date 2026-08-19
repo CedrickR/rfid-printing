@@ -1593,6 +1593,77 @@ def export_immateriel(
     )
 
 
+@router.post("/assets/print-labels")
+def print_labels(
+    request: Request,
+    asset_ids: list[int] = Form(default=[]),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Page d'impression d'étiquettes (ruban 90 x 36 mm, une étiquette par
+    page) à partir des biens cochés dans l'inventaire. Génération du
+    PDF via l'impression navigateur (§ job_detail.html), pas de
+    dépendance PDF côté serveur.
+    """
+
+    require_manager(current_user)
+
+    if not asset_ids:
+
+        return RedirectResponse(
+            url="/assets?error=no_selection",
+            status_code=303
+        )
+
+    assets_list = (
+        db.query(Asset)
+        .filter(Asset.id.in_(asset_ids))
+        .order_by(Asset.bien_id)
+        .all()
+    )
+
+    local_numeros = {
+        asset.local_numero
+        for asset in assets_list
+        if asset.local_numero
+    }
+
+    bureau_mappings = {}
+
+    if local_numeros:
+
+        bureau_mappings = {
+            mapping.codelieu: mapping
+            for mapping in (
+                db.query(BureauMapping)
+                .filter(BureauMapping.codelieu.in_(local_numeros))
+                .all()
+            )
+        }
+
+    labels = []
+
+    for asset in assets_list:
+
+        destination = (asset.destination or "").strip()
+        mapping = bureau_mappings.get(asset.local_numero)
+
+        labels.append({
+            "bien_id": asset.bien_id,
+            "destination_first_letter": destination[:1].upper(),
+            "destination_rest": destination[1:].strip(),
+            "etage": mapping.etage if mapping else "",
+            "bureau": mapping.bureau if mapping else ""
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="print_labels.html",
+        context={"labels": labels}
+    )
+
+
 @router.get("/assets/export-rfid-reader")
 def export_rfid_reader(
     current_user=Depends(get_current_user_web),

@@ -119,6 +119,13 @@
             </a>
         </li>
 
+        <li class="nav-item {% if request.url.path == '/admin/destinations' %}active{% endif %}">
+            <a class="nav-link" href="/admin/destinations">
+                <i class="fas fa-fw fa-map-signs"></i>
+                <span>Destination et Bureau</span>
+            </a>
+        </li>
+
         {% endif %}
 
         <hr class="sidebar-divider d-none d-md-block">

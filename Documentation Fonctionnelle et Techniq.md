@@ -94,6 +94,9 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
   - Filtre par **plage de Bien ID** (numérique, ex. de `20260001` à `20260020`).
   - Filtres par **immeuble**, **niveau**, **local** (listes déroulantes alimentées par les valeurs distinctes présentes en base).
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
+- Colonnes **Destination** et **Bureau** :
+  - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
+  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le code lieu du fichier bureaux importé sur `/admin/destinations` (§2.12) ; vide si aucune correspondance.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -192,7 +195,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.11 Sauvegardes de la base de données (`/admin/backups`, administrateur uniquement)
 
-- **Sauvegarde automatique** : une copie complète de la base SQLite active est créée après chaque import CSV réussi (inventaire, fichier de scan RFID, ou GLPI), via l'API `backup()` de sqlite3 (cohérente même avec des écritures concurrentes). Un échec de sauvegarde est journalisé mais **n'interrompt jamais** l'import lui-même.
+- **Sauvegarde automatique** : une copie complète de la base SQLite active est créée après chaque import CSV réussi (inventaire, fichier de scan RFID, GLPI, ou fichier bureaux), via l'API `backup()` de sqlite3 (cohérente même avec des écritures concurrentes). Un échec de sauvegarde est journalisé mais **n'interrompt jamais** l'import lui-même.
 - **Historique limité à 2 sauvegardes** : seules les 2 plus récentes sont conservées, toutes origines confondues (imports automatiques et sauvegardes manuelles) ; les plus anciennes sont supprimées automatiquement dès qu'une nouvelle est créée.
 - **Sauvegarde manuelle** : bouton « Créer une sauvegarde maintenant » dans l'en-tête du tableau.
 - **Tableau des sauvegardes** : date, origine (import inventaire / scan RFID / GLPI / manuelle), auteur, taille, avec pour chaque ligne :
@@ -200,6 +203,19 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   - **Supprimer** (`POST /admin/backups/{fichier}/delete`) : supprime définitivement cette sauvegarde. Confirmation obligatoire.
 - **Zone sensible** : bouton « Vider la base de données » (même action que sur le tableau de bord, `POST /admin/reset-database`), avec confirmation obligatoire — regroupé ici avec les sauvegardes qui en sont le filet de sécurité.
 - Les fichiers de sauvegarde (`.db`) et leurs métadonnées (`.json`) sont stockés hors de la base elle-même (dossier `backend/backups/`, non versionné), pour rester disponibles et cohérents même après une restauration.
+
+### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
+
+Gère les deux listes de référence utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), sur deux onglets.
+
+- **Onglet Destinations** :
+  - Tableau des destinations existantes, avec pour chaque ligne un champ de renommage (`POST /admin/destinations/{id}/update`) et un bouton de suppression (`POST /admin/destinations/{id}/delete`, confirmation obligatoire).
+  - Formulaire d'ajout (`POST /admin/destinations`) : libellé obligatoire et unique.
+  - Supprimer une destination n'efface pas la valeur déjà affectée aux biens qui l'utilisaient (simple valeur de liste, pas de clé étrangère).
+- **Onglet Bureaux** :
+  - Import d'un fichier CSV (`POST /admin/destinations/bureaux`, `;`, avec en-tête) — colonnes attendues : `codelieu`, `batiment`, `etage`, `bureau`. Le `codelieu` est comparé au **numéro local** de l'inventaire pour afficher le bureau correspondant sur la page Inventaire.
+  - **Jamais de doublon** : si le code lieu existe déjà (import précédent), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même code lieu est rejeté (import à corriger).
+  - Affiche le dernier fichier chargé (date, auteur, nombre de lignes) et le nombre total de codes lieu connus.
 
 ---
 
@@ -220,6 +236,7 @@ Trois profils (champ `role` de la table `users`) :
 | Tableau de bord | ✅ | ✅ | ❌ |
 | Import CSV | ✅ | ✅ | ❌ |
 | Inventaire (consultation) | ✅ | ✅ | ✅ |
+| Modifier la Destination d'un bien | ✅ | ✅ | ❌ |
 | Export résultat de recherche (CSV) | ✅ | ✅ | ✅ |
 | Créer un lot / Inventaire immatériel / Export lecteur RFID | ✅ | ✅ | ❌ |
 | Lots (liste, détail, génération CMD, export PDF/CSV) | ✅ | ✅ | ❌ |
@@ -229,6 +246,7 @@ Trois profils (champ `role` de la table `users`) :
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
 | Sauvegardes de la base de données | ✅ | ❌ | ❌ |
+| Destination et Bureau (listes de référence) | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
 
 Chaque restriction est appliquée **côté serveur** (403 explicite), l'affichage conditionnel du menu et des boutons n'étant qu'un confort d'usage, pas la seule protection.
@@ -425,12 +443,18 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/admin/backups` | Sauvegarde manuelle (administrateur) |
 | `POST` | `/admin/backups/{fichier}/restore` | Restauration d'une sauvegarde (administrateur) |
 | `POST` | `/admin/backups/{fichier}/delete` | Suppression d'une sauvegarde (administrateur) |
+| `GET` | `/admin/destinations` | Page Destination et Bureau, 2 onglets (administrateur) |
+| `POST` | `/admin/destinations` | Création d'une destination (administrateur) |
+| `POST` | `/admin/destinations/{id}/update` | Renommage d'une destination (administrateur) |
+| `POST` | `/admin/destinations/{id}/delete` | Suppression d'une destination (administrateur) |
+| `POST` | `/admin/destinations/bureaux` | Import du fichier CSV de correspondance bureaux (administrateur) |
 | `GET`/`POST` | `/settings/cmd-template` | Consultation/mise à jour du gabarit CMD (administrateur) |
 | `POST` | `/settings/cmd-template/preview` | Aperçu Ajax du gabarit (administrateur) |
 | `GET` | `/import` | Page d'import CSV |
 | `POST` | `/import/preview` | Aperçu Ajax avant import |
 | `POST` | `/import` | Import définitif |
 | `GET` | `/assets` | Page Inventaire (recherche, filtres, sélection) |
+| `POST` | `/assets/{id}/destination` | Modifie la Destination d'un bien (gestionnaire/administrateur) |
 | `GET` | `/assets/export-csv` | Export CSV du résultat de recherche |
 | `POST` | `/assets/export-immateriel` | Export CSV « inventaire immatériel » de la sélection |
 | `GET` | `/assets/export-rfid-reader` | Export CSV de tous les biens actifs (lecteur RFID) |

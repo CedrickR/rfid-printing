@@ -45,6 +45,10 @@ class Asset(Base):
         String(255)
     )
 
+    destination = Column(
+        String(255)
+    )
+
     is_active = Column(
         Boolean,
         default=True

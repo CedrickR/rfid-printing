@@ -36,6 +36,8 @@
     ~ ("&niveau=" ~ (niveau | urlencode) if niveau else "")
     ~ ("&local=" ~ (local | urlencode) if local else "") %}
 
+{% set current_qs = "/assets?" ~ filters_qs ~ "&page=" ~ page ~ "&page_size=" ~ page_size %}
+
 <p class="text-muted mb-4">
     {{ total }} biens trouvés
 </p>
@@ -234,6 +236,8 @@
                             <th>Immeuble</th>
                             <th>Niveau</th>
                             <th>Local</th>
+                            <th>Destination</th>
+                            <th>Bureau</th>
                             <th>Actif</th>
                         </tr>
 
@@ -268,6 +272,31 @@
                             <td>{{ asset.local_libelle or "" }}</td>
 
                             <td>
+                                {% if request.state.role == 'lecteur' %}
+                                {{ asset.destination or "" }}
+                                {% else %}
+                                <select
+                                    class="form-control form-control-sm"
+                                    name="destination"
+                                    form="destination-form-{{ asset.id }}"
+                                    onchange="document.getElementById('destination-form-{{ asset.id }}').submit()"
+                                >
+                                    <option value="">-- Aucune --</option>
+                                    {% for option in destination_options %}
+                                    <option
+                                        value="{{ option }}"
+                                        {% if option == asset.destination %}selected{% endif %}
+                                    >
+                                        {{ option }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </td>
+
+                            <td>{{ bureau_by_codelieu.get(asset.local_numero, "") or "" }}</td>
+
+                            <td>
 
                                 {% if asset.is_active %}
 
@@ -300,6 +329,17 @@
     </div>
 
 </form>
+
+{% for asset in assets %}
+<form
+    id="destination-form-{{ asset.id }}"
+    method="post"
+    action="/assets/{{ asset.id }}/destination"
+    style="display: none;"
+>
+    <input type="hidden" name="next" value="{{ current_qs }}">
+</form>
+{% endfor %}
 
 <!-- Export du résultat de la recherche -->
 

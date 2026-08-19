@@ -32,6 +32,8 @@ from app.models.print_history_model import PrintHistory
 from app.models.print_job_line_model import PrintJobLine
 from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
 from app.models.glpi_asset_model import GlpiImport, GlpiAsset
+from app.models.destination_model import Destination
+from app.models.bureau_model import BureauImport, BureauMapping
 
 from app.auth import authenticate_user
 from app.auth import create_access_token
@@ -90,6 +92,18 @@ from app.services.backup_service import (
     BackupService,
     BackupNotFoundError,
     BACKUP_SOURCES,
+)
+from app.services.destination_service import (
+    DestinationService,
+    DuplicateDestinationError,
+    InvalidDestinationError,
+    DestinationNotFoundError,
+)
+from app.services.bureau_service import (
+    BureauImportService,
+    InvalidEncodingError as BureauInvalidEncodingError,
+    MissingColumnsError as BureauMissingColumnsError,
+    DuplicateCodelieuError,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -391,6 +405,237 @@ def backups_delete(
 
     return RedirectResponse(
         url="/admin/backups?deleted=1",
+        status_code=303
+    )
+
+
+def _destination_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, DuplicateDestinationError):
+        return "Cette destination existe déjà."
+
+    if isinstance(exc, InvalidDestinationError):
+        return "Le libellé de la destination est obligatoire."
+
+    if isinstance(exc, DestinationNotFoundError):
+        return "Destination introuvable."
+
+    return "Action impossible."
+
+
+def _bureau_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, BureauInvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, BureauMissingColumnsError):
+        return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
+
+    if isinstance(exc, DuplicateCodelieuError):
+        shown = exc.duplicated_codes[:20]
+        suffix = (
+            f" (et {len(exc.duplicated_codes) - 20} de plus)"
+            if len(exc.duplicated_codes) > 20
+            else ""
+        )
+        return (
+            "Code lieu en doublon dans le fichier : "
+            f"{', '.join(shown)}{suffix}"
+        )
+
+    return "Fichier bureaux invalide."
+
+
+def _render_destinations_page(
+    request: Request,
+    db: Session,
+    error: str = None,
+    status_code: int = 200
+):
+
+    last_bureau_import = (
+        db.query(BureauImport)
+        .order_by(BureauImport.imported_at.desc())
+        .first()
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="destinations.html",
+        context={
+            "destinations": DestinationService.list_destinations(db),
+            "last_bureau_import": last_bureau_import,
+            "bureau_mappings_count": db.query(BureauMapping).count(),
+            "error": error
+        },
+        status_code=status_code
+    )
+
+
+@router.get("/admin/destinations")
+def destinations_page(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    return _render_destinations_page(request, db)
+
+
+@router.post("/admin/destinations")
+def destinations_create(
+    request: Request,
+    libelle: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        DestinationService.create_destination(db, libelle)
+
+    except (DuplicateDestinationError, InvalidDestinationError) as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_destination_error_message(e),
+            status_code=400
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?created=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/destinations/{destination_id}/update")
+def destinations_update(
+    request: Request,
+    destination_id: int,
+    libelle: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        DestinationService.update_destination(db, destination_id, libelle)
+
+    except (
+        DuplicateDestinationError,
+        InvalidDestinationError,
+        DestinationNotFoundError
+    ) as e:
+
+        status_code = (
+            404
+            if isinstance(e, DestinationNotFoundError)
+            else 400
+        )
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_destination_error_message(e),
+            status_code=status_code
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?updated=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/destinations/{destination_id}/delete")
+def destinations_delete(
+    request: Request,
+    destination_id: int,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        DestinationService.delete_destination(db, destination_id)
+
+    except DestinationNotFoundError as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_destination_error_message(e),
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?deleted=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/destinations/bureaux")
+async def bureaux_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Charge le fichier CSV de correspondance bureaux (';', avec
+    en-tête : codelieu, batiment, etage, bureau), pour la colonne
+    "Bureau" de l'inventaire.
+    """
+
+    require_admin(current_user)
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return _render_destinations_page(
+            request,
+            db,
+            error="Le fichier doit être un CSV",
+            status_code=400
+        )
+
+    content = await file.read()
+
+    try:
+        rows = BureauImportService.parse(content)
+
+    except (
+        BureauInvalidEncodingError,
+        BureauMissingColumnsError,
+        DuplicateCodelieuError
+    ) as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_bureau_error_message(e),
+            status_code=400
+        )
+
+    bureau_import = BureauImportService.commit(
+        db,
+        rows,
+        file.filename,
+        current_user["sub"]
+    )
+
+    _auto_backup(db, "import_bureau", current_user["sub"])
+
+    return RedirectResponse(
+        url=(
+            "/admin/destinations?bureaux_imported=1"
+            f"&added={bureau_import.added_count}"
+            f"&updated={bureau_import.updated_count}"
+        ),
         status_code=303
     )
 
@@ -1003,6 +1248,32 @@ def assets(
         .first()
     )
 
+    local_numeros = {
+        asset.local_numero
+        for asset in assets_list
+        if asset.local_numero
+    }
+
+    bureau_by_codelieu = {}
+
+    if local_numeros:
+
+        mappings = (
+            db.query(BureauMapping)
+            .filter(BureauMapping.codelieu.in_(local_numeros))
+            .all()
+        )
+
+        bureau_by_codelieu = {
+            mapping.codelieu: mapping.bureau
+            for mapping in mappings
+        }
+
+    destination_options = [
+        destination.libelle
+        for destination in DestinationService.list_destinations(db)
+    ]
+
     return templates.TemplateResponse(
         request=request,
         name="assets.html",
@@ -1018,12 +1289,49 @@ def assets(
             "immeuble_options": _distinct_values(db, Asset.immeuble_libelle),
             "niveau_options": _distinct_values(db, Asset.niveau_libelle),
             "local_options": _distinct_values(db, Asset.local_libelle),
+            "destination_options": destination_options,
+            "bureau_by_codelieu": bureau_by_codelieu,
             "page": page,
             "total": total,
             "page_size": page_size,
             "last_import": last_import
         }
     )
+
+
+@router.post("/assets/{asset_id}/destination")
+def update_asset_destination(
+    asset_id: int,
+    destination: str = Form(default=""),
+    next: str = Form(default="/assets"),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Affecte (ou efface) la destination d'un bien depuis la page
+    Inventaire. La valeur vient de la liste déroulante gérée sur
+    /admin/destinations ; simple chaîne stockée sur le bien, comme les
+    autres colonnes de lieu (pas de clé étrangère).
+    """
+
+    require_manager(current_user)
+
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Bien introuvable")
+
+    asset.destination = destination or None
+
+    db.commit()
+
+    redirect_url = next if next.startswith("/assets") else "/assets"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.get("/assets/export-csv")

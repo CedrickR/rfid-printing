@@ -204,6 +204,16 @@
                 </button>
                 <button
                     type="submit"
+                    formaction="/assets/print-labels"
+                    formmethod="post"
+                    formtarget="_blank"
+                    class="btn btn-outline-success btn-sm"
+                    {% if request.state.role == 'lecteur' %}disabled title="Réservé aux gestionnaires et administrateurs"{% endif %}
+                >
+                    <i class="fas fa-tags fa-sm"></i> Étiquettes (PDF)
+                </button>
+                <button
+                    type="submit"
                     class="btn btn-success btn-sm"
                     {% if request.state.role == 'lecteur' %}disabled title="Réservé aux gestionnaires et administrateurs"{% endif %}
                 >

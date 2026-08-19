@@ -104,10 +104,15 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 - Actions sur la sélection :
   - **Créer un lot d'impression** (`POST /jobs/create`) à partir des biens cochés.
   - **Inventaire immatériel** (`POST /assets/export-immateriel`) : génère un CSV (`;`, sans en-tête, 2 colonnes) à partir des biens cochés — colonne 1 = `L261` + numéro local, colonne 2 = `261` + Bien ID (biens sans numéro local ignorés). Même format que les fichiers de lecteur RFID (§2.6).
+  - **Étiquettes (PDF)** (`POST /assets/print-labels`, nouvel onglet) : page d'impression d'étiquettes au format ruban **90 x 36 mm, une étiquette par page** (`@page { size: 90mm 36mm; }`), générée comme PDF via l'impression navigateur (bouton « Imprimer », `window.print()` — même principe que l'export PDF des lots, §2.5), sans dépendance PDF côté serveur. Chaque étiquette affiche :
+    - la **Destination** du bien, première lettre en lettrine (très grande police) suivie du reste du mot (police réduite) ;
+    - l'**étage** et le **bureau** correspondants (grande police), calculés comme la colonne Bureau (§2.4) mais sans le bâtiment ;
+    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN) puis, en dessous, le même numéro en chiffres ;
+    - une ligne de séparation, suivie d'un espace blanc laissé pour des annotations manuscrites.
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
   - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Actif.
-- Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
+- Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel », « Étiquettes (PDF) » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
 
 ### 2.5 Lots d'impression (`/jobs`)
 
@@ -459,6 +464,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/assets/{id}/destination` | Modifie la Destination d'un bien (gestionnaire/administrateur) |
 | `GET` | `/assets/export-csv` | Export CSV du résultat de recherche |
 | `POST` | `/assets/export-immateriel` | Export CSV « inventaire immatériel » de la sélection |
+| `POST` | `/assets/print-labels` | Page d'impression d'étiquettes (PDF via navigateur) de la sélection |
 | `GET` | `/assets/export-rfid-reader` | Export CSV de tous les biens actifs (lecteur RFID) |
 | `POST` | `/jobs/create` | Création d'un lot depuis l'inventaire |
 | `GET` | `/jobs` | Liste des lots |

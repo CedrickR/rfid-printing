@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="no-print d-flex justify-content-between align-items-center mb-4">
+
+    <h1 class="h3 mb-0 text-gray-800">
+        Étiquettes ({{ labels | length }})
+    </h1>
+
+    <div>
+        <button type="button" class="btn btn-success" onclick="window.print()">
+            <i class="fas fa-print fa-sm"></i> Imprimer
+        </button>
+        <a href="/assets" class="btn btn-outline-secondary">
+            Retour à l'inventaire
+        </a>
+    </div>
+
+</div>
+
+<p class="no-print text-muted mb-4">
+    Format ruban 90 x 36 mm, une étiquette par page. Vérifiez le format
+    papier/ruban dans la boîte de dialogue d'impression avant de valider
+    (« Plus de paramètres » → taille de papier « 90mm x 36mm » ou
+    équivalent selon le pilote de l'imprimante).
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<style>
+
+    @page {
+        size: 90mm 36mm;
+        margin: 0;
+    }
+
+    .label {
+        width: 90mm;
+        height: 36mm;
+        box-sizing: border-box;
+        padding: 2mm 3mm;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #000;
+        background: #fff;
+        border: 1px dashed #ccc;
+        margin-bottom: 4mm;
+    }
+
+    .label-destination {
+        display: flex;
+        align-items: baseline;
+        line-height: 0.85;
+        min-height: 13mm;
+    }
+
+    .label-destination .lettrine {
+        font-size: 13mm;
+        font-weight: 700;
+        margin-right: 1.5mm;
+    }
+
+    .label-destination .dest-rest {
+        font-size: 4.5mm;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3mm;
+    }
+
+    .label-location {
+        font-size: 5mm;
+        font-weight: 700;
+        margin-top: 0.5mm;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .label-separator {
+        border-top: 0.3mm dashed #999;
+        margin: 1.5mm 0;
+    }
+
+    .label-id {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .label-id svg {
+        width: 100%;
+        height: 7mm;
+    }
+
+    .label-id .bien-id-number {
+        font-size: 3.5mm;
+        font-weight: 700;
+        letter-spacing: 0.4mm;
+        margin-top: 0.3mm;
+    }
+
+    .label-blank-space {
+        flex: 1;
+    }
+
+    @media print {
+
+        .label {
+            border: none;
+            margin-bottom: 0;
+            page-break-after: always;
+        }
+
+        .label:last-child {
+            page-break-after: auto;
+        }
+    }
+
+    @media screen {
+
+        .labels-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4mm;
+        }
+    }
+
+</style>
+
+<div class="labels-preview">
+
+    {% for label in labels %}
+
+    <div class="label">
+
+        <div class="label-destination">
+            <span class="lettrine">{{ label.destination_first_letter }}</span>
+            <span class="dest-rest">{{ label.destination_rest }}</span>
+        </div>
+
+        <div class="label-location">
+            {% if label.etage or label.bureau %}
+            {{ label.etage }}{% if label.etage and label.bureau %} - {% endif %}{{ label.bureau }}
+            {% endif %}
+        </div>
+
+        <div class="label-separator"></div>
+
+        <div class="label-id">
+            <svg id="barcode-{{ loop.index }}"></svg>
+            <span class="bien-id-number">{{ label.bien_id }}</span>
+        </div>
+
+        <div class="label-blank-space"></div>
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+<script>
+if (window.JsBarcode) {
+    {% for label in labels %}
+    JsBarcode("#barcode-{{ loop.index }}", {{ label.bien_id | tojson }}, {
+        format: "CODE128",
+        displayValue: false,
+        margin: 0,
+        height: 50
+    });
+    {% endfor %}
+}
+</script>
+
+{% endblock %}

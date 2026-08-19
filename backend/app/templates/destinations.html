@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1 class="h3 mb-4 text-gray-800">
+    Destination et Bureau
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% elif request.query_params.get('created') == '1' %}
+<div class="alert alert-success">
+    Destination créée.
+</div>
+{% elif request.query_params.get('updated') == '1' %}
+<div class="alert alert-success">
+    Destination mise à jour.
+</div>
+{% elif request.query_params.get('deleted') == '1' %}
+<div class="alert alert-success">
+    Destination supprimée.
+</div>
+{% elif request.query_params.get('bureaux_imported') == '1' %}
+<div class="alert alert-success">
+    Import bureaux terminé :
+    {{ request.query_params.get('added') }} code(s) lieu ajouté(s),
+    {{ request.query_params.get('updated') }} mis à jour.
+</div>
+{% endif %}
+
+<ul class="nav nav-tabs" id="destinationsTab" role="tablist">
+
+    <li class="nav-item">
+        <a
+            class="nav-link active"
+            id="destinations-tab"
+            data-toggle="tab"
+            href="#destinations-pane"
+            role="tab"
+        >
+            Destinations
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a
+            class="nav-link"
+            id="bureaux-tab"
+            data-toggle="tab"
+            href="#bureaux-pane"
+            role="tab"
+        >
+            Bureaux
+        </a>
+    </li>
+
+</ul>
+
+<div class="tab-content" id="destinationsTabContent">
+
+    <!-- Onglet Destinations -->
+
+    <div class="tab-pane fade show active" id="destinations-pane" role="tabpanel">
+
+        <div class="card shadow mb-4 mt-3">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Liste des destinations
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <small class="form-text text-muted mb-3">
+                    Ces valeurs alimentent la liste déroulante de la colonne
+                    "Destination" de l'Inventaire. Supprimer une destination
+                    n'efface pas la valeur déjà affectée aux biens qui
+                    l'utilisaient.
+                </small>
+
+                <div class="table-responsive mt-3">
+
+                    <table class="table table-bordered table-hover">
+
+                        <thead>
+                            <tr>
+                                <th>Libellé</th>
+                                <th style="width: 220px;">Renommer</th>
+                                <th style="width: 80px;"></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for destination in destinations %}
+
+                            <tr>
+
+                                <td class="align-middle">{{ destination.libelle }}</td>
+
+                                <td>
+                                    <form
+                                        method="post"
+                                        action="/admin/destinations/{{ destination.id }}/update"
+                                        class="form-inline"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm mr-2"
+                                            name="libelle"
+                                            value="{{ destination.libelle }}"
+                                            required
+                                        >
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-save fa-sm"></i>
+                                        </button>
+                                    </form>
+                                </td>
+
+                                <td>
+                                    <form
+                                        method="post"
+                                        action="/admin/destinations/{{ destination.id }}/delete"
+                                        onsubmit="return confirm('Supprimer définitivement la destination « {{ destination.libelle }} » ?');"
+                                    >
+                                        <button type="submit" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash fa-sm"></i>
+                                        </button>
+                                    </form>
+                                </td>
+
+                            </tr>
+
+                            {% else %}
+
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">
+                                    Aucune destination.
+                                </td>
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card shadow mb-4">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Ajouter une destination
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <form method="post" action="/admin/destinations" class="form-inline">
+
+                    <label class="mr-2 mb-2" for="libelle">
+                        Libellé
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control mr-3 mb-2"
+                        id="libelle"
+                        name="libelle"
+                        required
+                    >
+
+                    <button type="submit" class="btn btn-success mb-2">
+                        <i class="fas fa-plus fa-sm"></i> Ajouter
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Onglet Bureaux -->
+
+    <div class="tab-pane fade" id="bureaux-pane" role="tabpanel">
+
+        <div class="card shadow mb-4 mt-3">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Charger le fichier de correspondance bureaux
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <form
+                    method="post"
+                    action="/admin/destinations/bureaux"
+                    enctype="multipart/form-data"
+                    class="form-inline"
+                >
+
+                    <input
+                        type="file"
+                        class="form-control-file mr-3 mb-2"
+                        name="file"
+                        accept=".csv"
+                        required
+                    >
+
+                    <button type="submit" class="btn btn-success mb-2">
+                        <i class="fas fa-file-import fa-sm"></i> Charger
+                    </button>
+
+                </form>
+
+                <small class="form-text text-muted">
+                    Fichier CSV (';', avec en-tête). Colonnes attendues :
+                    <code>codelieu</code>, <code>batiment</code>,
+                    <code>etage</code>, <code>bureau</code>. Le
+                    <code>codelieu</code> est comparé au numéro local de
+                    l'inventaire pour afficher le bureau correspondant. Un
+                    import ultérieur pour un code lieu déjà connu met à jour
+                    ses informations (jamais de doublon).
+                </small>
+
+                <div class="table-responsive mt-4">
+
+                    <table class="table table-sm table-bordered">
+
+                        <thead>
+                            <tr>
+                                <th>Dernier fichier</th>
+                                <th>Chargé le</th>
+                                <th>Par</th>
+                                <th>Lignes</th>
+                                <th>Codes lieu connus</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            <tr>
+
+                                {% if last_bureau_import %}
+                                <td>{{ last_bureau_import.filename }}</td>
+                                <td>{{ last_bureau_import.imported_at }}</td>
+                                <td>{{ last_bureau_import.imported_by }}</td>
+                                <td>{{ last_bureau_import.total_rows }}</td>
+                                {% else %}
+                                <td colspan="4" class="text-muted">Aucun import</td>
+                                {% endif %}
+
+                                <td>{{ bureau_mappings_count }}</td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

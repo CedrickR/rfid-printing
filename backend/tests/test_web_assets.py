@@ -482,3 +482,138 @@ def test_assets_page_shows_most_recent_import_when_several(
 
     assert response.status_code == 200
     assert response.text.count("Dernière importation") == 1
+
+
+def test_assets_page_shows_destination_and_bureau_columns(client, admin_user):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Destination" in response.text
+    assert "Bureau" in response.text
+
+
+def test_assets_page_shows_bureau_from_mapping(client, admin_user):
+
+    _login_and_seed(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "loc.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;PC actif;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post(
+        "/admin/destinations/bureaux",
+        files={
+            "file": (
+                "bureaux.csv",
+                "codelieu;batiment;etage;bureau\n"
+                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "021-A" in response.text
+
+
+def test_update_asset_destination_sets_value(client, admin_user):
+
+    _login_and_seed(client)
+
+    client.post("/admin/destinations", data={"libelle": "Direction Info"})
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/destination",
+        data={"destination": "Direction Info", "next": "/assets"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"
+
+    listing = client.get("/assets")
+
+    assert 'selected' in listing.text
+    assert "Direction Info" in listing.text
+
+
+def test_update_asset_destination_requires_manager_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/assets/1/destination",
+        data={"destination": "Direction Info"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_asset_destination_missing_asset_returns_404(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.post(
+        "/assets/999/destination",
+        data={"destination": "Direction Info"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_update_asset_destination_ignores_unsafe_next(client, admin_user):
+
+    _login_and_seed(client)
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/destination",
+        data={"destination": "Direction Info", "next": "https://evil.example"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"

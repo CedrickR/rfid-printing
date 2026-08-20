@@ -304,7 +304,28 @@
                                 {% endif %}
                             </td>
 
-                            <td>{{ bureau_by_codelieu.get(asset.local_numero, "") or "" }}</td>
+                            <td>
+                                {% if request.state.role == 'lecteur' %}
+                                {{ bureau_by_codelieu.get(asset.local_numero, "") or "" }}
+                                {% else %}
+                                <select
+                                    class="form-control form-control-sm"
+                                    name="code_piece_service"
+                                    form="bureau-form-{{ asset.id }}"
+                                    onchange="document.getElementById('bureau-form-{{ asset.id }}').submit()"
+                                >
+                                    <option value="">-- Aucun --</option>
+                                    {% for option in bureau_options %}
+                                    <option
+                                        value="{{ option.code_piece_service }}"
+                                        {% if option.code_piece_service == asset.local_numero %}selected{% endif %}
+                                    >
+                                        {{ option.label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </td>
 
                             <td>
 
@@ -345,6 +366,14 @@
     id="destination-form-{{ asset.id }}"
     method="post"
     action="/assets/{{ asset.id }}/destination"
+    style="display: none;"
+>
+    <input type="hidden" name="next" value="{{ current_qs }}">
+</form>
+<form
+    id="bureau-form-{{ asset.id }}"
+    method="post"
+    action="/assets/{{ asset.id }}/bureau"
     style="display: none;"
 >
     <input type="hidden" name="next" value="{{ current_qs }}">

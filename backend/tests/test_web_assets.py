@@ -714,3 +714,143 @@ def test_update_asset_destination_ignores_unsafe_next(client, admin_user):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/assets"
+
+
+def _upload_bureau(client, code_piece_service="01100021", nom_piece="021-A"):
+
+    client.post(
+        "/admin/destinations/bureaux",
+        files={
+            "file": (
+                "bureaux.csv",
+                "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+                f"REZ DE CHAUSSEE;{nom_piece};{code_piece_service};2\n",
+                "text/csv"
+            )
+        }
+    )
+
+
+def test_assets_page_shows_bureau_dropdown_with_code_piece_service(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+    _upload_bureau(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert 'name="code_piece_service"' in response.text
+    assert 'value="01100021"' in response.text
+    assert "021-A" in response.text
+
+
+def test_assets_page_shows_bureau_read_only_for_reader_role(
+    client, standard_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert 'name="code_piece_service"' not in response.text
+
+
+def test_update_asset_bureau_sets_local_numero(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_bureau(client)
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/bureau",
+        data={"code_piece_service": "01100021", "next": "/assets"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"
+
+    listing = client.get("/assets")
+
+    assert 'selected' in listing.text
+    assert "021-A" in listing.text
+
+
+def test_update_asset_bureau_requires_manager_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/assets/1/bureau",
+        data={"code_piece_service": "01100021"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_asset_bureau_missing_asset_returns_404(client, admin_user):
+
+    _login_and_seed(client)
+
+    response = client.post(
+        "/assets/999/bureau",
+        data={"code_piece_service": "01100021"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_update_asset_bureau_ignores_unsafe_next(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_bureau(client)
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/bureau",
+        data={
+            "code_piece_service": "01100021",
+            "next": "https://evil.example"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"

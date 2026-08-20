@@ -13,7 +13,8 @@ from app.database import Base
 class BureauImport(Base):
     """
     Historique des imports du fichier CSV de correspondance bureaux
-    (colonnes : codelieu, batiment, etage, bureau).
+    (colonnes : niveau, nom_piece, code_piece_service,
+    nombre_poste_prevu).
     """
 
     __tablename__ = "bureau_imports"
@@ -57,10 +58,12 @@ class BureauImport(Base):
 
 class BureauMapping(Base):
     """
-    Bureau (bâtiment/étage/bureau) connu pour un code lieu, pour
-    affichage dans la colonne "Bureau" de l'inventaire (jointure sur
-    `Asset.local_numero`). Un seul enregistrement par codelieu, mis à
-    jour à chaque nouvel import (pas de doublon).
+    Pièce (bureau) connue pour un code pièce, pour affichage dans la
+    colonne "Bureau" de l'inventaire (jointure entre
+    `code_piece_service` et `Asset.local_numero`) et pour la
+    répartition ordinateurs/écrans par bureau du tableau de bord. Un
+    seul enregistrement par code_piece_service, mis à jour à chaque
+    nouvel import (pas de doublon).
     """
 
     __tablename__ = "bureau_mappings"
@@ -70,22 +73,23 @@ class BureauMapping(Base):
         primary_key=True
     )
 
-    codelieu = Column(
+    code_piece_service = Column(
         String(100),
         nullable=False,
         unique=True
     )
 
-    batiment = Column(
+    niveau = Column(
         String(255)
     )
 
-    etage = Column(
+    nom_piece = Column(
         String(255)
     )
 
-    bureau = Column(
-        String(255)
+    nombre_poste_prevu = Column(
+        Integer,
+        default=0
     )
 
     import_id = Column(

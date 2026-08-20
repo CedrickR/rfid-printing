@@ -4,12 +4,15 @@ from io import StringIO
 
 from app.models.bureau_model import BureauImport, BureauMapping
 
-CODELIEU_COLUMN = "codelieu"
-BATIMENT_COLUMN = "batiment"
-ETAGE_COLUMN = "etage"
-BUREAU_COLUMN = "bureau"
+NIVEAU_COLUMN = "niveau"
+NOM_PIECE_COLUMN = "nom_piece"
+CODE_PIECE_SERVICE_COLUMN = "code_piece_service"
+NOMBRE_POSTE_PREVU_COLUMN = "nombre_poste_prevu"
 REQUIRED_COLUMNS = [
-    CODELIEU_COLUMN, BATIMENT_COLUMN, ETAGE_COLUMN, BUREAU_COLUMN
+    NIVEAU_COLUMN,
+    NOM_PIECE_COLUMN,
+    CODE_PIECE_SERVICE_COLUMN,
+    NOMBRE_POSTE_PREVU_COLUMN
 ]
 
 
@@ -22,7 +25,7 @@ class MissingColumnsError(Exception):
         self.missing_columns = missing_columns
 
 
-class DuplicateCodelieuError(Exception):
+class DuplicateCodePieceServiceError(Exception):
     def __init__(self, duplicated_codes):
         self.duplicated_codes = duplicated_codes
 
@@ -30,15 +33,20 @@ class DuplicateCodelieuError(Exception):
 class BureauImportService:
     """
     Import du fichier CSV de correspondance bureaux (';', avec
-    en-tête, colonnes codelieu/batiment/etage/bureau), pour la colonne
-    "Bureau" de l'inventaire (jointure sur `Asset.local_numero`).
+    en-tête, colonnes niveau/nom_piece/code_piece_service/
+    nombre_poste_prevu), pour la colonne "Bureau" de l'inventaire
+    (jointure entre code_piece_service et `Asset.local_numero`) et
+    pour la répartition ordinateurs/écrans par bureau du tableau de
+    bord.
     """
 
     @staticmethod
     def parse(content: bytes):
         """
-        Décode et parse le CSV. Retourne une liste de (codelieu,
-        batiment, etage, bureau).
+        Décode et parse le CSV. Retourne une liste de (niveau,
+        nom_piece, code_piece_service, nombre_poste_prevu).
+        nombre_poste_prevu est ramené à un entier (0 si vide ou non
+        numérique, plutôt que de faire échouer l'import).
         """
 
         try:
@@ -65,31 +73,41 @@ class BureauImportService:
 
         for row in reader:
 
-            codelieu = (row.get(CODELIEU_COLUMN) or "").strip()
-            batiment = (row.get(BATIMENT_COLUMN) or "").strip()
-            etage = (row.get(ETAGE_COLUMN) or "").strip()
-            bureau = (row.get(BUREAU_COLUMN) or "").strip()
+            niveau = (row.get(NIVEAU_COLUMN) or "").strip()
+            nom_piece = (row.get(NOM_PIECE_COLUMN) or "").strip()
+            code_piece_service = (
+                row.get(CODE_PIECE_SERVICE_COLUMN) or ""
+            ).strip()
 
-            if not codelieu:
+            try:
+                nombre_poste_prevu = int(
+                    (row.get(NOMBRE_POSTE_PREVU_COLUMN) or "0").strip()
+                )
+            except ValueError:
+                nombre_poste_prevu = 0
+
+            if not code_piece_service:
                 continue
 
-            if codelieu in seen_codes:
-                duplicated_codes.append(codelieu)
+            if code_piece_service in seen_codes:
+                duplicated_codes.append(code_piece_service)
                 continue
 
-            seen_codes.add(codelieu)
+            seen_codes.add(code_piece_service)
 
-            rows.append((codelieu, batiment, etage, bureau))
+            rows.append(
+                (niveau, nom_piece, code_piece_service, nombre_poste_prevu)
+            )
 
         if duplicated_codes:
-            raise DuplicateCodelieuError(duplicated_codes)
+            raise DuplicateCodePieceServiceError(duplicated_codes)
 
         return rows
 
     @staticmethod
     def commit(db, rows, filename: str, username: str) -> BureauImport:
         """
-        Ajoute les nouveaux codes lieu et met à jour ceux déjà connus
+        Ajoute les nouveaux codes pièce et met à jour ceux déjà connus
         (jamais de doublon en base).
         """
 
@@ -107,19 +125,21 @@ class BureauImportService:
         added_count = 0
         updated_count = 0
 
-        for codelieu, batiment, etage, bureau in rows:
+        for niveau, nom_piece, code_piece_service, nombre_poste_prevu in rows:
 
             existing = (
                 db.query(BureauMapping)
-                .filter(BureauMapping.codelieu == codelieu)
+                .filter(
+                    BureauMapping.code_piece_service == code_piece_service
+                )
                 .first()
             )
 
             if existing:
 
-                existing.batiment = batiment
-                existing.etage = etage
-                existing.bureau = bureau
+                existing.niveau = niveau
+                existing.nom_piece = nom_piece
+                existing.nombre_poste_prevu = nombre_poste_prevu
                 existing.import_id = bureau_import.id
                 existing.updated_at = datetime.now(UTC)
 
@@ -129,10 +149,10 @@ class BureauImportService:
 
                 db.add(
                     BureauMapping(
-                        codelieu=codelieu,
-                        batiment=batiment,
-                        etage=etage,
-                        bureau=bureau,
+                        code_piece_service=code_piece_service,
+                        niveau=niveau,
+                        nom_piece=nom_piece,
+                        nombre_poste_prevu=nombre_poste_prevu,
                         import_id=bureau_import.id,
                         updated_at=datetime.now(UTC)
                     )

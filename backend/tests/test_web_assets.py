@@ -437,8 +437,8 @@ def test_export_csv_includes_destination_and_bureau(client, admin_user):
         files={
             "file": (
                 "bureaux.csv",
-                "codelieu;batiment;etage;bureau\n"
-                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+                "REZ DE CHAUSSEE;021-A;01100021;2\n",
                 "text/csv"
             )
         }
@@ -472,7 +472,7 @@ def test_export_csv_includes_destination_and_bureau(client, admin_user):
     )
     assert (
         "1001;PC actif;01100021;;;;Direction Info;"
-        "SIEGE - REZ DE CHAUSSEE - 021-A;Actif" in lines
+        "REZ DE CHAUSSEE - 021-A;Actif" in lines
     )
 
 
@@ -497,8 +497,8 @@ def test_assets_page_shows_bureau_as_concatenated_fields(client, admin_user):
         files={
             "file": (
                 "bureaux.csv",
-                "codelieu;batiment;etage;bureau\n"
-                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+                "REZ DE CHAUSSEE;021-A;01100021;2\n",
                 "text/csv"
             )
         }
@@ -507,7 +507,7 @@ def test_assets_page_shows_bureau_as_concatenated_fields(client, admin_user):
     response = client.get("/assets")
 
     assert response.status_code == 200
-    assert "SIEGE - REZ DE CHAUSSEE - 021-A" in response.text
+    assert "REZ DE CHAUSSEE - 021-A" in response.text
 
 
 def test_assets_page_shows_no_last_import_when_database_empty(
@@ -613,8 +613,8 @@ def test_assets_page_shows_bureau_from_mapping(client, admin_user):
         files={
             "file": (
                 "bureaux.csv",
-                "codelieu;batiment;etage;bureau\n"
-                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+                "REZ DE CHAUSSEE;021-A;01100021;2\n",
                 "text/csv"
             )
         }

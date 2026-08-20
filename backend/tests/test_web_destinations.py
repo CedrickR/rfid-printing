@@ -1,9 +1,14 @@
-BUREAU_HEADER = "codelieu;batiment;etage;bureau\n"
+BUREAU_HEADER = "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
 
 
-def _bureau_row(codelieu, batiment="SIEGE", etage="REZ DE CHAUSSEE", bureau="021"):
+def _bureau_row(
+    code_piece_service,
+    niveau="REZ DE CHAUSSEE",
+    nom_piece="021",
+    nombre_poste_prevu="2"
+):
 
-    return f"{codelieu};{batiment};{etage};{bureau}\n"
+    return f"{niveau};{nom_piece};{code_piece_service};{nombre_poste_prevu}\n"
 
 
 def _login(client, username="admin", password="Admin123!"):
@@ -18,9 +23,11 @@ def _login(client, username="admin", password="Admin123!"):
     )
 
 
-def _upload_bureaux(client, codelieu="01100021", bureau="021"):
+def _upload_bureaux(client, code_piece_service="01100021", nom_piece="021"):
 
-    content = BUREAU_HEADER + _bureau_row(codelieu, bureau=bureau)
+    content = BUREAU_HEADER + _bureau_row(
+        code_piece_service, nom_piece=nom_piece
+    )
 
     return client.post(
         "/admin/destinations/bureaux",
@@ -216,13 +223,17 @@ def test_bureaux_upload_shows_last_import_info(client, admin_user):
     assert ">1<" in listing.text
 
 
-def test_bureaux_reimport_updates_existing_codelieu(client, admin_user):
+def test_bureaux_reimport_updates_existing_code_piece_service(
+    client, admin_user
+):
 
     _login(client)
 
-    _upload_bureaux(client, codelieu="01100021", bureau="021")
+    _upload_bureaux(client, code_piece_service="01100021", nom_piece="021")
 
-    response = _upload_bureaux(client, codelieu="01100021", bureau="099")
+    response = _upload_bureaux(
+        client, code_piece_service="01100021", nom_piece="099"
+    )
 
     assert response.status_code == 303
     assert response.headers["location"] == (
@@ -236,7 +247,7 @@ def test_bureaux_upload_rejects_non_csv_file(client, admin_user):
 
     response = client.post(
         "/admin/destinations/bureaux",
-        files={"file": ("bureaux.txt", "codelieu;batiment;etage;bureau\n", "text/plain")}
+        files={"file": ("bureaux.txt", BUREAU_HEADER, "text/plain")}
     )
 
     assert response.status_code == 400
@@ -249,7 +260,7 @@ def test_bureaux_upload_reports_missing_columns(client, admin_user):
 
     response = client.post(
         "/admin/destinations/bureaux",
-        files={"file": ("bureaux.csv", "codelieu;batiment\n01100021;SIEGE\n", "text/csv")}
+        files={"file": ("bureaux.csv", "niveau;nom_piece\nREZ;021\n", "text/csv")}
     )
 
     assert response.status_code == 400

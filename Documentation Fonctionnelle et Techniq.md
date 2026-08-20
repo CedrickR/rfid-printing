@@ -65,10 +65,21 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 
 ### 2.2 Tableau de bord (`/dashboard`)
 
+Organisé en deux onglets.
+
+**Onglet « Vue d'ensemble »** :
+
 - Compteurs : nombre d'imports, de biens actifs, de lots, d'entrées d'historique.
 - **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - Panneau **« Zone sensible »** (administrateur uniquement) : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés). Action irréversible, confirmation JavaScript obligatoire.
+
+**Onglet « Répartition par bureau »** :
+
+- Un tableau, une ligne par bureau connu (fichier importé sur `/admin/destinations`, §2.12), comparant le nombre d'ordinateurs et d'écrans **attendus** au nombre **réel** :
+  - **Attendu** : dérivé du `nombre_poste_prevu` du bureau — 1 ordinateur et 2 écrans par poste prévu (règle fixe).
+  - **Réel** : biens actifs dont le **numéro local** correspond au **code pièce et service** du bureau, comptés par type — le type (ordinateur ou écran) est déterminé par le **rapprochement GLPI** (§2.7, `GlpiAsset.glpi_type`, valeurs `ordinateur`/`moniteur`) via le Bien ID commun ; un bien jamais rapproché via un import GLPI ne compte dans aucune des deux colonnes.
+- **Écart** = réel − attendu, pour les ordinateurs et pour les écrans séparément. Tout écart non nul est **mis en évidence** (fond rouge, texte en gras).
 
 ### 2.3 Import de l'inventaire (`/import`)
 
@@ -98,7 +109,7 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
 - Colonnes **Destination** et **Bureau** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
-  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le code lieu du fichier bureaux importé sur `/admin/destinations` (§2.12) — affiche la **concaténation** des champs `batiment`, `etage` et `bureau` du fichier importé (séparés par « - », parties vides ignorées) ; vide si aucune correspondance.
+  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le **code pièce et service** du fichier bureaux importé sur `/admin/destinations` (§2.12) — affiche la **concaténation** des champs `niveau` et `nom_piece` du fichier importé (séparés par « - », parties vides ignorées) ; vide si aucune correspondance.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -215,16 +226,16 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
 
-Gère les deux listes de référence utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), sur deux onglets.
+Gère les deux listes de référence utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), et par l'onglet « Répartition par bureau » du tableau de bord (§2.2), sur deux onglets.
 
 - **Onglet Destinations** :
   - Tableau des destinations existantes, avec pour chaque ligne un champ de renommage (`POST /admin/destinations/{id}/update`) et un bouton de suppression (`POST /admin/destinations/{id}/delete`, confirmation obligatoire).
   - Formulaire d'ajout (`POST /admin/destinations`) : libellé obligatoire et unique.
   - Supprimer une destination n'efface pas la valeur déjà affectée aux biens qui l'utilisaient (simple valeur de liste, pas de clé étrangère).
 - **Onglet Bureaux** :
-  - Import d'un fichier CSV (`POST /admin/destinations/bureaux`, `;`, avec en-tête) — colonnes attendues : `codelieu`, `batiment`, `etage`, `bureau`. Le `codelieu` est comparé au **numéro local** de l'inventaire pour afficher le bureau correspondant sur la page Inventaire.
-  - **Jamais de doublon** : si le code lieu existe déjà (import précédent), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même code lieu est rejeté (import à corriger).
-  - Affiche le dernier fichier chargé (date, auteur, nombre de lignes) et le nombre total de codes lieu connus.
+  - Import d'un fichier CSV (`POST /admin/destinations/bureaux`, `;`, avec en-tête) — colonnes attendues : `niveau`, `nom_piece`, `code_piece_service`, `nombre_poste_prevu`. Le `code_piece_service` est comparé au **numéro local** de l'inventaire pour afficher le bureau correspondant sur la page Inventaire, et le `nombre_poste_prevu` alimente l'onglet « Répartition par bureau » du tableau de bord (1 poste = 1 ordinateur + 2 écrans).
+  - **Jamais de doublon** : si le code pièce et service existe déjà (import précédent), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même code pièce et service est rejeté (import à corriger).
+  - Affiche le dernier fichier chargé (date, auteur, nombre de lignes) et le nombre total de codes pièce connus.
 
 ---
 

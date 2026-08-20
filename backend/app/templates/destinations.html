@@ -226,12 +226,16 @@
 
                 <small class="form-text text-muted">
                     Fichier CSV (';', avec en-tête). Colonnes attendues :
-                    <code>codelieu</code>, <code>batiment</code>,
-                    <code>etage</code>, <code>bureau</code>. Le
-                    <code>codelieu</code> est comparé au numéro local de
-                    l'inventaire pour afficher le bureau correspondant. Un
-                    import ultérieur pour un code lieu déjà connu met à jour
-                    ses informations (jamais de doublon).
+                    <code>niveau</code>, <code>nom_piece</code>,
+                    <code>code_piece_service</code>,
+                    <code>nombre_poste_prevu</code>. Le
+                    <code>code_piece_service</code> est comparé au numéro
+                    local de l'inventaire pour afficher le bureau
+                    correspondant, et <code>nombre_poste_prevu</code>
+                    alimente la répartition ordinateurs/écrans par bureau
+                    du tableau de bord (un poste = 1 ordinateur + 2
+                    écrans). Un import ultérieur pour un code pièce déjà
+                    connu met à jour ses informations (jamais de doublon).
                 </small>
 
                 <div class="table-responsive mt-4">
@@ -244,7 +248,7 @@
                                 <th>Chargé le</th>
                                 <th>Par</th>
                                 <th>Lignes</th>
-                                <th>Codes lieu connus</th>
+                                <th>Codes pièce connus</th>
                             </tr>
                         </thead>
 

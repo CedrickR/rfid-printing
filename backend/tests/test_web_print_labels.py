@@ -91,8 +91,8 @@ def test_print_labels_shows_destination_lettrine_and_location(
         files={
             "file": (
                 "bureaux.csv",
-                "codelieu;batiment;etage;bureau\n"
-                "01100021;SIEGE;REZ DE CHAUSSEE;021-A\n",
+                "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+                "REZ DE CHAUSSEE;021-A;01100021;2\n",
                 "text/csv"
             )
         }

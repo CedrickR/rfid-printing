@@ -70,8 +70,8 @@ def test_print_labels_shows_barcode_and_bien_id(client, admin_user):
     assert response.status_code == 200
     assert '<svg id="barcode-1">' in response.text
     assert 'getElementById("barcode-1")' in response.text
-    assert 'var value = "20260001";' in response.text
-    assert ">20260001<" in response.text
+    assert 'var value = "26120260001";' in response.text
+    assert ">26120260001<" in response.text
 
 
 def test_print_labels_shows_destination_lettrine_and_location(
@@ -107,7 +107,7 @@ def test_print_labels_shows_destination_lettrine_and_location(
     assert response.status_code == 200
     assert '<span class="lettrine">D</span>' in response.text
     assert '<span class="dest-rest">irection Info</span>' in response.text
-    assert "REZ DE CHAUSSEE - 021-A" in response.text
+    assert "REZ DE CHAUSSEE - 021-A - 01100021" in response.text
 
 
 def test_print_labels_handles_missing_destination_and_bureau(
@@ -166,3 +166,31 @@ def test_print_labels_page_size_is_90_by_36_mm(client, admin_user):
 
     assert response.status_code == 200
     assert "size: 90mm 36mm;" in response.text
+
+
+def test_print_labels_has_gap_between_lines(client, admin_user):
+
+    _login(client)
+    _seed_asset(client)
+
+    response = client.post(
+        "/assets/print-labels",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 200
+    assert "gap: 0.3mm;" in response.text
+
+
+def test_print_labels_bien_id_font_size_increased(client, admin_user):
+
+    _login(client)
+    _seed_asset(client)
+
+    response = client.post(
+        "/assets/print-labels",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 200
+    assert "font-size: 5mm;" in response.text

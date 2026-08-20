@@ -1799,11 +1799,12 @@ def print_labels(
         mapping = bureau_mappings.get(asset.local_numero)
 
         labels.append({
-            "bien_id": asset.bien_id,
+            "bien_id": format_bien_code(asset.bien_id),
             "destination_first_letter": destination[:1].upper(),
             "destination_rest": destination[1:].strip(),
             "etage": mapping.niveau if mapping else "",
-            "bureau": mapping.nom_piece if mapping else ""
+            "bureau": mapping.nom_piece if mapping else "",
+            "code_piece_service": mapping.code_piece_service if mapping else ""
         })
 
     return templates.TemplateResponse(

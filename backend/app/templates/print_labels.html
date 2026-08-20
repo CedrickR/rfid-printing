@@ -42,6 +42,7 @@
         padding: 4mm;
         display: flex;
         flex-direction: column;
+        gap: 0.3mm;
         overflow: hidden;
         font-family: Arial, Helvetica, sans-serif;
         color: #000;
@@ -78,19 +79,21 @@
     }
 
     .label-location {
-        font-size: 4.5mm;
+        font-size: 2.8mm;
         font-weight: 700;
-        line-height: 1;
-        margin-top: 0.2mm;
-        white-space: nowrap;
+        line-height: 1.05;
+        white-space: normal;
+        overflow-wrap: break-word;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
         overflow: hidden;
-        text-overflow: ellipsis;
-        flex-shrink: 0;
+        flex-shrink: 1;
     }
 
     .label-separator {
         border-top: 0.3mm dashed #999;
-        margin: 0.3mm 0;
+        margin: 0.15mm 0;
         flex-shrink: 0;
     }
 
@@ -107,7 +110,7 @@
     }
 
     .label-id .bien-id-number {
-        font-size: 4mm;
+        font-size: 5mm;
         font-weight: 700;
         line-height: 1;
         letter-spacing: 0.4mm;
@@ -155,9 +158,7 @@
         </div>
 
         <div class="label-location">
-            {% if label.etage or label.bureau %}
-            {{ label.etage }}{% if label.etage and label.bureau %} - {% endif %}{{ label.bureau }}
-            {% endif %}
+            {{ [label.etage, label.bureau, label.code_piece_service] | select | join(" - ") }}
         </div>
 
         <div class="label-separator"></div>
@@ -188,7 +189,7 @@ if (window.JsBarcode) {
     // chiffres du Bien ID.
     var MM_TO_PX = 96 / 25.4;
     var TARGET_WIDTH_PX = 72 * MM_TO_PX;
-    var TARGET_HEIGHT_PX = 9 * MM_TO_PX;
+    var TARGET_HEIGHT_PX = 7 * MM_TO_PX;
 
     {% for label in labels %}
     (function () {

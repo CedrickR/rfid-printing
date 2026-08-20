@@ -93,6 +93,10 @@ class GlpiAsset(Base):
         String(100)
     )
 
+    utilisateur = Column(
+        String(255)
+    )
+
     glpi_type = Column(
         String(50),
         nullable=False

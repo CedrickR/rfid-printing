@@ -1347,6 +1347,27 @@ def _bureau_by_codelieu(db: Session, codes):
     return result
 
 
+def _glpi_utilisateur_by_bien_id(db: Session, bien_ids):
+    """
+    Pour chaque Bien ID demandé, l'utilisateur connu via le
+    rapprochement GLPI (colonne "Utilisateur" de l'Inventaire).
+    """
+
+    if not bien_ids:
+        return {}
+
+    glpi_assets = (
+        db.query(GlpiAsset)
+        .filter(GlpiAsset.bien_id.in_(bien_ids))
+        .all()
+    )
+
+    return {
+        glpi_asset.bien_id: glpi_asset.utilisateur or ""
+        for glpi_asset in glpi_assets
+    }
+
+
 def _bureau_options(db: Session):
     """
     Liste de tous les bureaux connus (code_piece_service + libellé
@@ -1435,6 +1456,10 @@ def assets(
 
     bureau_by_codelieu = _bureau_by_codelieu(db, local_numeros)
 
+    bien_ids = {asset.bien_id for asset in assets_list}
+
+    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+
     destination_options = [
         destination.libelle
         for destination in DestinationService.list_destinations(db)
@@ -1458,6 +1483,7 @@ def assets(
             "destination_options": destination_options,
             "bureau_by_codelieu": bureau_by_codelieu,
             "bureau_options": _bureau_options(db),
+            "glpi_utilisateur_by_bien_id": glpi_utilisateur_by_bien_id,
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1569,6 +1595,10 @@ def export_assets_csv(
 
     bureau_by_codelieu = _bureau_by_codelieu(db, local_numeros)
 
+    bien_ids = {asset.bien_id for asset in assets_list}
+
+    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+
     buffer = StringIO()
 
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
@@ -1583,6 +1613,7 @@ def export_assets_csv(
             "Local",
             "Destination",
             "Bureau",
+            "Utilisateur",
             "Actif"
         ]
     )
@@ -1598,6 +1629,7 @@ def export_assets_csv(
                 asset.local_libelle or "",
                 asset.destination or "",
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
+                glpi_utilisateur_by_bien_id.get(asset.bien_id, "") or "",
                 "Actif" if asset.is_active else "Exclu"
             ]
         )

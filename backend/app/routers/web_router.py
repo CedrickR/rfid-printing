@@ -1350,8 +1350,8 @@ def _bureau_by_codelieu(db: Session, codes):
 def _bureau_options(db: Session):
     """
     Liste de tous les bureaux connus (code_piece_service + libellé
-    affiché), pour alimenter la liste déroulante de la colonne Bureau
-    de l'Inventaire.
+    affiché, incluant le nombre de poste prévu), pour alimenter la
+    liste déroulante de la colonne Bureau de l'Inventaire.
     """
 
     mappings = (
@@ -1372,9 +1372,14 @@ def _bureau_options(db: Session):
 
         label = " - ".join(parts) or mapping.code_piece_service
 
+        nombre_poste_prevu = mapping.nombre_poste_prevu or 0
+
         options.append({
             "code_piece_service": mapping.code_piece_service,
-            "label": f"{label} ({mapping.code_piece_service})"
+            "label": (
+                f"{label} ({mapping.code_piece_service}) "
+                f"- {nombre_poste_prevu} poste(s)"
+            )
         })
 
     return options

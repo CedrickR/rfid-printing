@@ -39,7 +39,7 @@
         width: 90mm;
         height: 36mm;
         box-sizing: border-box;
-        padding: 5mm;
+        padding: 4mm;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -54,19 +54,19 @@
         display: flex;
         align-items: baseline;
         line-height: 0.85;
-        min-height: 7mm;
+        min-height: 9mm;
         overflow: hidden;
         flex-shrink: 0;
     }
 
     .label-destination .lettrine {
-        font-size: 7mm;
+        font-size: 9mm;
         font-weight: 700;
         margin-right: 1.5mm;
     }
 
     .label-destination .dest-rest {
-        font-size: 20px;
+        font-size: 7mm;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.3mm;
@@ -78,7 +78,7 @@
     }
 
     .label-location {
-        font-size: 5mm;
+        font-size: 4.5mm;
         font-weight: 700;
         line-height: 1;
         margin-top: 0.2mm;
@@ -102,8 +102,8 @@
     }
 
     .label-id svg {
-        width: auto;
-        height: 8mm;
+        display: block;
+        max-width: 100%;
     }
 
     .label-id .bien-id-number {
@@ -177,15 +177,46 @@
 
 <script>
 if (window.JsBarcode) {
+(function () {
+
+    // Le nombre de modules d'un CODE128 dépend de la longueur du Bien
+    // ID : à largeur de trait fixe, le code-barres rendu n'occupe donc
+    // pas toujours le même espace sur l'étiquette. On mesure le rendu
+    // initial puis on recalcule la largeur de trait pour que chaque
+    // code-barres occupe une largeur physique constante (proche de la
+    // largeur utile de l'étiquette), quel que soit le nombre de
+    // chiffres du Bien ID.
+    var MM_TO_PX = 96 / 25.4;
+    var TARGET_WIDTH_PX = 72 * MM_TO_PX;
+    var TARGET_HEIGHT_PX = 9 * MM_TO_PX;
+
     {% for label in labels %}
-    JsBarcode("#barcode-{{ loop.index }}", {{ label.bien_id | tojson }}, {
-        format: "CODE128",
-        displayValue: false,
-        margin: 0,
-        width: 2.5,
-        height: 90
-    });
+    (function () {
+
+        var svg = document.getElementById("barcode-{{ loop.index }}");
+        var value = {{ label.bien_id | tojson }};
+
+        var options = {
+            format: "CODE128",
+            displayValue: false,
+            margin: 0,
+            width: 1,
+            height: TARGET_HEIGHT_PX
+        };
+
+        JsBarcode(svg, value, options);
+
+        var measuredWidth = svg.getBBox().width;
+
+        if (measuredWidth > 0) {
+            options.width = TARGET_WIDTH_PX / measuredWidth;
+            JsBarcode(svg, value, options);
+        }
+
+    })();
     {% endfor %}
+
+})();
 }
 </script>
 

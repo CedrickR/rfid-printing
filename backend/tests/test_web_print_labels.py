@@ -69,7 +69,8 @@ def test_print_labels_shows_barcode_and_bien_id(client, admin_user):
 
     assert response.status_code == 200
     assert '<svg id="barcode-1">' in response.text
-    assert 'JsBarcode("#barcode-1", "20260001"' in response.text
+    assert 'getElementById("barcode-1")' in response.text
+    assert 'var value = "20260001";' in response.text
     assert ">20260001<" in response.text
 
 

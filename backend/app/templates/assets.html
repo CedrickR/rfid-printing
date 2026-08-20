@@ -248,6 +248,7 @@
                             <th>Local</th>
                             <th>Destination</th>
                             <th>Bureau</th>
+                            <th>Utilisateur</th>
                             <th>Actif</th>
                         </tr>
 
@@ -326,6 +327,8 @@
                                 </select>
                                 {% endif %}
                             </td>
+
+                            <td>{{ glpi_utilisateur_by_bien_id.get(asset.bien_id, "") or "" }}</td>
 
                             <td>
 

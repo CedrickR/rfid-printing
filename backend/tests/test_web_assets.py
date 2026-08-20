@@ -362,11 +362,11 @@ def test_export_csv_contains_header_and_all_matching_rows(
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Actif"
+        "Destination;Bureau;Utilisateur;Actif"
     )
     assert len(lines) == 4  # en-tête + 3 biens
-    assert "1001;PC actif;;;;;;;Actif" in lines
-    assert "1002;Ecran sorti tot;;;;;;;Exclu" in lines
+    assert "1001;PC actif;;;;;;;;Actif" in lines
+    assert "1002;Ecran sorti tot;;;;;;;;Exclu" in lines
 
 
 def test_export_csv_respects_search_filters(client, admin_user):
@@ -468,11 +468,11 @@ def test_export_csv_includes_destination_and_bureau(client, admin_user):
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Actif"
+        "Destination;Bureau;Utilisateur;Actif"
     )
     assert (
         "1001;PC actif;01100021;;;;Direction Info;"
-        "REZ DE CHAUSSEE - 021-A;Actif" in lines
+        "REZ DE CHAUSSEE - 021-A;;Actif" in lines
     )
 
 
@@ -855,3 +855,69 @@ def test_update_asset_bureau_ignores_unsafe_next(client, admin_user):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/assets"
+
+
+GLPI_HEADER = (
+    '"Nom";"Entité";"Statut";"Type";"Modèle";"Lieu";"Utilisateur";'
+    '"Usager";"Numéro d\'inventaire";'
+    '"Informations financières et administratives - Numéro '
+    'd\'immobilisation";"Numéro de série";"Informations financières et '
+    'administratives - Fournisseur";"Numéro de la pièce"\n'
+)
+
+
+def _upload_glpi(client, bien_id, utilisateur, glpi_type="ordinateur"):
+
+    content = (
+        GLPI_HEADER
+        + f'"PC-01";"Entité";"En service";"Ordinateur";"Modèle";"SIEGE";'
+        f'"{utilisateur}";"usager";"{bien_id}";"";"SN123";"";"01100021"\n'
+    )
+
+    return client.post(
+        "/glpi-locations",
+        data={"glpi_type": glpi_type},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+
+def test_assets_page_shows_utilisateur_from_glpi_import(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont")
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Utilisateur" in response.text
+    assert "Jean Dupont" in response.text
+
+
+def test_assets_page_shows_empty_utilisateur_without_glpi_match(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Utilisateur" in response.text
+
+
+def test_export_csv_includes_utilisateur(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont")
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
+        "Destination;Bureau;Utilisateur;Actif"
+    )
+    assert "1001;PC actif;;;;;;;Jean Dupont;Actif" in lines

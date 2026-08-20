@@ -1347,6 +1347,39 @@ def _bureau_by_codelieu(db: Session, codes):
     return result
 
 
+def _bureau_options(db: Session):
+    """
+    Liste de tous les bureaux connus (code_piece_service + libellé
+    affiché), pour alimenter la liste déroulante de la colonne Bureau
+    de l'Inventaire.
+    """
+
+    mappings = (
+        db.query(BureauMapping)
+        .order_by(BureauMapping.niveau, BureauMapping.nom_piece)
+        .all()
+    )
+
+    options = []
+
+    for mapping in mappings:
+
+        parts = [
+            part
+            for part in (mapping.niveau, mapping.nom_piece)
+            if part
+        ]
+
+        label = " - ".join(parts) or mapping.code_piece_service
+
+        options.append({
+            "code_piece_service": mapping.code_piece_service,
+            "label": f"{label} ({mapping.code_piece_service})"
+        })
+
+    return options
+
+
 @router.get("/assets")
 def assets(
     request: Request,
@@ -1419,6 +1452,7 @@ def assets(
             "local_options": _distinct_values(db, Asset.local_libelle),
             "destination_options": destination_options,
             "bureau_by_codelieu": bureau_by_codelieu,
+            "bureau_options": _bureau_options(db),
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1454,6 +1488,42 @@ def update_asset_destination(
         raise HTTPException(status_code=404, detail="Bien introuvable")
 
     asset.destination = destination or None
+
+    db.commit()
+
+    redirect_url = next if next.startswith("/assets") else "/assets"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/assets/{asset_id}/bureau")
+def update_asset_bureau(
+    asset_id: int,
+    code_piece_service: str = Form(default=""),
+    next: str = Form(default="/assets"),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Affecte (ou efface) le bureau d'un bien depuis la page Inventaire.
+    La valeur vient de la liste déroulante des bureaux connus (import
+    /admin/destinations) : le code pièce et service choisi est stocké
+    dans le numéro local du bien, la même colonne utilisée pour le
+    rapprochement automatique affiché dans la colonne Bureau.
+    """
+
+    require_manager(current_user)
+
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Bien introuvable")
+
+    asset.local_numero = code_piece_service or None
 
     db.commit()
 

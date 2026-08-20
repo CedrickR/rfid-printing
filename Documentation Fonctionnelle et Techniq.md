@@ -109,17 +109,17 @@ Organisé en deux onglets.
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
 - Colonnes **Destination** et **Bureau** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
-  - **Bureau** : affichage seul, calculé par correspondance entre le numéro local du bien et le **code pièce et service** du fichier bureaux importé sur `/admin/destinations` (§2.12) — affiche la **concaténation** des champs `niveau` et `nom_piece` du fichier importé (séparés par « - », parties vides ignorées) ; vide si aucune correspondance.
+  - **Bureau** : liste déroulante par ligne (`POST /assets/{id}/bureau`), alimentée par les bureaux connus (import `/admin/destinations`, §2.12) — chaque option affiche la concaténation `niveau - nom_piece (code_piece_service)`. Choisir une valeur enregistre le **code pièce et service** correspondant dans le **numéro local** du bien (même colonne utilisée pour le rapprochement automatique affiché ensuite dans la colonne). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
   - **Créer un lot d'impression** (`POST /jobs/create`) à partir des biens cochés.
   - **Inventaire immatériel** (`POST /assets/export-immateriel`) : génère un CSV (`;`, sans en-tête, 2 colonnes) à partir des biens cochés — colonne 1 = `L261` + numéro local, colonne 2 = `261` + Bien ID (biens sans numéro local ignorés). Même format que les fichiers de lecteur RFID (§2.6).
-  - **Étiquettes (PDF)** (`POST /assets/print-labels`, nouvel onglet) : page d'impression d'étiquettes au format ruban **90 x 36 mm, une étiquette par page** (`@page { size: 90mm 36mm; }`, marge intérieure de 5 mm sur les bords), générée comme PDF via l'impression navigateur (bouton « Imprimer », `window.print()` — même principe que l'export PDF des lots, §2.5), sans dépendance PDF côté serveur. Chaque étiquette affiche, dans cet ordre :
-    - la **Destination** du bien : première lettre en lettrine (grande police), suivie du reste du mot (police réduite, tronqué avec « … » si trop long pour tenir sur une ligne) ;
+  - **Étiquettes (PDF)** (`POST /assets/print-labels`, nouvel onglet) : page d'impression d'étiquettes au format ruban **90 x 36 mm, une étiquette par page** (`@page { size: 90mm 36mm; }`, marge intérieure de 4 mm sur les bords), générée comme PDF via l'impression navigateur (bouton « Imprimer », `window.print()` — même principe que l'export PDF des lots, §2.5), sans dépendance PDF côté serveur. Chaque étiquette affiche, dans cet ordre :
+    - la **Destination** du bien, agrandie : première lettre en lettrine (grande police), suivie du reste du mot (police réduite, tronqué avec « … » si trop long pour tenir sur une ligne) ;
     - l'**étage** et le **bureau** correspondants (police intermédiaire), calculés comme la colonne Bureau (§2.4) mais sans le bâtiment ;
     - une ligne de séparation ;
-    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN), centré, puis en dessous le même numéro en chiffres, également centré ;
+    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN), centré, puis en dessous le même numéro en chiffres, également centré — la largeur de trait est recalculée après un premier rendu pour que le code-barres occupe toujours une largeur physique constante (~72 mm) quel que soit le nombre de chiffres du Bien ID ;
     - le reste de la hauteur disponible est laissé en blanc pour des annotations manuscrites.
     Les tailles de police sont calibrées pour tenir exactement dans les 90 x 36 mm (vérifié en mesurant le rendu, sans rognage) ; à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
@@ -475,6 +475,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/import` | Import définitif |
 | `GET` | `/assets` | Page Inventaire (recherche, filtres, sélection) |
 | `POST` | `/assets/{id}/destination` | Modifie la Destination d'un bien (gestionnaire/administrateur) |
+| `POST` | `/assets/{id}/bureau` | Modifie le Bureau (code pièce et service) d'un bien (gestionnaire/administrateur) |
 | `GET` | `/assets/export-csv` | Export CSV du résultat de recherche |
 | `POST` | `/assets/export-immateriel` | Export CSV « inventaire immatériel » de la sélection |
 | `POST` | `/assets/print-labels` | Page d'impression d'étiquettes (PDF via navigateur) de la sélection |

@@ -744,6 +744,7 @@ def test_assets_page_shows_bureau_dropdown_with_code_piece_service(
     assert 'name="code_piece_service"' in response.text
     assert 'value="01100021"' in response.text
     assert "021-A" in response.text
+    assert "2 poste(s)" in response.text
 
 
 def test_assets_page_shows_bureau_read_only_for_reader_role(

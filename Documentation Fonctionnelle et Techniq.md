@@ -104,11 +104,13 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 - Actions sur la sélection :
   - **Créer un lot d'impression** (`POST /jobs/create`) à partir des biens cochés.
   - **Inventaire immatériel** (`POST /assets/export-immateriel`) : génère un CSV (`;`, sans en-tête, 2 colonnes) à partir des biens cochés — colonne 1 = `L261` + numéro local, colonne 2 = `261` + Bien ID (biens sans numéro local ignorés). Même format que les fichiers de lecteur RFID (§2.6).
-  - **Étiquettes (PDF)** (`POST /assets/print-labels`, nouvel onglet) : page d'impression d'étiquettes au format ruban **90 x 36 mm, une étiquette par page** (`@page { size: 90mm 36mm; }`), générée comme PDF via l'impression navigateur (bouton « Imprimer », `window.print()` — même principe que l'export PDF des lots, §2.5), sans dépendance PDF côté serveur. Chaque étiquette affiche :
-    - la **Destination** du bien, première lettre en lettrine (très grande police) suivie du reste du mot (police réduite) ;
-    - l'**étage** et le **bureau** correspondants (grande police), calculés comme la colonne Bureau (§2.4) mais sans le bâtiment ;
-    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN) puis, en dessous, le même numéro en chiffres ;
-    - une ligne de séparation, suivie d'un espace blanc laissé pour des annotations manuscrites.
+  - **Étiquettes (PDF)** (`POST /assets/print-labels`, nouvel onglet) : page d'impression d'étiquettes au format ruban **90 x 36 mm, une étiquette par page** (`@page { size: 90mm 36mm; }`, marge intérieure de 5 mm sur les bords), générée comme PDF via l'impression navigateur (bouton « Imprimer », `window.print()` — même principe que l'export PDF des lots, §2.5), sans dépendance PDF côté serveur. Chaque étiquette affiche, dans cet ordre :
+    - la **Destination** du bien : première lettre en lettrine (grande police), suivie du reste du mot (police réduite, tronqué avec « … » si trop long pour tenir sur une ligne) ;
+    - l'**étage** et le **bureau** correspondants (police intermédiaire), calculés comme la colonne Bureau (§2.4) mais sans le bâtiment ;
+    - une ligne de séparation ;
+    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN), centré, puis en dessous le même numéro en chiffres, également centré ;
+    - le reste de la hauteur disponible est laissé en blanc pour des annotations manuscrites.
+    Les tailles de police sont calibrées pour tenir exactement dans les 90 x 36 mm (vérifié en mesurant le rendu, sans rognage) ; à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
   - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Actif.

@@ -104,7 +104,7 @@ from app.services.bureau_service import (
     BureauImportService,
     InvalidEncodingError as BureauInvalidEncodingError,
     MissingColumnsError as BureauMissingColumnsError,
-    DuplicateCodelieuError,
+    DuplicateCodePieceServiceError,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -275,6 +275,8 @@ def dashboard(
         assets_count - labels_generated_count, 0
     )
 
+    bureau_repartition = _compute_bureau_repartition(db)
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -287,9 +289,80 @@ def dashboard(
             "destination_values": destination_values,
             "labels_generated_count": labels_generated_count,
             "labels_not_generated_count": labels_not_generated_count,
+            "bureau_repartition": bureau_repartition,
             "role": current_user["role"]
         }
     )
+
+
+def _compute_bureau_repartition(db: Session):
+    """
+    Pour chaque bureau connu (BureauMapping), compare le nombre
+    d'ordinateurs et d'écrans réellement inventoriés (type déterminé via
+    le rapprochement GLPI, `GlpiAsset.glpi_type`) au nombre attendu
+    d'après `nombre_poste_prevu` (1 ordinateur et 2 écrans par poste).
+    """
+
+    counts_by_code = (
+        db.query(
+            Asset.local_numero,
+            GlpiAsset.glpi_type,
+            func.count(Asset.id)
+        )
+        .join(GlpiAsset, GlpiAsset.bien_id == Asset.bien_id)
+        .filter(Asset.is_active == True)
+        .filter(Asset.local_numero.isnot(None))
+        .group_by(Asset.local_numero, GlpiAsset.glpi_type)
+        .all()
+    )
+
+    actual_counts = {}
+
+    for local_numero, glpi_type, count in counts_by_code:
+
+        entry = actual_counts.setdefault(
+            local_numero, {"ordinateur": 0, "moniteur": 0}
+        )
+
+        if glpi_type in entry:
+            entry[glpi_type] = count
+
+    mappings = (
+        db.query(BureauMapping)
+        .order_by(BureauMapping.niveau, BureauMapping.nom_piece)
+        .all()
+    )
+
+    repartition = []
+
+    for mapping in mappings:
+
+        actual = actual_counts.get(
+            mapping.code_piece_service, {"ordinateur": 0, "moniteur": 0}
+        )
+
+        nombre_poste_prevu = mapping.nombre_poste_prevu or 0
+
+        ordinateurs_attendus = nombre_poste_prevu
+        ecrans_attendus = nombre_poste_prevu * 2
+
+        ordinateurs_reels = actual["ordinateur"]
+        ecrans_reels = actual["moniteur"]
+
+        repartition.append({
+            "niveau": mapping.niveau,
+            "nom_piece": mapping.nom_piece,
+            "code_piece_service": mapping.code_piece_service,
+            "nombre_poste_prevu": nombre_poste_prevu,
+            "ordinateurs_attendus": ordinateurs_attendus,
+            "ordinateurs_reels": ordinateurs_reels,
+            "ecart_ordinateurs": ordinateurs_reels - ordinateurs_attendus,
+            "ecrans_attendus": ecrans_attendus,
+            "ecrans_reels": ecrans_reels,
+            "ecart_ecrans": ecrans_reels - ecrans_attendus
+        })
+
+    return repartition
 
 
 @router.post("/admin/reset-database")
@@ -467,7 +540,7 @@ def _bureau_error_message(exc: Exception) -> str:
     if isinstance(exc, BureauMissingColumnsError):
         return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
 
-    if isinstance(exc, DuplicateCodelieuError):
+    if isinstance(exc, DuplicateCodePieceServiceError):
         shown = exc.duplicated_codes[:20]
         suffix = (
             f" (et {len(exc.duplicated_codes) - 20} de plus)"
@@ -475,7 +548,7 @@ def _bureau_error_message(exc: Exception) -> str:
             else ""
         )
         return (
-            "Code lieu en doublon dans le fichier : "
+            "Code pièce et service en doublon dans le fichier : "
             f"{', '.join(shown)}{suffix}"
         )
 
@@ -624,8 +697,9 @@ async def bureaux_upload(
 ):
     """
     Charge le fichier CSV de correspondance bureaux (';', avec
-    en-tête : codelieu, batiment, etage, bureau), pour la colonne
-    "Bureau" de l'inventaire.
+    en-tête : niveau, nom_piece, code_piece_service,
+    nombre_poste_prevu), pour la colonne "Bureau" de l'inventaire et
+    la répartition ordinateurs/écrans par bureau du tableau de bord.
     """
 
     require_admin(current_user)
@@ -647,7 +721,7 @@ async def bureaux_upload(
     except (
         BureauInvalidEncodingError,
         BureauMissingColumnsError,
-        DuplicateCodelieuError
+        DuplicateCodePieceServiceError
     ) as e:
 
         return _render_destinations_page(
@@ -1244,8 +1318,8 @@ def _filtered_assets_query(
 
 def _bureau_by_codelieu(db: Session, codes):
     """
-    Pour chaque code lieu demandé, la concaténation des champs
-    bâtiment/étage/bureau issus du fichier d'import bureaux (colonne
+    Pour chaque code pièce demandé, la concaténation des champs
+    niveau/nom_piece issus du fichier d'import bureaux (colonne
     "Bureau" de l'inventaire), les parties vides étant ignorées.
     """
 
@@ -1254,7 +1328,7 @@ def _bureau_by_codelieu(db: Session, codes):
 
     mappings = (
         db.query(BureauMapping)
-        .filter(BureauMapping.codelieu.in_(codes))
+        .filter(BureauMapping.code_piece_service.in_(codes))
         .all()
     )
 
@@ -1264,11 +1338,11 @@ def _bureau_by_codelieu(db: Session, codes):
 
         parts = [
             part
-            for part in (mapping.batiment, mapping.etage, mapping.bureau)
+            for part in (mapping.niveau, mapping.nom_piece)
             if part
         ]
 
-        result[mapping.codelieu] = " - ".join(parts)
+        result[mapping.code_piece_service] = " - ".join(parts)
 
     return result
 
@@ -1634,10 +1708,10 @@ def print_labels(
     if local_numeros:
 
         bureau_mappings = {
-            mapping.codelieu: mapping
+            mapping.code_piece_service: mapping
             for mapping in (
                 db.query(BureauMapping)
-                .filter(BureauMapping.codelieu.in_(local_numeros))
+                .filter(BureauMapping.code_piece_service.in_(local_numeros))
                 .all()
             )
         }
@@ -1653,8 +1727,8 @@ def print_labels(
             "bien_id": asset.bien_id,
             "destination_first_letter": destination[:1].upper(),
             "destination_rest": destination[1:].strip(),
-            "etage": mapping.etage if mapping else "",
-            "bureau": mapping.bureau if mapping else ""
+            "etage": mapping.niveau if mapping else "",
+            "bureau": mapping.nom_piece if mapping else ""
         })
 
     return templates.TemplateResponse(

@@ -27,7 +27,39 @@
 </div>
 {% endif %}
 
-<div class="row">
+<ul class="nav nav-tabs" id="dashboardTab" role="tablist">
+
+    <li class="nav-item">
+        <a
+            class="nav-link active"
+            id="overview-tab"
+            data-toggle="tab"
+            href="#overview-pane"
+            role="tab"
+        >
+            Vue d'ensemble
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a
+            class="nav-link"
+            id="bureau-repartition-tab"
+            data-toggle="tab"
+            href="#bureau-repartition-pane"
+            role="tab"
+        >
+            Répartition par bureau
+        </a>
+    </li>
+
+</ul>
+
+<div class="tab-content" id="dashboardTabContent">
+
+<div class="tab-pane fade show active" id="overview-pane" role="tabpanel">
+
+<div class="row mt-3">
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-left-primary shadow h-100 py-2">
@@ -194,6 +226,94 @@
 
 </div>
 {% endif %}
+
+</div>
+
+<!-- Onglet Répartition par bureau -->
+
+<div class="tab-pane fade" id="bureau-repartition-pane" role="tabpanel">
+
+    <div class="card shadow mb-4 mt-3">
+
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Ordinateurs et écrans par bureau
+            </h6>
+        </div>
+
+        <div class="card-body">
+
+            <small class="form-text text-muted mb-3">
+                Attendu = nombre de poste prévu (1 ordinateur et 2 écrans
+                par poste). Réel = biens actifs rapprochés GLPI
+                (<code>ordinateur</code> / <code>moniteur</code>) dont le
+                numéro local correspond au code pièce et service du
+                bureau. Les écarts non nuls sont mis en évidence.
+            </small>
+
+            <div class="table-responsive mt-3">
+
+                <table class="table table-bordered table-hover table-sm">
+
+                    <thead>
+                        <tr>
+                            <th>Niveau</th>
+                            <th>Nom pièce</th>
+                            <th>Code pièce et service</th>
+                            <th class="text-center">Postes prévus</th>
+                            <th class="text-center">Ordinateurs attendus</th>
+                            <th class="text-center">Ordinateurs réels</th>
+                            <th class="text-center">Écart ordinateurs</th>
+                            <th class="text-center">Écrans attendus</th>
+                            <th class="text-center">Écrans réels</th>
+                            <th class="text-center">Écart écrans</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for bureau in bureau_repartition %}
+
+                        <tr>
+                            <td>{{ bureau.niveau }}</td>
+                            <td>{{ bureau.nom_piece }}</td>
+                            <td>{{ bureau.code_piece_service }}</td>
+                            <td class="text-center">{{ bureau.nombre_poste_prevu }}</td>
+                            <td class="text-center">{{ bureau.ordinateurs_attendus }}</td>
+                            <td class="text-center">{{ bureau.ordinateurs_reels }}</td>
+                            <td class="text-center {% if bureau.ecart_ordinateurs != 0 %}table-danger font-weight-bold{% endif %}">
+                                {{ "%+d" | format(bureau.ecart_ordinateurs) }}
+                            </td>
+                            <td class="text-center">{{ bureau.ecrans_attendus }}</td>
+                            <td class="text-center">{{ bureau.ecrans_reels }}</td>
+                            <td class="text-center {% if bureau.ecart_ecrans != 0 %}table-danger font-weight-bold{% endif %}">
+                                {{ "%+d" | format(bureau.ecart_ecrans) }}
+                            </td>
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="10" class="text-center text-muted">
+                                Aucun bureau importé.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>

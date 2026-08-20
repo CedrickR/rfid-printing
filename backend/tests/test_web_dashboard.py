@@ -1,6 +1,56 @@
 import re
 
 
+GLPI_HEADER = (
+    '"Nom";"Entité";"Statut";"Type";"Modèle";"Lieu";"Utilisateur";'
+    '"Usager";"Numéro d\'inventaire";'
+    '"Informations financières et administratives - Numéro '
+    'd\'immobilisation";"Numéro de série";"Informations financières et '
+    'administratives - Fournisseur";"Numéro de la pièce"\n'
+)
+
+BUREAU_HEADER = "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
+
+
+def _glpi_row(inventaire, piece="01100021"):
+
+    return (
+        f'"PC-01";"Entité";"En service";"Ordinateur";"Modèle";"SIEGE";'
+        f'"user";"usager";"{inventaire}";"";"SN123";"";"{piece}"\n'
+    )
+
+
+def _upload_glpi(client, inventaire, glpi_type):
+
+    content = GLPI_HEADER + _glpi_row(inventaire)
+
+    return client.post(
+        "/glpi-locations",
+        data={"glpi_type": glpi_type},
+        files={"file": ("glpi.csv", content, "text/csv")},
+        follow_redirects=False
+    )
+
+
+def _upload_bureau(
+    client,
+    code_piece_service="01100021",
+    niveau="REZ DE CHAUSSEE",
+    nom_piece="021-ENTREPOT",
+    nombre_poste_prevu="1"
+):
+
+    content = BUREAU_HEADER + (
+        f"{niveau};{nom_piece};{code_piece_service};{nombre_poste_prevu}\n"
+    )
+
+    return client.post(
+        "/admin/destinations/bureaux",
+        files={"file": ("bureaux.csv", content, "text/csv")},
+        follow_redirects=False
+    )
+
+
 def _login(client, username="admin", password="Admin123!"):
 
     client.post(
@@ -194,3 +244,78 @@ def test_dashboard_labels_generated_chart_counts_generated_jobs(
     assert match is not None
     assert match.group(1) == "1"
     assert match.group(2) == "1"
+
+
+def test_dashboard_bureau_repartition_shows_no_bureau_message(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Aucun bureau importé." in response.text
+
+
+def test_dashboard_bureau_repartition_counts_ordinateurs_and_ecrans(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;PC Un;;01100021\n"
+                "1002;Ecran Un;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    _upload_bureau(client, nombre_poste_prevu="1")
+
+    _upload_glpi(client, "1001", "ordinateur")
+    _upload_glpi(client, "1002", "moniteur")
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "REZ DE CHAUSSEE" in response.text
+    assert "021-ENTREPOT" in response.text
+    assert "01100021" in response.text
+
+    # 1 poste prévu -> 1 ordinateur attendu (réel : 1, écart nul) et
+    # 2 écrans attendus (réel : 1, écart de -1 mis en évidence).
+    assert "table-danger" in response.text
+
+
+def test_dashboard_bureau_repartition_highlights_gap_when_no_assets(
+    client, admin_user
+):
+
+    _login(client)
+
+    _upload_bureau(client, nombre_poste_prevu="1")
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "table-danger" in response.text
+    assert "-1" in response.text
+    assert "-2" in response.text
+
+
+def test_dashboard_bureau_repartition_denies_reader_role(
+    client, standard_user
+):
+
+    _login(client, "employe", "Employe123!")
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 403

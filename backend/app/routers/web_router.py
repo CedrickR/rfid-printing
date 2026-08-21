@@ -1347,10 +1347,11 @@ def _bureau_by_codelieu(db: Session, codes):
     return result
 
 
-def _glpi_utilisateur_by_bien_id(db: Session, bien_ids):
+def _glpi_info_by_bien_id(db: Session, bien_ids):
     """
-    Pour chaque Bien ID demandé, l'utilisateur connu via le
-    rapprochement GLPI (colonne "Utilisateur" de l'Inventaire).
+    Pour chaque Bien ID demandé, l'utilisateur et le numéro de série
+    connus via le rapprochement GLPI (colonnes "Utilisateur" et
+    "Numéro de série" de l'Inventaire).
     """
 
     if not bien_ids:
@@ -1363,7 +1364,10 @@ def _glpi_utilisateur_by_bien_id(db: Session, bien_ids):
     )
 
     return {
-        glpi_asset.bien_id: glpi_asset.utilisateur or ""
+        glpi_asset.bien_id: {
+            "utilisateur": glpi_asset.utilisateur or "",
+            "numero_serie": glpi_asset.numero_serie or ""
+        }
         for glpi_asset in glpi_assets
     }
 
@@ -1458,7 +1462,7 @@ def assets(
 
     bien_ids = {asset.bien_id for asset in assets_list}
 
-    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+    glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
 
     destination_options = [
         destination.libelle
@@ -1483,7 +1487,7 @@ def assets(
             "destination_options": destination_options,
             "bureau_by_codelieu": bureau_by_codelieu,
             "bureau_options": _bureau_options(db),
-            "glpi_utilisateur_by_bien_id": glpi_utilisateur_by_bien_id,
+            "glpi_info_by_bien_id": glpi_info_by_bien_id,
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1597,7 +1601,7 @@ def export_assets_csv(
 
     bien_ids = {asset.bien_id for asset in assets_list}
 
-    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+    glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
 
     buffer = StringIO()
 
@@ -1614,11 +1618,15 @@ def export_assets_csv(
             "Destination",
             "Bureau",
             "Utilisateur",
+            "Numéro de série",
             "Actif"
         ]
     )
 
     for asset in assets_list:
+
+        glpi_info = glpi_info_by_bien_id.get(asset.bien_id, {})
+
         writer.writerow(
             [
                 asset.bien_id,
@@ -1629,7 +1637,8 @@ def export_assets_csv(
                 asset.local_libelle or "",
                 asset.destination or "",
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
-                glpi_utilisateur_by_bien_id.get(asset.bien_id, "") or "",
+                glpi_info.get("utilisateur", ""),
+                glpi_info.get("numero_serie", ""),
                 "Actif" if asset.is_active else "Exclu"
             ]
         )

@@ -97,6 +97,10 @@ class GlpiAsset(Base):
         String(255)
     )
 
+    numero_serie = Column(
+        String(255)
+    )
+
     glpi_type = Column(
         String(50),
         nullable=False

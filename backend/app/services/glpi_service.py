@@ -24,6 +24,7 @@ REQUIRED_COLUMNS = [BIEN_ID_COLUMN, NUMERO_PIECE_COLUMN]
 LIEU_COLUMN = "Lieu"
 STATUT_COLUMN = "Statut"
 UTILISATEUR_COLUMN = "Utilisateur"
+NUMERO_SERIE_COLUMN = "Numéro de série"
 
 # Le numéro de la pièce est toujours sur 8 caractères dans l'inventaire
 # (ex. "00600001") ; GLPI l'exporte parfois sans les zéros non
@@ -63,17 +64,17 @@ class GlpiImportService:
     Import des exports GLPI (';', avec en-tête). Colonnes conservées :
     "Numéro d'inventaire" (Bien ID) et "Numéro de la pièce" (pour
     comparaison avec le numéro local déjà connu dans l'inventaire), et
-    "Lieu"/"Statut"/"Utilisateur" (informations complémentaires
-    affichées dans le tableau des écarts et, pour "Utilisateur", dans
-    la colonne Utilisateur de l'Inventaire, sans effet sur la
-    comparaison).
+    "Lieu"/"Statut"/"Utilisateur"/"Numéro de série" (informations
+    complémentaires affichées dans le tableau des écarts et, pour
+    "Utilisateur"/"Numéro de série", dans les colonnes correspondantes
+    de l'Inventaire, sans effet sur la comparaison).
     """
 
     @staticmethod
     def parse(content: bytes):
         """
         Décode et parse le CSV. Retourne une liste de (bien_id,
-        numero_piece, lieu, statut, utilisateur). Lève
+        numero_piece, lieu, statut, utilisateur, numero_serie). Lève
         DuplicateBienIdError si le fichier contient plusieurs fois le
         même Bien ID (cohérent avec l'import inventaire : on force un
         fichier propre plutôt que de choisir silencieusement une
@@ -111,6 +112,7 @@ class GlpiImportService:
             lieu = (row.get(LIEU_COLUMN) or "").strip()
             statut = (row.get(STATUT_COLUMN) or "").strip()
             utilisateur = (row.get(UTILISATEUR_COLUMN) or "").strip()
+            numero_serie = (row.get(NUMERO_SERIE_COLUMN) or "").strip()
 
             if not bien_id:
                 continue
@@ -121,7 +123,9 @@ class GlpiImportService:
 
             seen_ids.add(bien_id)
 
-            rows.append((bien_id, numero_piece, lieu, statut, utilisateur))
+            rows.append(
+                (bien_id, numero_piece, lieu, statut, utilisateur, numero_serie)
+            )
 
         if duplicated_ids:
             raise DuplicateBienIdError(duplicated_ids)
@@ -153,7 +157,7 @@ class GlpiImportService:
         added_count = 0
         updated_count = 0
 
-        for bien_id, numero_piece, lieu, statut, utilisateur in rows:
+        for bien_id, numero_piece, lieu, statut, utilisateur, numero_serie in rows:
 
             existing = (
                 db.query(GlpiAsset)
@@ -167,6 +171,7 @@ class GlpiImportService:
                 existing.lieu = lieu
                 existing.statut = statut
                 existing.utilisateur = utilisateur
+                existing.numero_serie = numero_serie
                 existing.glpi_type = glpi_type
                 existing.import_id = glpi_import.id
                 existing.updated_at = datetime.now(UTC)
@@ -182,6 +187,7 @@ class GlpiImportService:
                         lieu=lieu,
                         statut=statut,
                         utilisateur=utilisateur,
+                        numero_serie=numero_serie,
                         glpi_type=glpi_type,
                         import_id=glpi_import.id,
                         updated_at=datetime.now(UTC)

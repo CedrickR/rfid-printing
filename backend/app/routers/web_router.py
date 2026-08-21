@@ -1373,6 +1373,25 @@ def _glpi_info_by_bien_id(db: Session, bien_ids):
     }
 
 
+def _utilisateur_options(db: Session):
+    """
+    Liste triée des utilisateurs distincts connus via les imports GLPI
+    (colonne "Utilisateur"), pour alimenter la liste déroulante de la
+    colonne Utilisateur de l'Inventaire.
+    """
+
+    rows = (
+        db.query(GlpiAsset.utilisateur)
+        .filter(GlpiAsset.utilisateur.isnot(None))
+        .filter(GlpiAsset.utilisateur != "")
+        .distinct()
+        .order_by(GlpiAsset.utilisateur)
+        .all()
+    )
+
+    return [row[0] for row in rows]
+
+
 def _bureau_options(db: Session):
     """
     Liste de tous les bureaux connus (code_piece_service + libellé
@@ -1489,6 +1508,7 @@ def assets(
             "bureau_by_codelieu": bureau_by_codelieu,
             "bureau_options": _bureau_options(db),
             "glpi_info_by_bien_id": glpi_info_by_bien_id,
+            "utilisateur_options": _utilisateur_options(db),
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1568,6 +1588,43 @@ def update_asset_bureau(
     return RedirectResponse(url=redirect_url, status_code=303)
 
 
+@router.post("/assets/{asset_id}/utilisateur")
+def update_asset_utilisateur(
+    asset_id: int,
+    utilisateur: str = Form(default=""),
+    next: str = Form(default="/assets"),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Affecte (ou efface) une correction manuelle de l'utilisateur d'un
+    bien depuis la page Inventaire. La valeur vient de la liste
+    déroulante des utilisateurs connus via les imports GLPI. Tant
+    qu'elle n'est pas renseignée, la colonne Utilisateur affiche la
+    valeur calculée par rapprochement GLPI (§2.7) ; une fois
+    renseignée, elle prend le dessus sur ce calcul automatique.
+    """
+
+    require_manager(current_user)
+
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Bien introuvable")
+
+    asset.utilisateur = utilisateur or None
+
+    db.commit()
+
+    redirect_url = next if next.startswith("/assets") else "/assets"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
 @router.get("/assets/export-csv")
 def export_assets_csv(
     q: str = Query(default=""),
@@ -1638,7 +1695,7 @@ def export_assets_csv(
                 asset.local_libelle or "",
                 asset.destination or "",
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
-                glpi_info.get("utilisateur", ""),
+                asset.utilisateur or glpi_info.get("utilisateur", ""),
                 glpi_info.get("numero_serie", ""),
                 "Actif" if asset.is_active else "Exclu"
             ]

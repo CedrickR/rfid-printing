@@ -329,7 +329,29 @@
                                 {% endif %}
                             </td>
 
-                            <td>{{ glpi_info_by_bien_id.get(asset.bien_id, {}).get("utilisateur", "") }}</td>
+                            <td>
+                                {% set effective_utilisateur = asset.utilisateur or glpi_info_by_bien_id.get(asset.bien_id, {}).get("utilisateur", "") %}
+                                {% if request.state.role == 'lecteur' %}
+                                {{ effective_utilisateur }}
+                                {% else %}
+                                <select
+                                    class="form-control form-control-sm"
+                                    name="utilisateur"
+                                    form="utilisateur-form-{{ asset.id }}"
+                                    onchange="document.getElementById('utilisateur-form-{{ asset.id }}').submit()"
+                                >
+                                    <option value="">-- Aucun --</option>
+                                    {% for option in utilisateur_options %}
+                                    <option
+                                        value="{{ option }}"
+                                        {% if option == effective_utilisateur %}selected{% endif %}
+                                    >
+                                        {{ option }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </td>
 
                             <td>{{ glpi_info_by_bien_id.get(asset.bien_id, {}).get("numero_serie", "") }}</td>
 
@@ -380,6 +402,14 @@
     id="bureau-form-{{ asset.id }}"
     method="post"
     action="/assets/{{ asset.id }}/bureau"
+    style="display: none;"
+>
+    <input type="hidden" name="next" value="{{ current_qs }}">
+</form>
+<form
+    id="utilisateur-form-{{ asset.id }}"
+    method="post"
+    action="/assets/{{ asset.id }}/utilisateur"
     style="display: none;"
 >
     <input type="hidden" name="next" value="{{ current_qs }}">

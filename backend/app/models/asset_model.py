@@ -49,6 +49,10 @@ class Asset(Base):
         String(255)
     )
 
+    utilisateur = Column(
+        String(255)
+    )
+
     is_active = Column(
         Boolean,
         default=True

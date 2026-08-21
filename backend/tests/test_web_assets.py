@@ -1,3 +1,6 @@
+import re
+
+
 def _login_and_seed(client):
 
     client.post(
@@ -962,3 +965,139 @@ def test_export_csv_includes_numero_serie(client, admin_user):
     lines = response.text.strip("\n").split("\n")
 
     assert "1001;PC actif;;;;;;;Jean Dupont;SN-ABC-42;Actif" in lines
+
+
+def test_assets_page_shows_utilisateur_dropdown_with_known_names(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont")
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert 'name="utilisateur"' in response.text
+    assert 'value="Jean Dupont"' in response.text
+
+
+def test_assets_page_shows_utilisateur_read_only_for_reader_role(
+    client, standard_user
+):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert 'name="utilisateur"' not in response.text
+
+
+def test_update_asset_utilisateur_overrides_glpi_value(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont")
+    _upload_glpi(client, "1002", "Marie Curie")
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/utilisateur",
+        data={"utilisateur": "Marie Curie", "next": "/assets"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"
+
+    listing = client.get("/assets")
+
+    assert re.search(
+        r'value="Marie Curie"\s*selected', listing.text
+    ) is not None
+    assert re.search(
+        r'value="Jean Dupont"\s*selected', listing.text
+    ) is None
+
+    csv_export = client.get("/assets/export-csv")
+
+    assert "1001;PC actif;;;;;;;Marie Curie;SN123;Actif" in (
+        csv_export.text.strip("\n").split("\n")
+    )
+
+
+def test_update_asset_utilisateur_requires_manager_role(client, standard_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "employe",
+            "password": "Employe123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/assets/1/utilisateur",
+        data={"utilisateur": "Jean Dupont"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_asset_utilisateur_missing_asset_returns_404(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.post(
+        "/assets/999/utilisateur",
+        data={"utilisateur": "Jean Dupont"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_update_asset_utilisateur_ignores_unsafe_next(client, admin_user):
+
+    _login_and_seed(client)
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    response = client.post(
+        f"/assets/{asset_id}/utilisateur",
+        data={
+            "utilisateur": "Jean Dupont",
+            "next": "https://evil.example"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/assets"

@@ -110,7 +110,8 @@ Organisé en deux onglets.
 - Colonnes **Destination**, **Bureau**, **Utilisateur** et **Numéro de série** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Bureau** : liste déroulante par ligne (`POST /assets/{id}/bureau`), alimentée par les bureaux connus (import `/admin/destinations`, §2.12) — chaque option affiche `niveau - nom_piece (code_piece_service) - N poste(s)`, incluant le **nombre de poste prévu** du bureau. Choisir une valeur enregistre le **code pièce et service** correspondant dans le **numéro local** du bien (même colonne utilisée pour le rapprochement automatique affiché ensuite dans la colonne). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
-  - **Utilisateur** et **Numéro de série** : affichage seul, calculés par rapprochement GLPI (§2.7) — colonnes « Utilisateur » et « Numéro de série » du dernier fichier GLPI importé pour le Bien ID du bien (jointure sur le Bien ID) ; vides si le bien n'a jamais été rapproché via un import GLPI.
+  - **Utilisateur** : liste déroulante par ligne (`POST /assets/{id}/utilisateur`), alimentée par tous les utilisateurs distincts connus via les imports GLPI (§2.7). Tant qu'aucune valeur n'est choisie, la colonne affiche l'utilisateur calculé par rapprochement GLPI (jointure sur le Bien ID) ; choisir une valeur enregistre une **correction manuelle** qui prend le dessus sur ce calcul automatique (y compris lors d'imports GLPI ultérieurs). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
+  - **Numéro de série** : affichage seul, calculé par rapprochement GLPI (§2.7) — colonne « Numéro de série » du dernier fichier GLPI importé pour le Bien ID du bien (jointure sur le Bien ID) ; vide si le bien n'a jamais été rapproché via un import GLPI.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -480,6 +481,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `GET` | `/assets` | Page Inventaire (recherche, filtres, sélection) |
 | `POST` | `/assets/{id}/destination` | Modifie la Destination d'un bien (gestionnaire/administrateur) |
 | `POST` | `/assets/{id}/bureau` | Modifie le Bureau (code pièce et service) d'un bien (gestionnaire/administrateur) |
+| `POST` | `/assets/{id}/utilisateur` | Enregistre une correction manuelle de l'Utilisateur d'un bien (gestionnaire/administrateur) |
 | `GET` | `/assets/export-csv` | Export CSV du résultat de recherche |
 | `POST` | `/assets/export-immateriel` | Export CSV « inventaire immatériel » de la sélection |
 | `POST` | `/assets/print-labels` | Page d'impression d'étiquettes (PDF via navigateur) de la sélection |

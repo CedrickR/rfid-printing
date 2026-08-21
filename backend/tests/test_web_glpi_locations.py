@@ -142,7 +142,7 @@ def test_upload_rejects_missing_columns(client, admin_user):
     assert "Colonnes manquantes" in response.text
 
 
-def test_upload_rejects_duplicate_bien_id_in_file(client, admin_user):
+def test_upload_shows_duplicates_table_for_duplicate_bien_id(client, admin_user):
 
     _login(client)
 
@@ -158,8 +158,156 @@ def test_upload_rejects_duplicate_bien_id_in_file(client, admin_user):
         files={"file": ("glpi.csv", content, "text/csv")}
     )
 
+    assert response.status_code == 200
+    assert "doublon" in response.text.lower()
+    assert response.text.count("corrected_bien_id_") == 2
+    assert "01100099" in response.text
+    assert "01100050" in response.text
+    assert 'name="content_b64"' in response.text
+    assert 'name="glpi_type" value="ordinateur"' in response.text
+
+
+def _extract_content_b64(html):
+
+    import re
+
+    match = re.search(r'name="content_b64" value="([^"]*)"', html)
+
+    assert match is not None
+
+    return match.group(1)
+
+
+def test_confirm_duplicates_finalizes_import_with_corrected_bien_ids(
+    client, admin_user
+):
+
+    _login(client)
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260001", "01100050")
+    )
+
+    upload_response = client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    content_b64 = _extract_content_b64(upload_response.text)
+
+    response = client.post(
+        "/glpi-locations/confirm-duplicates",
+        data={
+            "content_b64": content_b64,
+            "glpi_type": "ordinateur",
+            "filename": "glpi.csv",
+            "corrected_bien_id_0": "20260001",
+            "corrected_bien_id_1": "20260002"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert "imported=1" in response.headers["location"]
+    assert "added=2" in response.headers["location"]
+    assert "updated=0" in response.headers["location"]
+
+
+def test_confirm_duplicates_still_duplicate_reshows_table(client, admin_user):
+
+    _login(client)
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260001", "01100050")
+    )
+
+    upload_response = client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    content_b64 = _extract_content_b64(upload_response.text)
+
+    response = client.post(
+        "/glpi-locations/confirm-duplicates",
+        data={
+            "content_b64": content_b64,
+            "glpi_type": "ordinateur",
+            "filename": "glpi.csv",
+            "corrected_bien_id_0": "20260001",
+            "corrected_bien_id_1": "20260001"
+        }
+    )
+
     assert response.status_code == 400
     assert "doublon" in response.text.lower()
+    assert response.text.count("corrected_bien_id_") == 2
+
+
+def test_confirm_duplicates_drops_row_with_blank_corrected_bien_id(
+    client, admin_user
+):
+
+    _login(client)
+
+    content = (
+        GLPI_HEADER
+        + _glpi_row("20260001", "01100099")
+        + _glpi_row("20260001", "01100050")
+    )
+
+    upload_response = client.post(
+        "/glpi-locations",
+        data={"glpi_type": "ordinateur"},
+        files={"file": ("glpi.csv", content, "text/csv")}
+    )
+
+    content_b64 = _extract_content_b64(upload_response.text)
+
+    response = client.post(
+        "/glpi-locations/confirm-duplicates",
+        data={
+            "content_b64": content_b64,
+            "glpi_type": "ordinateur",
+            "filename": "glpi.csv",
+            "corrected_bien_id_0": "20260001",
+            "corrected_bien_id_1": "   "
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert "imported=1" in response.headers["location"]
+    assert "added=1" in response.headers["location"]
+
+
+def test_confirm_duplicates_requires_admin_role(client, manager_user):
+
+    client.post(
+        "/login",
+        data={
+            "username": "gestionnaire",
+            "password": "Gestionnaire123!",
+            "next": "/dashboard"
+        }
+    )
+
+    response = client.post(
+        "/glpi-locations/confirm-duplicates",
+        data={
+            "content_b64": "",
+            "glpi_type": "ordinateur",
+            "filename": "glpi.csv"
+        }
+    )
+
+    assert response.status_code == 403
 
 
 def test_upload_rejects_invalid_glpi_type(client, admin_user):

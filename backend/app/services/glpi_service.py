@@ -71,14 +71,14 @@ class GlpiImportService:
     """
 
     @staticmethod
-    def parse(content: bytes):
+    def parse_allow_duplicates(content: bytes):
         """
-        Décode et parse le CSV. Retourne une liste de (bien_id,
-        numero_piece, lieu, statut, utilisateur, numero_serie). Lève
-        DuplicateBienIdError si le fichier contient plusieurs fois le
-        même Bien ID (cohérent avec l'import inventaire : on force un
-        fichier propre plutôt que de choisir silencieusement une
-        occurrence).
+        Décode et parse le CSV. Retourne la liste complète de (bien_id,
+        numero_piece, lieu, statut, utilisateur, numero_serie), une
+        ligne par ligne du fichier (bien_id non vide), y compris les
+        éventuels doublons de Bien ID : ne lève jamais
+        DuplicateBienIdError, pour permettre leur correction en ligne
+        avant import (voir find_duplicate_indices).
         """
 
         try:
@@ -100,8 +100,6 @@ class GlpiImportService:
             raise MissingColumnsError(missing_columns)
 
         rows = []
-        seen_ids = set()
-        duplicated_ids = []
 
         for row in reader:
 
@@ -117,18 +115,77 @@ class GlpiImportService:
             if not bien_id:
                 continue
 
-            if bien_id in seen_ids:
-                duplicated_ids.append(bien_id)
-                continue
-
-            seen_ids.add(bien_id)
-
             rows.append(
                 (bien_id, numero_piece, lieu, statut, utilisateur, numero_serie)
             )
 
-        if duplicated_ids:
-            raise DuplicateBienIdError(duplicated_ids)
+        return rows
+
+    @staticmethod
+    def find_duplicate_indices(rows):
+        """
+        Retourne un dict {bien_id: [indices]} pour chaque Bien ID
+        apparaissant plusieurs fois dans rows (indices dans la liste
+        rows de toutes ses occurrences, pas seulement la 2e et plus).
+        """
+
+        indices_by_bien_id = {}
+
+        for index, row in enumerate(rows):
+            indices_by_bien_id.setdefault(row[0], []).append(index)
+
+        return {
+            bien_id: indices
+            for bien_id, indices in indices_by_bien_id.items()
+            if len(indices) > 1
+        }
+
+    @staticmethod
+    def serialize_rows(rows) -> bytes:
+        """
+        Sérialise une liste de (bien_id, numero_piece, lieu, statut,
+        utilisateur, numero_serie) en CSV (';', avec en-tête), pour
+        pouvoir la redécoder plus tard via parse_allow_duplicates.
+        Utilisé pour faire transiter l'état courant d'une correction de
+        doublons entre deux requêtes (champ caché du formulaire), sans
+        stockage côté serveur.
+        """
+
+        buffer = StringIO()
+
+        writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+        writer.writerow([
+            BIEN_ID_COLUMN,
+            NUMERO_PIECE_COLUMN,
+            LIEU_COLUMN,
+            STATUT_COLUMN,
+            UTILISATEUR_COLUMN,
+            NUMERO_SERIE_COLUMN
+        ])
+
+        for row in rows:
+            writer.writerow(list(row))
+
+        return buffer.getvalue().encode("utf-8")
+
+    @staticmethod
+    def parse(content: bytes):
+        """
+        Décode et parse le CSV. Retourne une liste de (bien_id,
+        numero_piece, lieu, statut, utilisateur, numero_serie). Lève
+        DuplicateBienIdError si le fichier contient plusieurs fois le
+        même Bien ID (cohérent avec l'import inventaire : on force un
+        fichier propre plutôt que de choisir silencieusement une
+        occurrence).
+        """
+
+        rows = GlpiImportService.parse_allow_duplicates(content)
+
+        duplicates = GlpiImportService.find_duplicate_indices(rows)
+
+        if duplicates:
+            raise DuplicateBienIdError(list(duplicates.keys()))
 
         return rows
 

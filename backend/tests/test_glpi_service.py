@@ -162,3 +162,73 @@ def test_parse_raises_on_invalid_encoding():
 
     with pytest.raises(InvalidEncodingError):
         GlpiImportService.parse(content)
+
+
+def test_parse_allow_duplicates_keeps_every_occurrence():
+
+    content = (
+        HEADER
+        + _row("20260001", "01100021")
+        + _row("20260001", "01100022")
+        + _row("20260002", "01100023")
+    ).encode("utf-8")
+
+    rows = GlpiImportService.parse_allow_duplicates(content)
+
+    assert len(rows) == 3
+    assert [row[0] for row in rows] == ["20260001", "20260001", "20260002"]
+
+
+def test_parse_allow_duplicates_raises_on_missing_columns():
+
+    content = ('"Nom";"Entité"\n"PC-01";"Entité1"\n').encode("utf-8")
+
+    with pytest.raises(MissingColumnsError):
+        GlpiImportService.parse_allow_duplicates(content)
+
+
+def test_parse_allow_duplicates_raises_on_invalid_encoding():
+
+    content = b"\xff\xfe\x00invalid"
+
+    with pytest.raises(InvalidEncodingError):
+        GlpiImportService.parse_allow_duplicates(content)
+
+
+def test_find_duplicate_indices_returns_all_occurrences():
+
+    rows = [
+        ("20260001", "", "", "", "", ""),
+        ("20260002", "", "", "", "", ""),
+        ("20260001", "", "", "", "", ""),
+        ("20260001", "", "", "", "", ""),
+    ]
+
+    assert GlpiImportService.find_duplicate_indices(rows) == {
+        "20260001": [0, 2, 3]
+    }
+
+
+def test_find_duplicate_indices_returns_empty_dict_without_duplicates():
+
+    rows = [
+        ("20260001", "", "", "", "", ""),
+        ("20260002", "", "", "", "", "")
+    ]
+
+    assert GlpiImportService.find_duplicate_indices(rows) == {}
+
+
+def test_serialize_rows_round_trips_through_parse_allow_duplicates():
+
+    rows = [
+        ("20260001", "01100021", "Lieu A", "En service", "Jean", "SN1"),
+        (
+            "20260001", "01100022", "Lieu B;avec point-virgule",
+            'Statut "cité"', "", "SN2"
+        )
+    ]
+
+    content = GlpiImportService.serialize_rows(rows)
+
+    assert GlpiImportService.parse_allow_duplicates(content) == rows

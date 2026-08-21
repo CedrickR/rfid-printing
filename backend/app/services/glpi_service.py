@@ -24,6 +24,7 @@ REQUIRED_COLUMNS = [BIEN_ID_COLUMN, NUMERO_PIECE_COLUMN]
 LIEU_COLUMN = "Lieu"
 STATUT_COLUMN = "Statut"
 UTILISATEUR_COLUMN = "Utilisateur"
+NUMERO_SERIE_COLUMN = "Numéro de série"
 
 # Le numéro de la pièce est toujours sur 8 caractères dans l'inventaire
 # (ex. "00600001") ; GLPI l'exporte parfois sans les zéros non
@@ -63,21 +64,21 @@ class GlpiImportService:
     Import des exports GLPI (';', avec en-tête). Colonnes conservées :
     "Numéro d'inventaire" (Bien ID) et "Numéro de la pièce" (pour
     comparaison avec le numéro local déjà connu dans l'inventaire), et
-    "Lieu"/"Statut"/"Utilisateur" (informations complémentaires
-    affichées dans le tableau des écarts et, pour "Utilisateur", dans
-    la colonne Utilisateur de l'Inventaire, sans effet sur la
-    comparaison).
+    "Lieu"/"Statut"/"Utilisateur"/"Numéro de série" (informations
+    complémentaires affichées dans le tableau des écarts et, pour
+    "Utilisateur"/"Numéro de série", dans les colonnes correspondantes
+    de l'Inventaire, sans effet sur la comparaison).
     """
 
     @staticmethod
-    def parse(content: bytes):
+    def parse_allow_duplicates(content: bytes):
         """
-        Décode et parse le CSV. Retourne une liste de (bien_id,
-        numero_piece, lieu, statut, utilisateur). Lève
-        DuplicateBienIdError si le fichier contient plusieurs fois le
-        même Bien ID (cohérent avec l'import inventaire : on force un
-        fichier propre plutôt que de choisir silencieusement une
-        occurrence).
+        Décode et parse le CSV. Retourne la liste complète de (bien_id,
+        numero_piece, lieu, statut, utilisateur, numero_serie), une
+        ligne par ligne du fichier (bien_id non vide), y compris les
+        éventuels doublons de Bien ID : ne lève jamais
+        DuplicateBienIdError, pour permettre leur correction en ligne
+        avant import (voir find_duplicate_indices).
         """
 
         try:
@@ -99,8 +100,6 @@ class GlpiImportService:
             raise MissingColumnsError(missing_columns)
 
         rows = []
-        seen_ids = set()
-        duplicated_ids = []
 
         for row in reader:
 
@@ -111,20 +110,82 @@ class GlpiImportService:
             lieu = (row.get(LIEU_COLUMN) or "").strip()
             statut = (row.get(STATUT_COLUMN) or "").strip()
             utilisateur = (row.get(UTILISATEUR_COLUMN) or "").strip()
+            numero_serie = (row.get(NUMERO_SERIE_COLUMN) or "").strip()
 
             if not bien_id:
                 continue
 
-            if bien_id in seen_ids:
-                duplicated_ids.append(bien_id)
-                continue
+            rows.append(
+                (bien_id, numero_piece, lieu, statut, utilisateur, numero_serie)
+            )
 
-            seen_ids.add(bien_id)
+        return rows
 
-            rows.append((bien_id, numero_piece, lieu, statut, utilisateur))
+    @staticmethod
+    def find_duplicate_indices(rows):
+        """
+        Retourne un dict {bien_id: [indices]} pour chaque Bien ID
+        apparaissant plusieurs fois dans rows (indices dans la liste
+        rows de toutes ses occurrences, pas seulement la 2e et plus).
+        """
 
-        if duplicated_ids:
-            raise DuplicateBienIdError(duplicated_ids)
+        indices_by_bien_id = {}
+
+        for index, row in enumerate(rows):
+            indices_by_bien_id.setdefault(row[0], []).append(index)
+
+        return {
+            bien_id: indices
+            for bien_id, indices in indices_by_bien_id.items()
+            if len(indices) > 1
+        }
+
+    @staticmethod
+    def serialize_rows(rows) -> bytes:
+        """
+        Sérialise une liste de (bien_id, numero_piece, lieu, statut,
+        utilisateur, numero_serie) en CSV (';', avec en-tête), pour
+        pouvoir la redécoder plus tard via parse_allow_duplicates.
+        Utilisé pour faire transiter l'état courant d'une correction de
+        doublons entre deux requêtes (champ caché du formulaire), sans
+        stockage côté serveur.
+        """
+
+        buffer = StringIO()
+
+        writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+        writer.writerow([
+            BIEN_ID_COLUMN,
+            NUMERO_PIECE_COLUMN,
+            LIEU_COLUMN,
+            STATUT_COLUMN,
+            UTILISATEUR_COLUMN,
+            NUMERO_SERIE_COLUMN
+        ])
+
+        for row in rows:
+            writer.writerow(list(row))
+
+        return buffer.getvalue().encode("utf-8")
+
+    @staticmethod
+    def parse(content: bytes):
+        """
+        Décode et parse le CSV. Retourne une liste de (bien_id,
+        numero_piece, lieu, statut, utilisateur, numero_serie). Lève
+        DuplicateBienIdError si le fichier contient plusieurs fois le
+        même Bien ID (cohérent avec l'import inventaire : on force un
+        fichier propre plutôt que de choisir silencieusement une
+        occurrence).
+        """
+
+        rows = GlpiImportService.parse_allow_duplicates(content)
+
+        duplicates = GlpiImportService.find_duplicate_indices(rows)
+
+        if duplicates:
+            raise DuplicateBienIdError(list(duplicates.keys()))
 
         return rows
 
@@ -153,7 +214,7 @@ class GlpiImportService:
         added_count = 0
         updated_count = 0
 
-        for bien_id, numero_piece, lieu, statut, utilisateur in rows:
+        for bien_id, numero_piece, lieu, statut, utilisateur, numero_serie in rows:
 
             existing = (
                 db.query(GlpiAsset)
@@ -167,6 +228,7 @@ class GlpiImportService:
                 existing.lieu = lieu
                 existing.statut = statut
                 existing.utilisateur = utilisateur
+                existing.numero_serie = numero_serie
                 existing.glpi_type = glpi_type
                 existing.import_id = glpi_import.id
                 existing.updated_at = datetime.now(UTC)
@@ -182,6 +244,7 @@ class GlpiImportService:
                         lieu=lieu,
                         statut=statut,
                         utilisateur=utilisateur,
+                        numero_serie=numero_serie,
                         glpi_type=glpi_type,
                         import_id=glpi_import.id,
                         updated_at=datetime.now(UTC)

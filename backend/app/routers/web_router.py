@@ -1,3 +1,4 @@
+import base64
 import csv
 import logging
 from datetime import UTC, datetime
@@ -1347,10 +1348,11 @@ def _bureau_by_codelieu(db: Session, codes):
     return result
 
 
-def _glpi_utilisateur_by_bien_id(db: Session, bien_ids):
+def _glpi_info_by_bien_id(db: Session, bien_ids):
     """
-    Pour chaque Bien ID demandé, l'utilisateur connu via le
-    rapprochement GLPI (colonne "Utilisateur" de l'Inventaire).
+    Pour chaque Bien ID demandé, l'utilisateur et le numéro de série
+    connus via le rapprochement GLPI (colonnes "Utilisateur" et
+    "Numéro de série" de l'Inventaire).
     """
 
     if not bien_ids:
@@ -1363,7 +1365,10 @@ def _glpi_utilisateur_by_bien_id(db: Session, bien_ids):
     )
 
     return {
-        glpi_asset.bien_id: glpi_asset.utilisateur or ""
+        glpi_asset.bien_id: {
+            "utilisateur": glpi_asset.utilisateur or "",
+            "numero_serie": glpi_asset.numero_serie or ""
+        }
         for glpi_asset in glpi_assets
     }
 
@@ -1458,7 +1463,7 @@ def assets(
 
     bien_ids = {asset.bien_id for asset in assets_list}
 
-    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+    glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
 
     destination_options = [
         destination.libelle
@@ -1483,7 +1488,7 @@ def assets(
             "destination_options": destination_options,
             "bureau_by_codelieu": bureau_by_codelieu,
             "bureau_options": _bureau_options(db),
-            "glpi_utilisateur_by_bien_id": glpi_utilisateur_by_bien_id,
+            "glpi_info_by_bien_id": glpi_info_by_bien_id,
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1597,7 +1602,7 @@ def export_assets_csv(
 
     bien_ids = {asset.bien_id for asset in assets_list}
 
-    glpi_utilisateur_by_bien_id = _glpi_utilisateur_by_bien_id(db, bien_ids)
+    glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
 
     buffer = StringIO()
 
@@ -1614,11 +1619,15 @@ def export_assets_csv(
             "Destination",
             "Bureau",
             "Utilisateur",
+            "Numéro de série",
             "Actif"
         ]
     )
 
     for asset in assets_list:
+
+        glpi_info = glpi_info_by_bien_id.get(asset.bien_id, {})
+
         writer.writerow(
             [
                 asset.bien_id,
@@ -1629,7 +1638,8 @@ def export_assets_csv(
                 asset.local_libelle or "",
                 asset.destination or "",
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
-                glpi_utilisateur_by_bien_id.get(asset.bien_id, "") or "",
+                glpi_info.get("utilisateur", ""),
+                glpi_info.get("numero_serie", ""),
                 "Actif" if asset.is_active else "Exclu"
             ]
         )
@@ -2562,19 +2572,58 @@ def _glpi_error_message(exc: Exception) -> str:
     if isinstance(exc, GlpiMissingColumnsError):
         return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
 
-    if isinstance(exc, GlpiDuplicateBienIdError):
-        shown = exc.duplicated_ids[:20]
-        suffix = (
-            f" (et {len(exc.duplicated_ids) - 20} de plus)"
-            if len(exc.duplicated_ids) > 20
-            else ""
-        )
-        return (
-            "Numéro d'inventaire en doublon dans le fichier : "
-            f"{', '.join(shown)}{suffix}"
-        )
-
     return "Fichier GLPI invalide."
+
+
+def _render_glpi_duplicates(
+    request: Request,
+    rows,
+    duplicates: dict,
+    glpi_type: str,
+    filename: str,
+    error: str = None,
+    status_code: int = 200
+):
+    """
+    Page de correction des doublons de Bien ID détectés dans un import
+    GLPI : un tableau éditable liste chaque ligne en doublon pour
+    permettre de corriger le Bien ID avant de finaliser l'import
+    (`POST /glpi-locations/confirm-duplicates`), sans avoir à
+    recharger le fichier. L'état courant de rows transite d'une
+    requête à l'autre via un champ caché (pas de stockage serveur).
+    """
+
+    duplicate_groups = [
+        {
+            "bien_id": bien_id,
+            "rows": [
+                {"index": index, "row": rows[index]}
+                for index in indices
+            ]
+        }
+        for bien_id, indices in sorted(duplicates.items())
+    ]
+
+    content_b64 = base64.b64encode(
+        GlpiImportService.serialize_rows(rows)
+    ).decode("ascii")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="glpi_duplicates.html",
+        context={
+            "duplicate_groups": duplicate_groups,
+            "duplicate_rows_count": sum(
+                len(group["rows"]) for group in duplicate_groups
+            ),
+            "content_b64": content_b64,
+            "glpi_type": glpi_type,
+            "filename": filename,
+            "glpi_types": GLPI_TYPES,
+            "error": error
+        },
+        status_code=status_code
+    )
 
 
 def _local_options(db: Session):
@@ -2959,11 +3008,20 @@ async def glpi_locations_upload(
     try:
         rows = GlpiImportService.parse(content)
 
-    except (
-        GlpiInvalidEncodingError,
-        GlpiMissingColumnsError,
-        GlpiDuplicateBienIdError
-    ) as e:
+    except GlpiDuplicateBienIdError:
+
+        rows = GlpiImportService.parse_allow_duplicates(content)
+        duplicates = GlpiImportService.find_duplicate_indices(rows)
+
+        return _render_glpi_duplicates(
+            request,
+            rows,
+            duplicates,
+            glpi_type,
+            file.filename
+        )
+
+    except (GlpiInvalidEncodingError, GlpiMissingColumnsError) as e:
 
         return _render_glpi_locations(
             request,
@@ -2977,6 +3035,103 @@ async def glpi_locations_upload(
         rows,
         glpi_type,
         file.filename,
+        current_user["sub"]
+    )
+
+    _auto_backup(db, "import_glpi", current_user["sub"])
+
+    return RedirectResponse(
+        url=(
+            "/glpi-locations?imported=1"
+            f"&added={glpi_import.added_count}"
+            f"&updated={glpi_import.updated_count}"
+        ),
+        status_code=303
+    )
+
+
+@router.post("/glpi-locations/confirm-duplicates")
+async def glpi_locations_confirm_duplicates(
+    request: Request,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Finalise un import GLPI après correction des doublons de Bien ID
+    sur la page de correction (`_render_glpi_duplicates`) : réapplique
+    les Bien ID corrigés aux lignes concernées, revérifie l'absence de
+    doublon puis importe, ou réaffiche le tableau des doublons
+    restants si la correction est incomplète.
+    """
+
+    require_admin(current_user)
+
+    form = await request.form()
+
+    glpi_type = form.get("glpi_type", "")
+    filename = form.get("filename", "")
+
+    try:
+        content = base64.b64decode(form.get("content_b64", ""))
+        rows = GlpiImportService.parse_allow_duplicates(content)
+
+    except Exception:
+
+        return _render_glpi_locations(
+            request,
+            db,
+            error="Fichier de correction invalide.",
+            status_code=400
+        )
+
+    corrected_rows = []
+
+    for index, row in enumerate(rows):
+
+        corrected_bien_id = form.get(f"corrected_bien_id_{index}")
+
+        if corrected_bien_id is not None:
+
+            bien_id = corrected_bien_id.strip()
+
+            if not bien_id:
+                continue
+
+            row = (bien_id,) + row[1:]
+
+        corrected_rows.append(row)
+
+    duplicates = GlpiImportService.find_duplicate_indices(corrected_rows)
+
+    if duplicates:
+
+        return _render_glpi_duplicates(
+            request,
+            corrected_rows,
+            duplicates,
+            glpi_type,
+            filename,
+            error=(
+                "Il reste des doublons de Bien ID : corrigez les "
+                "lignes ci-dessous avant de continuer."
+            ),
+            status_code=400
+        )
+
+    if glpi_type not in GLPI_TYPES:
+
+        return _render_glpi_locations(
+            request,
+            db,
+            error="Type GLPI invalide.",
+            status_code=400
+        )
+
+    glpi_import = GlpiImportService.commit(
+        db,
+        corrected_rows,
+        glpi_type,
+        filename,
         current_user["sub"]
     )
 

@@ -362,11 +362,11 @@ def test_export_csv_contains_header_and_all_matching_rows(
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
     )
     assert len(lines) == 4  # en-tête + 3 biens
-    assert "1001;PC actif;;;;;;;;Actif" in lines
-    assert "1002;Ecran sorti tot;;;;;;;;Exclu" in lines
+    assert "1001;PC actif;;;;;;;;;Actif" in lines
+    assert "1002;Ecran sorti tot;;;;;;;;;Exclu" in lines
 
 
 def test_export_csv_respects_search_filters(client, admin_user):
@@ -468,11 +468,11 @@ def test_export_csv_includes_destination_and_bureau(client, admin_user):
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
     )
     assert (
         "1001;PC actif;01100021;;;;Direction Info;"
-        "REZ DE CHAUSSEE - 021-A;;Actif" in lines
+        "REZ DE CHAUSSEE - 021-A;;;Actif" in lines
     )
 
 
@@ -866,12 +866,15 @@ GLPI_HEADER = (
 )
 
 
-def _upload_glpi(client, bien_id, utilisateur, glpi_type="ordinateur"):
+def _upload_glpi(
+    client, bien_id, utilisateur, numero_serie="SN123", glpi_type="ordinateur"
+):
 
     content = (
         GLPI_HEADER
         + f'"PC-01";"Entité";"En service";"Ordinateur";"Modèle";"SIEGE";'
-        f'"{utilisateur}";"usager";"{bien_id}";"";"SN123";"";"01100021"\n'
+        f'"{utilisateur}";"usager";"{bien_id}";"";"{numero_serie}";"";'
+        f'"01100021"\n'
     )
 
     return client.post(
@@ -918,6 +921,44 @@ def test_export_csv_includes_utilisateur(client, admin_user):
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
     )
-    assert "1001;PC actif;;;;;;;Jean Dupont;Actif" in lines
+    assert "1001;PC actif;;;;;;;Jean Dupont;SN123;Actif" in lines
+
+
+def test_assets_page_shows_numero_serie_from_glpi_import(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont", numero_serie="SN-ABC-42")
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Numéro de série" in response.text
+    assert "SN-ABC-42" in response.text
+
+
+def test_assets_page_shows_empty_numero_serie_without_glpi_match(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Numéro de série" in response.text
+
+
+def test_export_csv_includes_numero_serie(client, admin_user):
+
+    _login_and_seed(client)
+    _upload_glpi(client, "1001", "Jean Dupont", numero_serie="SN-ABC-42")
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert "1001;PC actif;;;;;;;Jean Dupont;SN-ABC-42;Actif" in lines

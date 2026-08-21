@@ -107,10 +107,10 @@ Organisé en deux onglets.
   - Filtre par **plage de Bien ID** (numérique, ex. de `20260001` à `20260020`).
   - Filtres par **immeuble**, **niveau**, **local** (listes déroulantes alimentées par les valeurs distinctes présentes en base).
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
-- Colonnes **Destination**, **Bureau** et **Utilisateur** :
+- Colonnes **Destination**, **Bureau**, **Utilisateur** et **Numéro de série** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Bureau** : liste déroulante par ligne (`POST /assets/{id}/bureau`), alimentée par les bureaux connus (import `/admin/destinations`, §2.12) — chaque option affiche `niveau - nom_piece (code_piece_service) - N poste(s)`, incluant le **nombre de poste prévu** du bureau. Choisir une valeur enregistre le **code pièce et service** correspondant dans le **numéro local** du bien (même colonne utilisée pour le rapprochement automatique affiché ensuite dans la colonne). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
-  - **Utilisateur** : affichage seul, calculé par rapprochement GLPI (§2.7) — colonne « Utilisateur » du dernier fichier GLPI importé pour le Bien ID du bien (jointure sur le Bien ID) ; vide si le bien n'a jamais été rapproché via un import GLPI.
+  - **Utilisateur** et **Numéro de série** : affichage seul, calculés par rapprochement GLPI (§2.7) — colonnes « Utilisateur » et « Numéro de série » du dernier fichier GLPI importé pour le Bien ID du bien (jointure sur le Bien ID) ; vides si le bien n'a jamais été rapproché via un import GLPI.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -125,7 +125,7 @@ Organisé en deux onglets.
     Les tailles de police sont calibrées pour tenir dans les 90 x 36 mm ; en cas de bureau très long, la ligne étage/bureau/code peut être tronquée (jamais le code-barres ni son numéro, prioritaires) — à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
-  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Utilisateur, Actif.
+  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Utilisateur, Numéro de série, Actif.
 - Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel », « Étiquettes (PDF) » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
 
 ### 2.5 Lots d'impression (`/jobs`)
@@ -164,8 +164,10 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
   | `Lieu` | Affichage uniquement (informatif) |
   | `Statut` | Affichage uniquement (informatif) |
   | `Utilisateur` | Affichage uniquement — alimente la colonne **Utilisateur** de l'Inventaire (§2.4) |
+  | `Numéro de série` | Affichage uniquement — alimente la colonne **Numéro de série** de l'Inventaire (§2.4) |
 
-  Toutes les autres colonnes du fichier sont ignorées ; `Lieu`/`Statut`/`Utilisateur` n'entrent pas dans la comparaison et restent vides s'ils sont absents du fichier. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon** : si le Bien ID existe déjà (import précédent, même ou autre type), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+  Toutes les autres colonnes du fichier sont ignorées ; `Lieu`/`Statut`/`Utilisateur`/`Numéro de série` n'entrent pas dans la comparaison et restent vides s'ils sont absents du fichier. Le numéro de la pièce fait toujours 8 caractères dans l'inventaire (ex. `00600001`) ; GLPI l'exporte parfois sans les zéros non significatifs (ex. `600001`) — il est donc **complété à gauche par des zéros** à l'import (`600001` → `00600001`, `1101043` → `01101043`). **Jamais de doublon en base** : si le Bien ID existe déjà (import précédent, même ou autre type), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée.
+- **Doublons de Bien ID dans le fichier importé** : si le fichier chargé contient plusieurs lignes avec le même Bien ID, l'import n'est pas rejeté silencieusement — une page de correction s'affiche à la place, avec un tableau éditable par groupe de Bien ID en doublon (Bien ID corrigé, Numéro de la pièce, Lieu, Statut, Utilisateur, Numéro de série de chaque ligne concernée). Corriger le Bien ID des lignes nécessaires puis valider (`POST /glpi-locations/confirm-duplicates`) termine l'import **sans avoir à recharger le fichier** ; si des doublons subsistent après correction (ou qu'une correction en crée un nouveau), le même tableau se réaffiche avec les doublons restants. Laisser un Bien ID corrigé vide ignore la ligne (comme une ligne sans Bien ID lors d'un import normal).
 - **Tableau des écarts** : liste les biens présents à la fois dans l'inventaire et dans un import GLPI dont le numéro local diffère du numéro de la pièce GLPI, avec Bien ID, désignation, numéro local actuel (survolé, une infobulle affiche la désignation du local), statut actif/exclu, **type GLPI** (Ordinateurs / Moniteurs / Périphériques / Logiciels / Imprimantes — le type de bien de l'import dont provient la ligne), lieu GLPI, numéro de la pièce GLPI et statut GLPI.
   - **Filtre Actif** : trois boutons dans l'en-tête de la colonne « Actif » — « Tous » (`?active_filter=tous`, défaut), « Actif » (`?active_filter=actif`, uniquement les biens actifs) et « Exclu » (`?active_filter=exclu`, uniquement les biens exclus).
   - **Filtre Type (GLPI)** : liste déroulante (« Tous les types » ou l'un des 5 types GLPI) dans le formulaire de filtre au-dessus du tableau (`?type=ordinateur|moniteur|peripherique|logiciel|imprimante`).
@@ -498,6 +500,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `GET` | `/rfid-scans/{id}/export` | Export horodaté du fichier de scan |
 | `GET` | `/glpi-locations` | Page de mise à jour des codes lieux (import GLPI + tableau des écarts) |
 | `POST` | `/glpi-locations` | Chargement d'un export GLPI (un des 5 types) |
+| `POST` | `/glpi-locations/confirm-duplicates` | Finalise l'import après correction des doublons de Bien ID (administrateur) |
 | `POST` | `/glpi-locations/export-csv` | Export CSV (Bien ID, numéro local) des corrections pour les lignes sélectionnées |
 | `POST` | `/glpi-locations/export-csv-complet` | Idem, avec en plus les colonnes immeuble/niveau/local du lieu retenu |
 | `POST` | `/glpi-locations/reset` | Vide les données GLPI importées (administrateur) |

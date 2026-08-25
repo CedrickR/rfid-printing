@@ -72,6 +72,7 @@ Organisé en deux onglets.
 - Compteurs : nombre d'imports, de biens actifs, de lots, d'entrées d'historique.
 - **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
+- **Graphique « Étiquettes imprimées et non imprimées par destination »** (barres horizontales empilées) : pour chaque destination (« Sans destination » incluse), la répartition des biens actifs entre étiquette imprimée et non imprimée — même définition de « imprimée » que le graphique précédent (lot **généré** au moins une fois).
 - Panneau **« Zone sensible »** (administrateur uniquement) : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés). Action irréversible, confirmation JavaScript obligatoire.
 
 **Onglet « Répartition par bureau »** :
@@ -106,12 +107,15 @@ Organisé en deux onglets.
   - Filtre « actifs uniquement ».
   - Filtre par **plage de Bien ID** (numérique, ex. de `20260001` à `20260020`).
   - Filtres par **immeuble**, **niveau**, **local** (listes déroulantes alimentées par les valeurs distinctes présentes en base).
+  - Filtre **« Étiquette imprimée »** (`?printed=oui|non`) : Tous / Imprimées / Non imprimées — un bien est considéré imprimé s'il a été inclus dans au moins un lot d'impression **généré** (`PrintJob.status == "GENERATED"`).
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
-- Colonnes **Destination**, **Bureau**, **Utilisateur** et **Numéro de série** :
+- Colonnes **Destination**, **Bureau**, **Utilisateur**, **Numéro de série**, **Étiquette imprimée** et **Lot d'impression** :
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Bureau** : liste déroulante par ligne (`POST /assets/{id}/bureau`), alimentée par les bureaux connus (import `/admin/destinations`, §2.12) — chaque option affiche `niveau - nom_piece (code_piece_service) - N poste(s)`, incluant le **nombre de poste prévu** du bureau. Choisir une valeur enregistre le **code pièce et service** correspondant dans le **numéro local** du bien (même colonne utilisée pour le rapprochement automatique affiché ensuite dans la colonne). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Utilisateur** : liste déroulante par ligne (`POST /assets/{id}/utilisateur`), alimentée par tous les utilisateurs distincts connus via les imports GLPI (§2.7). Tant qu'aucune valeur n'est choisie, la colonne affiche l'utilisateur calculé par rapprochement GLPI (jointure sur le Bien ID) ; choisir une valeur enregistre une **correction manuelle** qui prend le dessus sur ce calcul automatique (y compris lors d'imports GLPI ultérieurs). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Numéro de série** : affichage seul, calculé par rapprochement GLPI (§2.7) — colonne « Numéro de série » du dernier fichier GLPI importé pour le Bien ID du bien (jointure sur le Bien ID) ; vide si le bien n'a jamais été rapproché via un import GLPI.
+  - **Étiquette imprimée** : affichage seul (badge Oui/Non) — Oui si le bien a été inclus dans au moins un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, issu de la génération du fichier CMD d'un lot, §2.5).
+  - **Lot d'impression** : affichage seul — numéro (avec lien vers `/jobs/{id}`) du lot d'impression **généré** le plus récent ayant inclus le bien ; vide si le bien n'a jamais été imprimé.
 - **Sélection multiple** de biens (case à cocher par ligne + case « tout sélectionner » sur la page courante), **persistante entre les pages** (stockée côté navigateur, `localStorage`) et entre les recherches.
 - Affichage, à droite du titre, de la **date/heure et de l'utilisateur de la dernière importation**.
 - Actions sur la sélection :
@@ -126,7 +130,7 @@ Organisé en deux onglets.
     Les tailles de police sont calibrées pour tenir dans les 90 x 36 mm ; en cas de bureau très long, la ligne étage/bureau/code peut être tronquée (jamais le code-barres ni son numéro, prioritaires) — à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
-  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Utilisateur, Numéro de série, Actif.
+  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée, y compris le filtre « Étiquette imprimée »). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Utilisateur, Numéro de série, Actif, Étiquette imprimée, Lot d'impression (numéro du lot, vide si jamais imprimé).
 - Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel », « Étiquettes (PDF) » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
 
 ### 2.5 Lots d'impression (`/jobs`)

@@ -195,6 +195,37 @@
 
 </div>
 
+<div class="row">
+
+    <div class="col-12 mb-4">
+        <div class="card shadow h-100">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Étiquettes imprimées et non imprimées par destination
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                {% if printed_by_destination.labels %}
+                <canvas
+                    id="printedByDestinationChart"
+                    height="{{ 60 + printed_by_destination.labels | length * 30 }}"
+                ></canvas>
+                {% else %}
+                <p class="text-muted mb-0">
+                    Aucun bien actif.
+                </p>
+                {% endif %}
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
 {% if role == "administrateur" %}
 <div class="card shadow border-left-danger mb-4">
 
@@ -419,6 +450,52 @@ if (window.Chart) {
                 },
                 plugins: {
                     legend: { display: false }
+                }
+            }
+        });
+    }
+
+    var printedByDestinationCanvas = document.getElementById(
+        "printedByDestinationChart"
+    );
+
+    if (printedByDestinationCanvas) {
+
+        var printedByDestinationLabels = (
+            {{ printed_by_destination.labels | tojson }}
+        );
+
+        new Chart(printedByDestinationCanvas, {
+            type: "bar",
+            data: {
+                labels: printedByDestinationLabels,
+                datasets: [
+                    {
+                        label: "Imprimées",
+                        data: {{ printed_by_destination.printed | tojson }},
+                        backgroundColor: colorAt(1)
+                    },
+                    {
+                        label: "Non imprimées",
+                        data: {{ printed_by_destination.not_printed | tojson }},
+                        backgroundColor: colorAt(4)
+                    }
+                ]
+            },
+            options: {
+                indexAxis: "y",
+                scales: {
+                    x: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    },
+                    y: {
+                        stacked: true
+                    }
+                },
+                plugins: {
+                    legend: { position: "top" }
                 }
             }
         });

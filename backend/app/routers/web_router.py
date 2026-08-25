@@ -278,6 +278,8 @@ def dashboard(
 
     bureau_repartition = _compute_bureau_repartition(db)
 
+    printed_by_destination = _compute_printed_by_destination(db)
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -291,9 +293,60 @@ def dashboard(
             "labels_generated_count": labels_generated_count,
             "labels_not_generated_count": labels_not_generated_count,
             "bureau_repartition": bureau_repartition,
+            "printed_by_destination": printed_by_destination,
             "role": current_user["role"]
         }
     )
+
+
+def _compute_printed_by_destination(db: Session):
+    """
+    Pour chaque destination, le nombre de biens actifs avec étiquette
+    imprimée (lot généré, statut "GENERATED") et sans étiquette
+    imprimée, pour l'indicateur du tableau de bord. Trié par nombre
+    total de biens décroissant, comme la répartition par destination.
+    """
+
+    printed_asset_ids = {
+        row[0]
+        for row in (
+            db.query(PrintJobLine.asset_id)
+            .join(PrintJob, PrintJob.id == PrintJobLine.job_id)
+            .filter(PrintJob.status == "GENERATED")
+            .distinct()
+            .all()
+        )
+    }
+
+    rows = (
+        db.query(Asset.destination, Asset.id)
+        .filter(Asset.is_active == True)
+        .all()
+    )
+
+    counts = {}
+
+    for destination, asset_id in rows:
+
+        label = destination or "Sans destination"
+        entry = counts.setdefault(label, {"printed": 0, "not_printed": 0})
+
+        if asset_id in printed_asset_ids:
+            entry["printed"] += 1
+        else:
+            entry["not_printed"] += 1
+
+    items = sorted(
+        counts.items(),
+        key=lambda item: item[1]["printed"] + item[1]["not_printed"],
+        reverse=True
+    )
+
+    return {
+        "labels": [label for label, _ in items],
+        "printed": [entry["printed"] for _, entry in items],
+        "not_printed": [entry["not_printed"] for _, entry in items]
+    }
 
 
 def _compute_bureau_repartition(db: Session):
@@ -1254,7 +1307,8 @@ def _filtered_assets_query(
     bien_id_to: str,
     immeuble: str,
     niveau: str,
-    local: str
+    local: str,
+    printed: str = ""
 ):
 
     query = db.query(Asset)
@@ -1313,6 +1367,20 @@ def _filtered_assets_query(
         query = query.filter(
             Asset.local_libelle == local
         )
+
+    if printed in ("oui", "non"):
+
+        printed_asset_ids = (
+            db.query(PrintJobLine.asset_id)
+            .join(PrintJob, PrintJob.id == PrintJobLine.job_id)
+            .filter(PrintJob.status == "GENERATED")
+            .distinct()
+        )
+
+        if printed == "oui":
+            query = query.filter(Asset.id.in_(printed_asset_ids))
+        else:
+            query = query.filter(~Asset.id.in_(printed_asset_ids))
 
     return query
 
@@ -1392,6 +1460,40 @@ def _utilisateur_options(db: Session):
     return [row[0] for row in rows]
 
 
+def _latest_printed_job_by_asset_id(db: Session, asset_ids):
+    """
+    Pour chaque bien demandé, le lot d'impression le plus récent ayant
+    généré son étiquette (statut "GENERATED"), pour la colonne "Lot
+    d'impression" et le filtre "Étiquette imprimée" de l'Inventaire.
+    Un bien absent du dict n'a jamais eu d'étiquette générée.
+    """
+
+    if not asset_ids:
+        return {}
+
+    rows = (
+        db.query(PrintJobLine.asset_id, PrintJob.id, PrintJob.generated_at)
+        .join(PrintJob, PrintJob.id == PrintJobLine.job_id)
+        .filter(PrintJob.status == "GENERATED")
+        .filter(PrintJobLine.asset_id.in_(asset_ids))
+        .all()
+    )
+
+    latest_by_asset_id = {}
+
+    for asset_id, job_id, generated_at in rows:
+
+        current = latest_by_asset_id.get(asset_id)
+
+        if current is None or generated_at > current[1]:
+            latest_by_asset_id[asset_id] = (job_id, generated_at)
+
+    return {
+        asset_id: job_id
+        for asset_id, (job_id, _) in latest_by_asset_id.items()
+    }
+
+
 def _bureau_options(db: Session):
     """
     Liste de tous les bureaux connus (code_piece_service + libellé
@@ -1440,6 +1542,7 @@ def assets(
     immeuble: str = Query(default=""),
     niveau: str = Query(default=""),
     local: str = Query(default=""),
+    printed: str = Query(default=""),
     page: int = 1,
     page_size: int = Query(default=10),
     current_user=Depends(get_current_user_web),
@@ -1450,7 +1553,8 @@ def assets(
         page_size = 10
 
     query = _filtered_assets_query(
-        db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local
+        db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local,
+        printed
     )
 
     total = query.count()
@@ -1484,6 +1588,12 @@ def assets(
 
     glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
 
+    asset_ids = {asset.id for asset in assets_list}
+
+    latest_printed_job_by_asset_id = _latest_printed_job_by_asset_id(
+        db, asset_ids
+    )
+
     destination_options = [
         destination.libelle
         for destination in DestinationService.list_destinations(db)
@@ -1501,6 +1611,7 @@ def assets(
             "immeuble": immeuble,
             "niveau": niveau,
             "local": local,
+            "printed": printed,
             "immeuble_options": _distinct_values(db, Asset.immeuble_libelle),
             "niveau_options": _distinct_values(db, Asset.niveau_libelle),
             "local_options": _distinct_values(db, Asset.local_libelle),
@@ -1509,6 +1620,7 @@ def assets(
             "bureau_options": _bureau_options(db),
             "glpi_info_by_bien_id": glpi_info_by_bien_id,
             "utilisateur_options": _utilisateur_options(db),
+            "latest_printed_job_by_asset_id": latest_printed_job_by_asset_id,
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -1634,6 +1746,7 @@ def export_assets_csv(
     immeuble: str = Query(default=""),
     niveau: str = Query(default=""),
     local: str = Query(default=""),
+    printed: str = Query(default=""),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
@@ -1644,7 +1757,8 @@ def export_assets_csv(
 
     assets_list = (
         _filtered_assets_query(
-            db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local
+            db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau,
+            local, printed
         )
         .all()
     )
@@ -1660,6 +1774,12 @@ def export_assets_csv(
     bien_ids = {asset.bien_id for asset in assets_list}
 
     glpi_info_by_bien_id = _glpi_info_by_bien_id(db, bien_ids)
+
+    asset_ids = {asset.id for asset in assets_list}
+
+    latest_printed_job_by_asset_id = _latest_printed_job_by_asset_id(
+        db, asset_ids
+    )
 
     buffer = StringIO()
 
@@ -1677,13 +1797,16 @@ def export_assets_csv(
             "Bureau",
             "Utilisateur",
             "Numéro de série",
-            "Actif"
+            "Actif",
+            "Étiquette imprimée",
+            "Lot d'impression"
         ]
     )
 
     for asset in assets_list:
 
         glpi_info = glpi_info_by_bien_id.get(asset.bien_id, {})
+        printed_job_id = latest_printed_job_by_asset_id.get(asset.id)
 
         writer.writerow(
             [
@@ -1697,7 +1820,9 @@ def export_assets_csv(
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
                 asset.utilisateur or glpi_info.get("utilisateur", ""),
                 glpi_info.get("numero_serie", ""),
-                "Actif" if asset.is_active else "Exclu"
+                "Actif" if asset.is_active else "Exclu",
+                "Oui" if printed_job_id else "Non",
+                printed_job_id or ""
             ]
         )
 

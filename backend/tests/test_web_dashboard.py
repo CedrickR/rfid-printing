@@ -100,9 +100,10 @@ def test_dashboard_shows_no_data_message_when_no_active_assets(
     response = client.get("/dashboard")
 
     assert response.status_code == 200
-    assert response.text.count("Aucun bien actif.") == 2
+    assert response.text.count("Aucun bien actif.") == 3
     assert 'id="destinationChart"' not in response.text
     assert 'id="labelsGeneratedChart"' not in response.text
+    assert 'id="printedByDestinationChart"' not in response.text
 
 
 def test_dashboard_destination_chart_reflects_assignments(
@@ -244,6 +245,63 @@ def test_dashboard_labels_generated_chart_counts_generated_jobs(
     assert match is not None
     assert match.group(1) == "1"
     assert match.group(2) == "1"
+
+
+def test_dashboard_printed_by_destination_chart_counts_printed_and_not(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie\n"
+                "1001;PC Un;\n"
+                "1002;PC Deux;\n"
+                "1003;PC Trois;\n",
+                "text/csv"
+            )
+        }
+    )
+
+    client.post("/admin/destinations", data={"libelle": "Direction Info"})
+
+    ids = _asset_ids(client)
+
+    _set_destination(client, ids["1001"], "Direction Info")
+    _set_destination(client, ids["1002"], "Direction Info")
+    _set_destination(client, ids["1003"], "Direction Info")
+
+    job_location = client.post(
+        "/jobs/create",
+        data={"asset_ids": [str(ids["1001"])]},
+        follow_redirects=False
+    ).headers["location"]
+
+    job_id = job_location.rstrip("/").split("/")[-1]
+
+    client.post(f"/jobs/{job_id}/generate")
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert 'id="printedByDestinationChart"' in response.text
+    assert '"Direction Info"' in response.text
+
+    printed_match = re.search(
+        r'"Imprimées"[^}]*data:\s*\(?\s*\[\s*(\d+)\s*\]', response.text, re.S
+    )
+    not_printed_match = re.search(
+        r'"Non imprimées"[^}]*data:\s*\(?\s*\[\s*(\d+)\s*\]', response.text, re.S
+    )
+
+    assert printed_match is not None
+    assert not_printed_match is not None
+    assert printed_match.group(1) == "1"
+    assert not_printed_match.group(1) == "2"
 
 
 def test_dashboard_bureau_repartition_shows_no_bureau_message(

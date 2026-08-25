@@ -34,7 +34,8 @@
     ~ ("&bien_id_to=" ~ bien_id_to if bien_id_to else "")
     ~ ("&immeuble=" ~ (immeuble | urlencode) if immeuble else "")
     ~ ("&niveau=" ~ (niveau | urlencode) if niveau else "")
-    ~ ("&local=" ~ (local | urlencode) if local else "") %}
+    ~ ("&local=" ~ (local | urlencode) if local else "")
+    ~ ("&printed=" ~ printed if printed else "") %}
 
 {% set current_qs = "/assets?" ~ filters_qs ~ "&page=" ~ page ~ "&page_size=" ~ page_size %}
 
@@ -155,6 +156,24 @@
                 {% endfor %}
             </select>
 
+            <label class="mr-2 mb-2" for="printed">
+                Étiquette imprimée
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="max-width: 180px;"
+                id="printed"
+                name="printed"
+            >
+                <option value="">Tous</option>
+                <option value="oui" {% if printed == "oui" %}selected{% endif %}>
+                    Imprimées
+                </option>
+                <option value="non" {% if printed == "non" %}selected{% endif %}>
+                    Non imprimées
+                </option>
+            </select>
+
             <button type="submit" class="btn btn-primary mb-2">
                 <i class="fas fa-search fa-sm"></i> Rechercher
             </button>
@@ -251,6 +270,8 @@
                             <th>Utilisateur</th>
                             <th>Numéro de série</th>
                             <th>Actif</th>
+                            <th>Étiquette imprimée</th>
+                            <th>Lot d'impression</th>
                         </tr>
 
                     </thead>
@@ -373,6 +394,33 @@
 
                             </td>
 
+                            <td>
+
+                                {% if latest_printed_job_by_asset_id.get(asset.id) %}
+
+                                    <span class="badge badge-success">
+                                        Oui
+                                    </span>
+
+                                {% else %}
+
+                                    <span class="badge badge-secondary">
+                                        Non
+                                    </span>
+
+                                {% endif %}
+
+                            </td>
+
+                            <td>
+                                {% set printed_job_id = latest_printed_job_by_asset_id.get(asset.id) %}
+                                {% if printed_job_id %}
+                                <a href="/jobs/{{ printed_job_id }}">
+                                    Lot #{{ printed_job_id }}
+                                </a>
+                                {% endif %}
+                            </td>
+
                         </tr>
 
                         {% endfor %}
@@ -433,6 +481,7 @@
     <input type="hidden" name="immeuble" value="{{ immeuble }}">
     <input type="hidden" name="niveau" value="{{ niveau }}">
     <input type="hidden" name="local" value="{{ local }}">
+    <input type="hidden" name="printed" value="{{ printed }}">
 
     <label class="mr-2" for="page_size">
         Lignes par page

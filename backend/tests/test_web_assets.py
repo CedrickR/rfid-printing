@@ -365,11 +365,12 @@ def test_export_csv_contains_header_and_all_matching_rows(
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif;"
+        "Étiquette imprimée;Lot d'impression"
     )
     assert len(lines) == 4  # en-tête + 3 biens
-    assert "1001;PC actif;;;;;;;;;Actif" in lines
-    assert "1002;Ecran sorti tot;;;;;;;;;Exclu" in lines
+    assert "1001;PC actif;;;;;;;;;Actif;Non;" in lines
+    assert "1002;Ecran sorti tot;;;;;;;;;Exclu;Non;" in lines
 
 
 def test_export_csv_respects_search_filters(client, admin_user):
@@ -471,11 +472,12 @@ def test_export_csv_includes_destination_and_bureau(client, admin_user):
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif;"
+        "Étiquette imprimée;Lot d'impression"
     )
     assert (
         "1001;PC actif;01100021;;;;Direction Info;"
-        "REZ DE CHAUSSEE - 021-A;;;Actif" in lines
+        "REZ DE CHAUSSEE - 021-A;;;Actif;Non;" in lines
     )
 
 
@@ -924,9 +926,10 @@ def test_export_csv_includes_utilisateur(client, admin_user):
 
     assert lines[0] == (
         "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
-        "Destination;Bureau;Utilisateur;Numéro de série;Actif"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif;"
+        "Étiquette imprimée;Lot d'impression"
     )
-    assert "1001;PC actif;;;;;;;Jean Dupont;SN123;Actif" in lines
+    assert "1001;PC actif;;;;;;;Jean Dupont;SN123;Actif;Non;" in lines
 
 
 def test_assets_page_shows_numero_serie_from_glpi_import(client, admin_user):
@@ -964,7 +967,7 @@ def test_export_csv_includes_numero_serie(client, admin_user):
 
     lines = response.text.strip("\n").split("\n")
 
-    assert "1001;PC actif;;;;;;;Jean Dupont;SN-ABC-42;Actif" in lines
+    assert "1001;PC actif;;;;;;;Jean Dupont;SN-ABC-42;Actif;Non;" in lines
 
 
 def test_assets_page_shows_utilisateur_dropdown_with_known_names(
@@ -1037,7 +1040,7 @@ def test_update_asset_utilisateur_overrides_glpi_value(client, admin_user):
 
     csv_export = client.get("/assets/export-csv")
 
-    assert "1001;PC actif;;;;;;;Marie Curie;SN123;Actif" in (
+    assert "1001;PC actif;;;;;;;Marie Curie;SN123;Actif;Non;" in (
         csv_export.text.strip("\n").split("\n")
     )
 
@@ -1101,3 +1104,119 @@ def test_update_asset_utilisateur_ignores_unsafe_next(client, admin_user):
 
     assert response.status_code == 303
     assert response.headers["location"] == "/assets"
+
+
+def _asset_ids_by_bien_id(client):
+
+    token = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "Admin123!"}
+    ).json()["access_token"]
+
+    assets = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    ).json()
+
+    return {asset["bien_id"]: asset["id"] for asset in assets}
+
+
+def _create_and_generate_job(client, asset_id):
+
+    job_location = client.post(
+        "/jobs/create",
+        data={"asset_ids": [str(asset_id)]},
+        follow_redirects=False
+    ).headers["location"]
+
+    job_id = job_location.rstrip("/").split("/")[-1]
+
+    client.post(f"/jobs/{job_id}/generate")
+
+    return job_id
+
+
+def test_assets_page_shows_printed_label_columns(client, admin_user):
+
+    _login_and_seed(client)
+
+    ids = _asset_ids_by_bien_id(client)
+    job_id = _create_and_generate_job(client, ids["1001"])
+
+    response = client.get("/assets")
+
+    assert response.status_code == 200
+    assert "Étiquette imprimée" in response.text
+    assert "Lot d'impression" in response.text
+    assert f'href="/jobs/{job_id}"' in response.text
+    assert f"Lot #{job_id}" in response.text
+
+
+def test_assets_filter_printed_oui_shows_only_printed_assets(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    ids = _asset_ids_by_bien_id(client)
+    _create_and_generate_job(client, ids["1001"])
+
+    response = client.get("/assets", params={"printed": "oui"})
+
+    assert response.status_code == 200
+    assert "PC actif" in response.text
+    assert "Ecran sorti tot" not in response.text
+    assert "Imprimante sortie tard" not in response.text
+
+
+def test_assets_filter_printed_non_shows_only_non_printed_assets(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    ids = _asset_ids_by_bien_id(client)
+    _create_and_generate_job(client, ids["1001"])
+
+    response = client.get("/assets", params={"printed": "non"})
+
+    assert response.status_code == 200
+    assert "PC actif" not in response.text
+    assert "Ecran sorti tot" in response.text
+    assert "Imprimante sortie tard" in response.text
+
+
+def test_export_csv_includes_printed_label_columns(client, admin_user):
+
+    _login_and_seed(client)
+
+    ids = _asset_ids_by_bien_id(client)
+    job_id = _create_and_generate_job(client, ids["1001"])
+
+    response = client.get("/assets/export-csv")
+
+    assert response.status_code == 200
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Bien ID;Désignation;Numéro local;Immeuble;Niveau;Local;"
+        "Destination;Bureau;Utilisateur;Numéro de série;Actif;"
+        "Étiquette imprimée;Lot d'impression"
+    )
+    assert f"1001;PC actif;;;;;;;;;Actif;Oui;{job_id}" in lines
+    assert "1002;Ecran sorti tot;;;;;;;;;Exclu;Non;" in lines
+
+
+def test_export_csv_respects_printed_filter(client, admin_user):
+
+    _login_and_seed(client)
+
+    ids = _asset_ids_by_bien_id(client)
+    _create_and_generate_job(client, ids["1001"])
+
+    response = client.get("/assets/export-csv", params={"printed": "oui"})
+
+    assert response.status_code == 200
+    assert "PC actif" in response.text
+    assert "Ecran sorti tot" not in response.text

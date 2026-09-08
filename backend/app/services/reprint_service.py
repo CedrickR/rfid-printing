@@ -19,7 +19,7 @@ class ReprintService:
             job_id=job.id,
             username=username,
             action="REPRINTED",
-            file_name=job.generated_file,
+            file_name=job.generated_path,
             labels_count=job.labels_count
         )
 

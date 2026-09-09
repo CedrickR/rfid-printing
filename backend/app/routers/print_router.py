@@ -21,6 +21,7 @@ from app.services.print_job_service import (
     EmptyPrintJobError,
     AlreadyGeneratedError,
 )
+from app.services.cmd_generator import DuplicateFilenameError
 
 router = APIRouter(
     prefix="/api/print",
@@ -264,7 +265,7 @@ def generate_print_job_file(
         )
 
     try:
-        prefix = PrintJobService.generate(
+        filenames = PrintJobService.generate(
             db,
             job,
             current_user["sub"]
@@ -287,9 +288,19 @@ def generate_print_job_file(
             )
         )
 
+    except DuplicateFilenameError as exc:
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Le gabarit de nom de fichier ne produit pas un nom "
+                f"distinct par bien du lot : {exc.filename}"
+            )
+        )
+
     return {
         "job_id": job.id,
-        "generated_prefix": prefix,
+        "generated_files": filenames,
         "status": job.status
     }
 

@@ -33,6 +33,26 @@ DEFAULT_LINE_TEMPLATE = (
     "PRINT|bien_id={{BienId}}|designation={{Designation}}"
 )
 
+# Nom de fichier sans extension (".cmd" est toujours ajouté à la
+# génération) ; accepte à la fois les placeholders d'en-tête et de
+# ligne puisqu'un fichier combine généralement un identifiant de lot
+# et un identifiant de bien.
+DEFAULT_FILENAME_TEMPLATE = "print_job_{{JobId}}_{{BienId}}"
+
+
+class DuplicateFilenameError(Exception):
+    """
+    Le gabarit de nom de fichier ne produit pas un nom distinct par
+    bien du lot (ex. gabarit sans {{BienId}}) : générer écraserait
+    silencieusement des fichiers déjà écrits pour ce même lot.
+    """
+
+    def __init__(self, filename: str):
+        self.filename = filename
+        super().__init__(
+            f"Nom de fichier en doublon dans le lot : {filename}"
+        )
+
 
 class CommandGenerator:
 
@@ -101,8 +121,9 @@ class CommandGenerator:
     ) -> str:
         """
         Comme sanitize_value, en interdisant en plus les caractères
-        invalides dans un nom de fichier (le Bien ID sert de nom de
-        fichier, un caractère comme "/" casserait sinon le chemin).
+        invalides dans un nom de fichier (le nom de fichier généré
+        sert de nom de fichier, un caractère comme "/" casserait
+        sinon le chemin).
         """
 
         text = re.sub(
@@ -113,36 +134,68 @@ class CommandGenerator:
 
         return text or "bien"
 
+    def render_filename_template(
+        self,
+        template: str,
+        job_id,
+        asset
+    ) -> str:
+        """
+        Comme render_template, mais accepte à la fois les placeholders
+        d'en-tête ({{JobId}}) et de ligne ({{BienId}}, ...) puisqu'un
+        nom de fichier combine généralement les deux. Le résultat est
+        sanitisé pour être un nom de fichier valide (voir
+        sanitize_filename).
+        """
+
+        def replace(match: re.Match) -> str:
+
+            name = match.group(1)
+
+            if name in JOB_PLACEHOLDERS:
+                return self.sanitize_value(
+                    JOB_PLACEHOLDERS[name](job_id)
+                )
+
+            if name in ASSET_PLACEHOLDERS:
+                return self.sanitize_value(
+                    ASSET_PLACEHOLDERS[name](asset)
+                )
+
+            return match.group(0)
+
+        rendered = PLACEHOLDER_PATTERN.sub(replace, template)
+
+        return self.sanitize_filename(rendered)
+
     def generate(
         self,
         job_id: int,
         assets: list,
         header_template: str = None,
-        line_template: str = None
-    ) -> str:
+        line_template: str = None,
+        filename_template: str = None
+    ) -> list:
         """
         Génère un fichier .cmd par bien du lot (et non plus un fichier
         unique pour tout le lot), déposés directement dans output_dir
-        (pas de sous-dossier), nommés "{prefix}_{BienId}.cmd". Retourne
-        ce préfixe commun. Une génération précédente du même lot est
-        remplacée intégralement (les fichiers de ce lot issus d'une
-        génération précédente sont supprimés avant d'écrire les
-        nouveaux).
+        (pas de sous-dossier), nommés d'après filename_template (§
+        render_filename_template, suffixé de ".cmd"). Retourne la
+        liste triée des noms de fichiers écrits.
         """
 
         header_template = header_template or DEFAULT_HEADER_TEMPLATE
         line_template = line_template or DEFAULT_LINE_TEMPLATE
-
-        prefix = f"print_job_{job_id}"
-
-        for existing_file in self.output_dir.glob(f"{prefix}_*.cmd"):
-            existing_file.unlink()
+        filename_template = filename_template or DEFAULT_FILENAME_TEMPLATE
 
         header = self.render_template(
             header_template,
             JOB_PLACEHOLDERS,
             job_id
         )
+
+        files = []
+        seen_filenames = set()
 
         for asset in assets:
 
@@ -153,26 +206,20 @@ class CommandGenerator:
             )
 
             asset_filename = (
-                f"{prefix}_{self.sanitize_filename(asset.bien_id)}.cmd"
+                f"{self.render_filename_template(filename_template, job_id, asset)}"
+                ".cmd"
             )
 
+            if asset_filename in seen_filenames:
+                raise DuplicateFilenameError(asset_filename)
+
+            seen_filenames.add(asset_filename)
+            files.append((asset_filename, header + line))
+
+        for asset_filename, content in files:
             (self.output_dir / asset_filename).write_text(
-                header + line,
+                content,
                 encoding="utf-8"
             )
 
-        return prefix
-
-    def list_generated_files(self, prefix: str) -> list:
-        """
-        Liste les fichiers .cmd d'un lot déjà généré (triés par nom),
-        pour affichage sur la page du lot.
-        """
-
-        if not prefix:
-            return []
-
-        return sorted(
-            generated_file.name
-            for generated_file in self.output_dir.glob(f"{prefix}_*.cmd")
-        )
+        return sorted(filename for filename, _ in files)

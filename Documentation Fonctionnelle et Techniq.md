@@ -137,7 +137,7 @@ Organisé en deux onglets.
 
 - Liste des lots, recherche par Bien ID (retrouve les lots contenant un bien donné) via `GET /jobs/search`.
 - Détail d'un lot (`/jobs/{id}`) : statut, nombre d'étiquettes, créateur, liste des biens associés.
-- **Génération des fichiers .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.7) : **un fichier .cmd par bien du lot** (et non plus un fichier unique pour tout le lot), déposés directement dans le dossier racine `generated/` (pas de sous-dossier), nommés `print_job_{id}_{BienId}.cmd` (ex. `print_job_5_20260001.cmd`) — chaque fichier contient l'en-tête du gabarit suivi de la ligne de ce seul bien. Une génération relancée pour le même lot remplace intégralement les fichiers de ce lot. Un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré. Les fichiers sont accessibles uniquement sur le disque du serveur (aucun téléchargement via l'application) ; la page du lot en liste le nombre et les noms.
+- **Génération des fichiers .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.8) : **un fichier .cmd par bien du lot** (et non plus un fichier unique pour tout le lot), déposés directement dans le dossier racine `generated/` (pas de sous-dossier), nommés d'après le gabarit de nom de fichier configurable (ex. `print_job_5_20260001.cmd` avec le gabarit par défaut) — chaque fichier contient l'en-tête du gabarit suivi de la ligne de ce seul bien. Un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré ; un gabarit de nom de fichier qui ne produit pas un nom distinct par bien (ex. sans `{{BienId}}`) est refusé, pour ne pas écraser silencieusement des fichiers du même lot. Les fichiers sont accessibles uniquement sur le disque du serveur (aucun téléchargement via l'application) ; la page du lot en liste le nombre et les noms.
 - **Export du tableau du lot** :
   - **Exporter en PDF** : bouton déclenchant l'impression navigateur (`window.print()`) sur une mise en page dédiée (menu, boutons et bannières masqués via une feuille de style `@media print`) — l'utilisateur choisit « Enregistrer au format PDF » dans la boîte de dialogue d'impression.
   - **Exporter en CSV** (`GET /jobs/{id}/export-csv`) : CSV (`;`, avec en-tête Bien ID/Désignation) de la liste des biens du lot.
@@ -191,22 +191,23 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
-- Gabarit **d'en-tête** (une fois par lot) et **de ligne** (répétée par bien), avec substitution de placeholders `{{Placeholder}}` :
+- Gabarit **d'en-tête** (une fois par lot), **de ligne** (répétée par bien) et **de nom de fichier** (un par bien, sans l'extension `.cmd` toujours ajoutée automatiquement), avec substitution de placeholders `{{Placeholder}}` :
 
   | Placeholder | Portée | Valeur |
   |---|---|---|
-  | `{{JobId}}` | En-tête | Identifiant du lot |
-  | `{{BienId}}` | Ligne | Bien ID |
-  | `{{Designation}}` | Ligne | Désignation du bien |
-  | `{{DateSortie}}` | Ligne | Date de sortie |
-  | `{{Statut}}` | Ligne | `Actif` / `Exclu` |
-  | `{{NumeroLocal}}` | Ligne | Numéro local |
-  | `{{Immeuble}}` | Ligne | Libellé immeuble |
-  | `{{Niveau}}` | Ligne | Libellé niveau |
-  | `{{Local}}` | Ligne | Libellé local |
+  | `{{JobId}}` | En-tête, nom de fichier | Identifiant du lot |
+  | `{{BienId}}` | Ligne, nom de fichier | Bien ID |
+  | `{{Designation}}` | Ligne, nom de fichier | Désignation du bien |
+  | `{{DateSortie}}` | Ligne, nom de fichier | Date de sortie |
+  | `{{Statut}}` | Ligne, nom de fichier | `Actif` / `Exclu` |
+  | `{{NumeroLocal}}` | Ligne, nom de fichier | Numéro local |
+  | `{{Immeuble}}` | Ligne, nom de fichier | Libellé immeuble |
+  | `{{Niveau}}` | Ligne, nom de fichier | Libellé niveau |
+  | `{{Local}}` | Ligne, nom de fichier | Libellé local |
 
-- Un placeholder inconnu (faute de frappe) est laissé tel quel dans le fichier généré, pour rester visible plutôt que de disparaître silencieusement.
-- Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple.
+- Le gabarit de nom de fichier combine un préfixe libre et des placeholders (ex. `print_job_{{JobId}}_{{BienId}}`, le défaut) ; le résultat est nettoyé des caractères invalides dans un nom de fichier. Il doit produire un nom **distinct par bien du lot** (donc généralement inclure `{{BienId}}` ou un autre placeholder qui varie par bien) : sinon la génération du lot est refusée (§2.5).
+- Un placeholder inconnu (faute de frappe) est laissé tel quel dans le fichier généré (ou le nom de fichier), pour rester visible plutôt que de disparaître silencieusement.
+- Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple ; affiche l'en-tête, la ligne et le nom de fichier qui seraient générés.
 - Le gabarit actif est toujours **le dernier enregistré** (historique conservé en base, une ligne par modification).
 
 ### 2.9 Historique (`/history`)
@@ -385,10 +386,10 @@ rfid-printing/
 | `users` | Comptes et profils | `id`, `username` (unique), `password_hash`, `role` |
 | `imports` | Historique des imports CSV inventaire | `id`, `filename`, `imported_by`, `imported_at`, `total_rows`, `active_assets`, `excluded_assets` |
 | `assets` | Biens de l'inventaire | `id`, `bien_id`, `bien_designation`, `bien_amort_date_sortie`, `local_numero`, `immeuble_libelle`, `niveau_libelle`, `local_libelle`, `is_active`, `import_id` (FK → `imports`) |
-| `print_jobs` | Lots d'impression | `id`, `created_by`, `created_at`, `status` (`PENDING`/`GENERATED`), `labels_count`, `generated_prefix` (préfixe commun des fichiers `.cmd` du lot déposés à la racine de `generated/`), `generated_at` |
+| `print_jobs` | Lots d'impression | `id`, `created_by`, `created_at`, `status` (`PENDING`/`GENERATED`), `labels_count`, `generated_files` (noms des fichiers `.cmd` du lot déposés à la racine de `generated/`, un par ligne), `generated_at` |
 | `print_job_lines` | Association bien ↔ lot | `id`, `job_id` (FK), `asset_id` (FK) |
 | `print_history` | Journal des générations/réimpressions | `id`, `job_id`, `username`, `action` (`GENERATED`/`REPRINTED`), `file_name`, `labels_count`, `created_at` |
-| `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `header_template`, `line_template`, `updated_by`, `updated_at` |
+| `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `header_template`, `line_template`, `filename_template`, `updated_by`, `updated_at` |
 | `rfid_scan_files` | Fichiers de scan RFID chargés | `id`, `filename`, `imported_by`, `imported_at` |
 | `rfid_scan_lines` | Lignes d'un fichier de scan | `id`, `scan_file_id` (FK), `lieu_numero`, `bien_id` |
 | `glpi_imports` | Historique des imports GLPI | `id`, `glpi_type`, `filename`, `imported_by`, `imported_at`, `total_rows`, `added_count`, `updated_count` |

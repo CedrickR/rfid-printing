@@ -24,11 +24,11 @@ class PrintJobService:
     """
 
     @staticmethod
-    def generate(db, job, username: str, generator=None) -> str:
+    def generate(db, job, username: str, generator=None) -> list:
         """
         Génère un fichier .cmd par bien du lot, déposés directement
         dans le dossier "generated/" (voir CommandGenerator.generate).
-        Retourne le préfixe commun de ces fichiers.
+        Retourne la liste des noms de fichiers écrits.
         """
 
         lines = (
@@ -60,14 +60,15 @@ class PrintJobService:
 
         template = CmdTemplateService.get_current(db)
 
-        prefix = generator.generate(
+        filenames = generator.generate(
             job_id=job.id,
             assets=assets,
             header_template=template.header_template,
-            line_template=template.line_template
+            line_template=template.line_template,
+            filename_template=template.filename_template
         )
 
-        job.generated_prefix = prefix
+        job.generated_files = "\n".join(filenames)
         job.generated_at = datetime.now(UTC)
         job.status = "GENERATED"
 
@@ -75,7 +76,7 @@ class PrintJobService:
             job_id=job.id,
             username=username,
             action="GENERATED",
-            file_name=prefix,
+            file_name=f"print_job_{job.id}",
             labels_count=job.labels_count
         )
 
@@ -84,4 +85,4 @@ class PrintJobService:
         db.commit()
         db.refresh(job)
 
-        return prefix
+        return filenames

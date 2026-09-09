@@ -4,6 +4,7 @@ from app.models.cmd_template_model import CmdTemplate
 from app.services.cmd_generator import (
     DEFAULT_HEADER_TEMPLATE,
     DEFAULT_LINE_TEMPLATE,
+    DEFAULT_FILENAME_TEMPLATE,
 )
 
 
@@ -29,6 +30,7 @@ class CmdTemplateService:
             template = CmdTemplate(
                 header_template=DEFAULT_HEADER_TEMPLATE,
                 line_template=DEFAULT_LINE_TEMPLATE,
+                filename_template=DEFAULT_FILENAME_TEMPLATE,
                 updated_by="system",
                 updated_at=datetime.now(UTC)
             )
@@ -36,11 +38,18 @@ class CmdTemplateService:
         return template
 
     @staticmethod
-    def update(db, header_template: str, line_template: str, username: str) -> CmdTemplate:
+    def update(
+        db,
+        header_template: str,
+        line_template: str,
+        filename_template: str,
+        username: str
+    ) -> CmdTemplate:
 
         template = CmdTemplate(
             header_template=header_template,
             line_template=line_template,
+            filename_template=filename_template,
             updated_by=username,
             updated_at=datetime.now(UTC)
         )

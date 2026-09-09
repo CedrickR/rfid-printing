@@ -5,6 +5,7 @@ from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Integer
 from sqlalchemy import String
+from sqlalchemy import Text
 
 from app.database import Base
 
@@ -41,11 +42,10 @@ class PrintJob(Base):
         nullable=False
     )
 
-    # Préfixe commun des fichiers .cmd déposés dans le dossier
-    # "generated/" lors de la génération (un fichier .cmd par bien du
-    # lot, nommé "{generated_prefix}_{BienId}.cmd").
-    generated_prefix = Column(
-        String(255),
+    # Noms des fichiers .cmd déposés dans le dossier "generated/" lors
+    # de la génération (un par bien du lot, un nom par ligne).
+    generated_files = Column(
+        Text,
         nullable=True
     )
 

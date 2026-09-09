@@ -64,6 +64,7 @@ from app.services.cmd_generator import (
     CommandGenerator,
     ASSET_PLACEHOLDERS,
     JOB_PLACEHOLDERS,
+    DuplicateFilenameError,
 )
 from app.services.rfid_scan_service import (
     RfidScanService,
@@ -1066,6 +1067,7 @@ def cmd_template_page(
         context={
             "header_template": template.header_template,
             "line_template": template.line_template,
+            "filename_template": template.filename_template,
             "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
             "job_placeholders": sorted(JOB_PLACEHOLDERS.keys()),
             "error": None
@@ -1078,13 +1080,21 @@ def cmd_template_update(
     request: Request,
     header_template: str = Form(...),
     line_template: str = Form(...),
+    filename_template: str = Form(...),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
     require_admin(current_user)
 
+    error = None
+
     if not line_template.strip():
+        error = "Le gabarit de ligne ne peut pas être vide."
+    elif not filename_template.strip():
+        error = "Le gabarit de nom de fichier ne peut pas être vide."
+
+    if error:
 
         return templates.TemplateResponse(
             request=request,
@@ -1092,9 +1102,10 @@ def cmd_template_update(
             context={
                 "header_template": header_template,
                 "line_template": line_template,
+                "filename_template": filename_template,
                 "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
                 "job_placeholders": sorted(JOB_PLACEHOLDERS.keys()),
-                "error": "Le gabarit de ligne ne peut pas être vide."
+                "error": error
             },
             status_code=400
         )
@@ -1103,6 +1114,7 @@ def cmd_template_update(
         db,
         header_template,
         line_template,
+        filename_template,
         current_user["sub"]
     )
 
@@ -1121,6 +1133,7 @@ def cmd_template_update(
 def cmd_template_preview(
     header_template: str = Form(...),
     line_template: str = Form(...),
+    filename_template: str = Form(...),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
@@ -1141,6 +1154,13 @@ def cmd_template_preview(
             line_template,
             ASSET_PLACEHOLDERS,
             sample_asset
+        ),
+        "filename": (
+            generator.render_filename_template(
+                filename_template,
+                42,
+                sample_asset
+            ) + ".cmd"
         )
     }
 
@@ -2180,8 +2200,8 @@ def job_detail(
             assets.append(asset)
 
     generated_files = (
-        CommandGenerator().list_generated_files(job.generated_prefix)
-        if job.generated_prefix
+        job.generated_files.split("\n")
+        if job.generated_files
         else []
     )
 
@@ -2371,6 +2391,13 @@ def generate_job(
 
         return RedirectResponse(
             url=f"/jobs/{job.id}?error=already_generated",
+            status_code=303
+        )
+
+    except DuplicateFilenameError:
+
+        return RedirectResponse(
+            url=f"/jobs/{job.id}?error=duplicate_filenames",
             status_code=303
         )
 

@@ -56,6 +56,33 @@
                         >{{ line_template }}</textarea>
                     </div>
 
+                    <div class="form-group">
+                        <label for="filename_template">
+                            Nom de fichier par bien (préfixe libre +
+                            placeholders, sans l'extension)
+                        </label>
+                        <div class="input-group">
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="filename_template"
+                                name="filename_template"
+                                style="font-family: monospace;"
+                                value="{{ filename_template }}"
+                                required
+                            >
+                            <div class="input-group-append">
+                                <span class="input-group-text">.cmd</span>
+                            </div>
+                        </div>
+                        <small class="form-text text-muted">
+                            Doit produire un nom distinct par bien du
+                            lot (inclure {{ '{{' }}BienId{{ '}}' }} ou
+                            un autre placeholder qui varie par bien),
+                            sans quoi la génération est refusée.
+                        </small>
+                    </div>
+
                     <button type="button" id="preview-button" class="btn btn-outline-primary">
                         <i class="fas fa-eye fa-sm"></i> Aperçu
                     </button>
@@ -70,6 +97,10 @@
                     <h6 class="font-weight-bold text-primary">
                         Aperçu (avec un bien d'exemple)
                     </h6>
+                    <p class="mb-1">
+                        <strong>Nom de fichier :</strong>
+                        <code id="preview-filename"></code>
+                    </p>
                     <pre id="preview-content" class="bg-light p-3 border rounded"></pre>
                 </div>
 
@@ -110,6 +141,13 @@
                 <hr>
 
                 <p class="text-muted small mb-0">
+                    Le nom de fichier accepte les placeholders des deux
+                    catégories ci-dessus (en-tête et ligne).
+                </p>
+
+                <hr>
+
+                <p class="text-muted small mb-0">
                     Un placeholder inconnu (faute de frappe) est laissé
                     tel quel dans le fichier généré, pour rester visible
                     plutôt que de disparaître silencieusement.
@@ -129,7 +167,9 @@
     var previewButton = document.getElementById("preview-button");
     var headerInput = document.getElementById("header_template");
     var lineInput = document.getElementById("line_template");
+    var filenameInput = document.getElementById("filename_template");
     var resultBox = document.getElementById("preview-result");
+    var filenameBox = document.getElementById("preview-filename");
     var contentBox = document.getElementById("preview-content");
     var errorBox = document.getElementById("preview-error");
 
@@ -141,6 +181,7 @@
         var formData = new FormData();
         formData.append("header_template", headerInput.value);
         formData.append("line_template", lineInput.value);
+        formData.append("filename_template", filenameInput.value);
 
         previewButton.disabled = true;
 
@@ -162,6 +203,7 @@
                     return;
                 }
 
+                filenameBox.textContent = result.data.filename;
                 contentBox.textContent = result.data.header + result.data.line;
                 resultBox.style.display = "block";
             })

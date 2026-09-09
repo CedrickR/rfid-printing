@@ -33,6 +33,11 @@ class CmdTemplate(Base):
         nullable=False
     )
 
+    filename_template = Column(
+        Text,
+        nullable=False
+    )
+
     updated_by = Column(
         String(100),
         nullable=False

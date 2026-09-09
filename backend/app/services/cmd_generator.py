@@ -95,6 +95,24 @@ class CommandGenerator:
 
         return PLACEHOLDER_PATTERN.sub(replace, template)
 
+    def sanitize_filename(
+        self,
+        value
+    ) -> str:
+        """
+        Comme sanitize_value, en interdisant en plus les caractères
+        invalides dans un nom de fichier (le Bien ID sert de nom de
+        fichier, un caractère comme "/" casserait sinon le chemin).
+        """
+
+        text = re.sub(
+            r'[\\/:*?"<>|]',
+            "_",
+            self.sanitize_value(value)
+        )
+
+        return text or "bien"
+
     def generate(
         self,
         job_id: int,
@@ -102,15 +120,29 @@ class CommandGenerator:
         header_template: str = None,
         line_template: str = None
     ) -> str:
+        """
+        Génère un fichier .cmd par bien du lot (et non plus un fichier
+        unique pour tout le lot), déposés dans un sous-dossier dédié à
+        ce lot. Retourne le nom de ce sous-dossier (relatif à
+        output_dir). Une génération précédente du même lot est
+        remplacée intégralement (le dossier ne conserve jamais que les
+        fichiers de la dernière génération).
+        """
 
         header_template = header_template or DEFAULT_HEADER_TEMPLATE
         line_template = line_template or DEFAULT_LINE_TEMPLATE
 
-        filename = f"print_job_{job_id}.cmd"
+        folder_name = f"print_job_{job_id}"
 
-        file_path = (
-            self.output_dir / filename
+        job_dir = self.output_dir / folder_name
+
+        job_dir.mkdir(
+            parents=True,
+            exist_ok=True
         )
+
+        for existing_file in job_dir.glob("*.cmd"):
+            existing_file.unlink()
 
         header = self.render_template(
             header_template,
@@ -118,20 +150,37 @@ class CommandGenerator:
             job_id
         )
 
-        lines = [
-            self.render_template(
+        for asset in assets:
+
+            line = self.render_template(
                 line_template,
                 ASSET_PLACEHOLDERS,
                 asset
             )
-            for asset in assets
-        ]
 
-        content = header + "\n".join(lines)
+            asset_filename = (
+                f"{self.sanitize_filename(asset.bien_id)}.cmd"
+            )
 
-        file_path.write_text(
-            content,
-            encoding="utf-8"
+            (job_dir / asset_filename).write_text(
+                header + line,
+                encoding="utf-8"
+            )
+
+        return folder_name
+
+    def list_generated_files(self, folder_name: str) -> list:
+        """
+        Liste les fichiers .cmd déposés dans le sous-dossier d'un lot
+        déjà généré (triés par nom), pour affichage sur la page du lot.
+        """
+
+        job_dir = self.output_dir / folder_name
+
+        if not job_dir.is_dir():
+            return []
+
+        return sorted(
+            generated_file.name
+            for generated_file in job_dir.glob("*.cmd")
         )
-
-        return filename

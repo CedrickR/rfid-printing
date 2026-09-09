@@ -41,6 +41,22 @@ def test_job_detail_shows_export_pdf_and_csv_buttons(client, admin_user):
     assert f'href="{job_url}/export-csv"' in response.text
 
 
+def test_job_detail_shows_generated_files_after_generation(
+    client, admin_user
+):
+
+    job_url = _login_and_create_job(client)
+
+    client.post(f"{job_url}/generate")
+
+    response = client.get(job_url)
+
+    assert response.status_code == 200
+    assert "1 fichier(s) .cmd généré(s)" in response.text
+    assert "generated/print_job_" in response.text
+    assert "1001.cmd" in response.text
+
+
 def test_job_export_csv_contains_header_and_assets(client, admin_user):
 
     job_url = _login_and_create_job(client)

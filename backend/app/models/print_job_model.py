@@ -41,7 +41,9 @@ class PrintJob(Base):
         nullable=False
     )
 
-    generated_file = Column(
+    # Nom du sous-dossier (relatif au dossier "generated/") déposé lors
+    # de la génération : contient un fichier .cmd par bien du lot.
+    generated_path = Column(
         String(255),
         nullable=True
     )

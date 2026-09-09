@@ -1,3 +1,6 @@
+from app.services.cmd_generator import CommandGenerator
+
+
 def _login(client, username="admin", password="Admin123!"):
 
     client.post(
@@ -222,12 +225,13 @@ def test_custom_template_is_used_when_generating_a_print_job(
 
     assert generate_response.status_code == 200
 
-    file_response = client.get(
-        f"/api/print/jobs/{job_id}/file",
-        headers={"Authorization": f"Bearer {token}"}
-    )
+    folder_name = generate_response.json()["generated_path"]
 
-    content = file_response.text
+    generator = CommandGenerator()
+
+    content = (
+        generator.output_dir / folder_name / "10001.cmd"
+    ).read_text(encoding="utf-8")
 
     assert f"### LOT {job_id} ###" in content
     assert "ETIQUETTE;10001;PC Portable;SIEGE" in content

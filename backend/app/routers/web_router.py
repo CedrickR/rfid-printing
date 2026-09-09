@@ -2179,12 +2179,19 @@ def job_detail(
         if asset:
             assets.append(asset)
 
+    generated_files = (
+        CommandGenerator().list_generated_files(job.generated_path)
+        if job.generated_path
+        else []
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="job_detail.html",
         context={
             "job": job,
-            "assets": assets
+            "assets": assets,
+            "generated_files": generated_files
         }
     )
 

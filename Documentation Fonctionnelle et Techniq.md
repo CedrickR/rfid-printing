@@ -137,7 +137,7 @@ Organisé en deux onglets.
 
 - Liste des lots, recherche par Bien ID (retrouve les lots contenant un bien donné) via `GET /jobs/search`.
 - Détail d'un lot (`/jobs/{id}`) : statut, nombre d'étiquettes, créateur, liste des biens associés.
-- **Génération du fichier .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.7) : un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré.
+- **Génération des fichiers .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.7) : **un fichier .cmd par bien du lot** (et non plus un fichier unique pour tout le lot), déposés dans un sous-dossier dédié au lot (`generated/print_job_{id}/`, un fichier par Bien ID, ex. `20260001.cmd`) — chaque fichier contient l'en-tête du gabarit suivi de la ligne de ce seul bien. Une génération relancée pour le même lot remplace intégralement le contenu du dossier. Un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré. Les fichiers sont accessibles uniquement sur le disque du serveur (aucun téléchargement via l'application) ; la page du lot en liste le nombre et les noms.
 - **Export du tableau du lot** :
   - **Exporter en PDF** : bouton déclenchant l'impression navigateur (`window.print()`) sur une mise en page dédiée (menu, boutons et bannières masqués via une feuille de style `@media print`) — l'utilisateur choisit « Enregistrer au format PDF » dans la boîte de dialogue d'impression.
   - **Exporter en CSV** (`GET /jobs/{id}/export-csv`) : CSV (`;`, avec en-tête Bien ID/Désignation) de la liste des biens du lot.
@@ -385,7 +385,7 @@ rfid-printing/
 | `users` | Comptes et profils | `id`, `username` (unique), `password_hash`, `role` |
 | `imports` | Historique des imports CSV inventaire | `id`, `filename`, `imported_by`, `imported_at`, `total_rows`, `active_assets`, `excluded_assets` |
 | `assets` | Biens de l'inventaire | `id`, `bien_id`, `bien_designation`, `bien_amort_date_sortie`, `local_numero`, `immeuble_libelle`, `niveau_libelle`, `local_libelle`, `is_active`, `import_id` (FK → `imports`) |
-| `print_jobs` | Lots d'impression | `id`, `created_by`, `created_at`, `status` (`PENDING`/`GENERATED`), `labels_count`, `generated_file`, `generated_at` |
+| `print_jobs` | Lots d'impression | `id`, `created_by`, `created_at`, `status` (`PENDING`/`GENERATED`), `labels_count`, `generated_path` (sous-dossier `generated/` contenant un `.cmd` par bien), `generated_at` |
 | `print_job_lines` | Association bien ↔ lot | `id`, `job_id` (FK), `asset_id` (FK) |
 | `print_history` | Journal des générations/réimpressions | `id`, `job_id`, `username`, `action` (`GENERATED`/`REPRINTED`), `file_name`, `labels_count`, `created_at` |
 | `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `header_template`, `line_template`, `updated_by`, `updated_at` |
@@ -427,8 +427,7 @@ Schéma versionné avec Alembic (`backend/alembic/versions/`) ; aucune modificat
 | `GET` | `/api/print/jobs` | authentifié | Liste des lots (filtre optionnel `bien_id`) |
 | `GET` | `/api/print/jobs/{job_id}` | authentifié | Détail d'un lot + biens associés |
 | `DELETE` | `/api/print/jobs/{job_id}` | gestionnaire+ | Supprime un lot |
-| `POST` | `/api/print/jobs/{job_id}/generate` | gestionnaire+ | Génère le fichier `.cmd` du lot |
-| `GET` | `/api/print/jobs/{job_id}/file` | authentifié | Télécharge le fichier `.cmd` généré (`text/plain`) — **point d'intégration avec le logiciel/matériel d'impression** |
+| `POST` | `/api/print/jobs/{job_id}/generate` | gestionnaire+ | Génère un fichier `.cmd` par bien du lot, déposés dans `generated/print_job_{job_id}/` sur le disque du serveur — **point d'intégration avec le logiciel/matériel d'impression**, aucun téléchargement via l'API |
 | `POST` | `/api/print/jobs/{job_id}/reprint` | authentifié | Enregistre une réimpression dans l'historique |
 
 #### Historique — préfixe `/api/history`

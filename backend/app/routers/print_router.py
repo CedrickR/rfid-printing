@@ -1,10 +1,7 @@
-from pathlib import Path
-
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
-from fastapi.responses import FileResponse
 
 from sqlalchemy.orm import Session
 
@@ -24,8 +21,6 @@ from app.services.print_job_service import (
     EmptyPrintJobError,
     AlreadyGeneratedError,
 )
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 router = APIRouter(
     prefix="/api/print",
@@ -294,58 +289,9 @@ def generate_print_job_file(
 
     return {
         "job_id": job.id,
-        "generated_file": filename,
+        "generated_path": filename,
         "status": job.status
     }
-
-
-@router.get("/jobs/{job_id}/file")
-def download_job_file(
-    job_id: int,
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-
-    job = (
-        db.query(PrintJob)
-        .filter(
-            PrintJob.id == job_id
-        )
-        .first()
-    )
-
-    if not job:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Lot introuvable"
-        )
-
-    if not job.generated_file:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Aucun fichier généré"
-        )
-
-    file_path = (
-        BASE_DIR
-        / "generated"
-        / job.generated_file
-    )
-
-    if not file_path.exists():
-
-        raise HTTPException(
-            status_code=404,
-            detail="Fichier introuvable"
-        )
-
-    return FileResponse(
-        path=file_path,
-        filename=job.generated_file,
-        media_type="text/plain"
-    )
 
 
 @router.post("/jobs/{job_id}/reprint")

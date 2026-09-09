@@ -236,7 +236,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
 
-Gère les deux listes de référence utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), et par l'onglet « Répartition par bureau » du tableau de bord (§2.2), sur deux onglets.
+Gère les listes de référence et les mises à jour en masse utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), et par l'onglet « Répartition par bureau » du tableau de bord (§2.2), sur trois onglets.
 
 - **Onglet Destinations** :
   - Tableau des destinations existantes, avec pour chaque ligne un champ de renommage (`POST /admin/destinations/{id}/update`) et un bouton de suppression (`POST /admin/destinations/{id}/delete`, confirmation obligatoire).
@@ -246,6 +246,12 @@ Gère les deux listes de référence utilisées par les colonnes **Destination**
   - Import d'un fichier CSV (`POST /admin/destinations/bureaux`, `;`, avec en-tête) — colonnes attendues : `niveau`, `nom_piece`, `code_piece_service`, `nombre_poste_prevu`. Le `code_piece_service` est comparé au **numéro local** de l'inventaire pour afficher le bureau correspondant sur la page Inventaire, et le `nombre_poste_prevu` alimente l'onglet « Répartition par bureau » du tableau de bord (1 poste = 1 ordinateur + 2 écrans).
   - **Jamais de doublon** : si le code pièce et service existe déjà (import précédent), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même code pièce et service est rejeté (import à corriger).
   - Affiche le dernier fichier chargé (date, auteur, nombre de lignes) et le nombre total de codes pièce connus.
+- **Onglet Mise à jour par fichier** :
+  - Import d'un fichier CSV (`POST /admin/destinations/majdest`, `;`, avec en-tête) **keyé par Bien ID** (contrairement à l'onglet Bureaux, keyé par code pièce) — colonnes attendues : `numero` (Bien ID), `Destination`, `Codes pièces et niveau` (les autres colonnes éventuelles du fichier sont ignorées).
+  - Pour chaque Bien ID du fichier déjà connu de l'inventaire : la **Destination** est remplacée par la valeur du fichier (une destination inconnue est **ajoutée automatiquement** à l'onglet Destinations plutôt que de faire échouer l'import), et le **Bureau** est mis à jour via le numéro local du bien (remplacé par `Codes pièces et niveau`, comme l'affectation manuelle depuis l'Inventaire — le nom affiché dans la colonne Bureau dépend ensuite du rapprochement avec l'onglet Bureaux). Une valeur vide dans le fichier **efface** la valeur existante (le fichier fait foi, comme l'import inventaire principal, §2.3).
+  - La colonne **Utilisateur** n'est **jamais modifiée** par cet import (le fichier ne contient pas de nom de personne).
+  - Les Bien ID du fichier absents de l'inventaire sont **ignorés** (comptés à part, pas d'erreur) ; un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
+  - Affiche le dernier fichier chargé (date, auteur, nombre de lignes, biens mis à jour, Bien ID non trouvés).
 
 ---
 
@@ -394,6 +400,7 @@ rfid-printing/
 | `rfid_scan_lines` | Lignes d'un fichier de scan | `id`, `scan_file_id` (FK), `lieu_numero`, `bien_id` |
 | `glpi_imports` | Historique des imports GLPI | `id`, `glpi_type`, `filename`, `imported_by`, `imported_at`, `total_rows`, `added_count`, `updated_count` |
 | `glpi_assets` | Informations GLPI par Bien ID (unique, mises à jour à chaque import) | `id`, `bien_id` (unique), `numero_piece`, `lieu`, `statut`, `glpi_type`, `import_id` (FK → `glpi_imports`), `updated_at` |
+| `destination_bureau_imports` | Historique des imports Destination/Bureau par Bien ID (§2.12) | `id`, `filename`, `imported_by`, `imported_at`, `total_rows`, `updated_count`, `unmatched_count` |
 
 Schéma versionné avec Alembic (`backend/alembic/versions/`) ; aucune modification manuelle du schéma ne doit être faite hors migration.
 
@@ -472,11 +479,12 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `POST` | `/admin/backups` | Sauvegarde manuelle (administrateur) |
 | `POST` | `/admin/backups/{fichier}/restore` | Restauration d'une sauvegarde (administrateur) |
 | `POST` | `/admin/backups/{fichier}/delete` | Suppression d'une sauvegarde (administrateur) |
-| `GET` | `/admin/destinations` | Page Destination et Bureau, 2 onglets (administrateur) |
+| `GET` | `/admin/destinations` | Page Destination et Bureau, 3 onglets (administrateur) |
 | `POST` | `/admin/destinations` | Création d'une destination (administrateur) |
 | `POST` | `/admin/destinations/{id}/update` | Renommage d'une destination (administrateur) |
 | `POST` | `/admin/destinations/{id}/delete` | Suppression d'une destination (administrateur) |
-| `POST` | `/admin/destinations/bureaux` | Import du fichier CSV de correspondance bureaux (administrateur) |
+| `POST` | `/admin/destinations/bureaux` | Import du fichier CSV de correspondance bureaux, keyé par code pièce (administrateur) |
+| `POST` | `/admin/destinations/majdest` | Import du fichier CSV de mise à jour Destination/Bureau, keyé par Bien ID (administrateur) |
 | `GET`/`POST` | `/settings/cmd-template` | Consultation/mise à jour du gabarit CMD (administrateur) |
 | `POST` | `/settings/cmd-template/preview` | Aperçu Ajax du gabarit (administrateur) |
 | `GET` | `/import` | Page d'import CSV |

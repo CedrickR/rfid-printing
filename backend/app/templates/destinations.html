@@ -28,6 +28,13 @@
     {{ request.query_params.get('added') }} code(s) lieu ajouté(s),
     {{ request.query_params.get('updated') }} mis à jour.
 </div>
+{% elif request.query_params.get('majdest_imported') == '1' %}
+<div class="alert alert-success">
+    Import Destination/Bureau terminé :
+    {{ request.query_params.get('majdest_updated') }} bien(s) mis à jour,
+    {{ request.query_params.get('majdest_unmatched') }} Bien ID du fichier
+    non trouvé(s) dans l'inventaire (ignoré(s)).
+</div>
 {% endif %}
 
 <ul class="nav nav-tabs" id="destinationsTab" role="tablist">
@@ -53,6 +60,18 @@
             role="tab"
         >
             Bureaux
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a
+            class="nav-link"
+            id="majdest-tab"
+            data-toggle="tab"
+            href="#majdest-pane"
+            role="tab"
+        >
+            Mise à jour par fichier
         </a>
     </li>
 
@@ -266,6 +285,101 @@
                                 {% endif %}
 
                                 <td>{{ bureau_mappings_count }}</td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Onglet Mise à jour par fichier -->
+
+    <div class="tab-pane fade" id="majdest-pane" role="tabpanel">
+
+        <div class="card shadow mb-4 mt-3">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Charger le fichier de mise à jour Destination/Bureau
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <form
+                    method="post"
+                    action="/admin/destinations/majdest"
+                    enctype="multipart/form-data"
+                    class="form-inline"
+                >
+
+                    <input
+                        type="file"
+                        class="form-control-file mr-3 mb-2"
+                        name="file"
+                        accept=".csv"
+                        required
+                    >
+
+                    <button type="submit" class="btn btn-success mb-2">
+                        <i class="fas fa-file-import fa-sm"></i> Charger
+                    </button>
+
+                </form>
+
+                <small class="form-text text-muted">
+                    Fichier CSV (';', avec en-tête). Colonnes attendues :
+                    <code>numero</code> (Bien ID), <code>Destination</code>,
+                    <code>Codes pièces et niveau</code> (les autres colonnes
+                    éventuelles sont ignorées). Pour chaque Bien ID déjà
+                    connu de l'inventaire, met à jour sa Destination (une
+                    nouvelle destination du fichier est ajoutée
+                    automatiquement à la liste, onglet Destinations) et son
+                    Bureau (via le numéro local, comparé aux codes pièce
+                    connus, onglet Bureaux, pour l'affichage). Une valeur
+                    vide dans le fichier efface la valeur existante ; les
+                    Bien ID du fichier absents de l'inventaire sont
+                    ignorés. La colonne Utilisateur n'est jamais modifiée
+                    par cet import.
+                </small>
+
+                <div class="table-responsive mt-4">
+
+                    <table class="table table-sm table-bordered">
+
+                        <thead>
+                            <tr>
+                                <th>Dernier fichier</th>
+                                <th>Chargé le</th>
+                                <th>Par</th>
+                                <th>Lignes</th>
+                                <th>Biens mis à jour</th>
+                                <th>Bien ID non trouvés</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            <tr>
+
+                                {% if last_majdest_import %}
+                                <td>{{ last_majdest_import.filename }}</td>
+                                <td>{{ last_majdest_import.imported_at }}</td>
+                                <td>{{ last_majdest_import.imported_by }}</td>
+                                <td>{{ last_majdest_import.total_rows }}</td>
+                                <td>{{ last_majdest_import.updated_count }}</td>
+                                <td>{{ last_majdest_import.unmatched_count }}</td>
+                                {% else %}
+                                <td colspan="6" class="text-muted">Aucun import</td>
+                                {% endif %}
 
                             </tr>
 

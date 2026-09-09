@@ -225,12 +225,12 @@ def test_custom_template_is_used_when_generating_a_print_job(
 
     assert generate_response.status_code == 200
 
-    folder_name = generate_response.json()["generated_path"]
+    prefix = generate_response.json()["generated_prefix"]
 
     generator = CommandGenerator()
 
     content = (
-        generator.output_dir / folder_name / "10001.cmd"
+        generator.output_dir / f"{prefix}_10001.cmd"
     ).read_text(encoding="utf-8")
 
     assert f"### LOT {job_id} ###" in content

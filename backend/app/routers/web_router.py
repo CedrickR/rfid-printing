@@ -2180,8 +2180,8 @@ def job_detail(
             assets.append(asset)
 
     generated_files = (
-        CommandGenerator().list_generated_files(job.generated_path)
-        if job.generated_path
+        CommandGenerator().list_generated_files(job.generated_prefix)
+        if job.generated_prefix
         else []
     )
 

@@ -264,7 +264,7 @@ def generate_print_job_file(
         )
 
     try:
-        filename = PrintJobService.generate(
+        prefix = PrintJobService.generate(
             db,
             job,
             current_user["sub"]
@@ -289,7 +289,7 @@ def generate_print_job_file(
 
     return {
         "job_id": job.id,
-        "generated_path": filename,
+        "generated_prefix": prefix,
         "status": job.status
     }
 

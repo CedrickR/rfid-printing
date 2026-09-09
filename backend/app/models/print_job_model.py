@@ -41,9 +41,10 @@ class PrintJob(Base):
         nullable=False
     )
 
-    # Nom du sous-dossier (relatif au dossier "generated/") déposé lors
-    # de la génération : contient un fichier .cmd par bien du lot.
-    generated_path = Column(
+    # Préfixe commun des fichiers .cmd déposés dans le dossier
+    # "generated/" lors de la génération (un fichier .cmd par bien du
+    # lot, nommé "{generated_prefix}_{BienId}.cmd").
+    generated_prefix = Column(
         String(255),
         nullable=True
     )

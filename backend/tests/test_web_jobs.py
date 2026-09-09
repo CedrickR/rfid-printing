@@ -53,7 +53,8 @@ def test_job_detail_shows_generated_files_after_generation(
 
     assert response.status_code == 200
     assert "1 fichier(s) .cmd généré(s)" in response.text
-    assert "generated/print_job_" in response.text
+    assert "generated/" in response.text
+    assert "print_job_" in response.text
     assert "1001.cmd" in response.text
 
 

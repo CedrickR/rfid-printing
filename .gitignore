@@ -4,5 +4,4 @@ __pycache__/
 .env
 .venv/
 **/generated/*.cmd
-**/generated/print_job_*/
 backend/backups/

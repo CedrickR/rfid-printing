@@ -31,11 +31,11 @@
             {{ job.status }}
         </p>
 
-        {% if job.generated_path %}
+        {% if job.generated_prefix %}
 
         <div class="alert alert-success">
             {{ generated_files | length }} fichier(s) .cmd généré(s)
-            dans le dossier <strong>generated/{{ job.generated_path }}/</strong> :
+            dans <strong>generated/</strong> :
             <ul class="mb-0">
                 {% for generated_file in generated_files %}
                 <li>{{ generated_file }}</li>

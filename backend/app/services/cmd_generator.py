@@ -122,26 +122,20 @@ class CommandGenerator:
     ) -> str:
         """
         Génère un fichier .cmd par bien du lot (et non plus un fichier
-        unique pour tout le lot), déposés dans un sous-dossier dédié à
-        ce lot. Retourne le nom de ce sous-dossier (relatif à
-        output_dir). Une génération précédente du même lot est
-        remplacée intégralement (le dossier ne conserve jamais que les
-        fichiers de la dernière génération).
+        unique pour tout le lot), déposés directement dans output_dir
+        (pas de sous-dossier), nommés "{prefix}_{BienId}.cmd". Retourne
+        ce préfixe commun. Une génération précédente du même lot est
+        remplacée intégralement (les fichiers de ce lot issus d'une
+        génération précédente sont supprimés avant d'écrire les
+        nouveaux).
         """
 
         header_template = header_template or DEFAULT_HEADER_TEMPLATE
         line_template = line_template or DEFAULT_LINE_TEMPLATE
 
-        folder_name = f"print_job_{job_id}"
+        prefix = f"print_job_{job_id}"
 
-        job_dir = self.output_dir / folder_name
-
-        job_dir.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        for existing_file in job_dir.glob("*.cmd"):
+        for existing_file in self.output_dir.glob(f"{prefix}_*.cmd"):
             existing_file.unlink()
 
         header = self.render_template(
@@ -159,28 +153,26 @@ class CommandGenerator:
             )
 
             asset_filename = (
-                f"{self.sanitize_filename(asset.bien_id)}.cmd"
+                f"{prefix}_{self.sanitize_filename(asset.bien_id)}.cmd"
             )
 
-            (job_dir / asset_filename).write_text(
+            (self.output_dir / asset_filename).write_text(
                 header + line,
                 encoding="utf-8"
             )
 
-        return folder_name
+        return prefix
 
-    def list_generated_files(self, folder_name: str) -> list:
+    def list_generated_files(self, prefix: str) -> list:
         """
-        Liste les fichiers .cmd déposés dans le sous-dossier d'un lot
-        déjà généré (triés par nom), pour affichage sur la page du lot.
+        Liste les fichiers .cmd d'un lot déjà généré (triés par nom),
+        pour affichage sur la page du lot.
         """
 
-        job_dir = self.output_dir / folder_name
-
-        if not job_dir.is_dir():
+        if not prefix:
             return []
 
         return sorted(
             generated_file.name
-            for generated_file in job_dir.glob("*.cmd")
+            for generated_file in self.output_dir.glob(f"{prefix}_*.cmd")
         )

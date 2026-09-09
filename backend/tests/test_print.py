@@ -130,7 +130,7 @@ def test_generate_print_job_file(
 
     assert data["job_id"] == job_id
     assert data["status"] == "GENERATED"
-    assert data["generated_path"] == f"print_job_{job_id}"
+    assert data["generated_prefix"] == f"print_job_{job_id}"
 
 
 def _create_two_jobs_with_distinct_assets(client, token):

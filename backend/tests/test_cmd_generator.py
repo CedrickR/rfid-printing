@@ -49,7 +49,9 @@ def test_sanitize_filename_empty_value_falls_back_to_default():
     assert generator.sanitize_filename(None) == "bien"
 
 
-def test_generate_writes_one_file_per_asset_in_job_folder(tmp_path):
+def test_generate_writes_one_file_per_asset_directly_in_output_dir(
+    tmp_path
+):
 
     generator = CommandGenerator(output_dir=tmp_path)
 
@@ -58,17 +60,17 @@ def test_generate_writes_one_file_per_asset_in_job_folder(tmp_path):
         make_asset("1002", "Ecran"),
     ]
 
-    folder_name = generator.generate(job_id=42, assets=assets)
+    prefix = generator.generate(job_id=42, assets=assets)
 
-    assert folder_name == "print_job_42"
+    assert prefix == "print_job_42"
 
-    job_dir = tmp_path / folder_name
-
-    assert sorted(f.name for f in job_dir.glob("*.cmd")) == [
-        "1001.cmd", "1002.cmd"
+    assert sorted(f.name for f in tmp_path.glob("*.cmd")) == [
+        "print_job_42_1001.cmd", "print_job_42_1002.cmd"
     ]
 
-    content_1001 = (job_dir / "1001.cmd").read_text(encoding="utf-8")
+    content_1001 = (
+        tmp_path / "print_job_42_1001.cmd"
+    ).read_text(encoding="utf-8")
     lines_1001 = content_1001.split("\n")
 
     assert lines_1001[0] == "REM RFID PRINT JOB 42"
@@ -77,7 +79,9 @@ def test_generate_writes_one_file_per_asset_in_job_folder(tmp_path):
     assert "PRINT|bien_id=1001|designation=PC Portable" in content_1001
     assert "1002" not in content_1001
 
-    content_1002 = (job_dir / "1002.cmd").read_text(encoding="utf-8")
+    content_1002 = (
+        tmp_path / "print_job_42_1002.cmd"
+    ).read_text(encoding="utf-8")
 
     assert "PRINT|bien_id=1002|designation=Ecran" in content_1002
     assert "1001" not in content_1002
@@ -89,9 +93,9 @@ def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):
 
     assets = [make_asset("1001", "PC | Portable\nNeuf")]
 
-    folder_name = generator.generate(job_id=1, assets=assets)
+    prefix = generator.generate(job_id=1, assets=assets)
 
-    content = (tmp_path / folder_name / "1001.cmd").read_text(
+    content = (tmp_path / f"{prefix}_1001.cmd").read_text(
         encoding="utf-8"
     )
 
@@ -100,16 +104,13 @@ def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):
     assert content.count("|") == 2
 
 
-def test_generate_with_no_assets_creates_empty_folder(tmp_path):
+def test_generate_with_no_assets_creates_no_cmd_file(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)
 
-    folder_name = generator.generate(job_id=7, assets=[])
+    prefix = generator.generate(job_id=7, assets=[])
 
-    job_dir = tmp_path / folder_name
-
-    assert job_dir.is_dir()
-    assert list(job_dir.glob("*.cmd")) == []
+    assert list(tmp_path.glob(f"{prefix}_*.cmd")) == []
 
 
 def test_generate_creates_output_dir_if_missing(tmp_path):
@@ -122,9 +123,9 @@ def test_generate_creates_output_dir_if_missing(tmp_path):
 
     assert output_dir.exists()
 
-    folder_name = generator.generate(job_id=1, assets=[make_asset("1001", "PC")])
+    prefix = generator.generate(job_id=1, assets=[make_asset("1001", "PC")])
 
-    assert (output_dir / folder_name / "1001.cmd").exists()
+    assert (output_dir / f"{prefix}_1001.cmd").exists()
 
 
 def test_generate_removes_stale_files_from_previous_generation(tmp_path):
@@ -132,13 +133,13 @@ def test_generate_removes_stale_files_from_previous_generation(tmp_path):
     generator = CommandGenerator(output_dir=tmp_path)
 
     generator.generate(job_id=1, assets=[make_asset("1001", "PC")])
-    folder_name = generator.generate(
+    prefix = generator.generate(
         job_id=1, assets=[make_asset("2002", "Ecran")]
     )
 
-    job_dir = tmp_path / folder_name
-
-    assert sorted(f.name for f in job_dir.glob("*.cmd")) == ["2002.cmd"]
+    assert sorted(f.name for f in tmp_path.glob(f"{prefix}_*.cmd")) == [
+        "print_job_1_2002.cmd"
+    ]
 
 
 def test_list_generated_files_returns_sorted_cmd_filenames(tmp_path):
@@ -151,11 +152,11 @@ def test_list_generated_files_returns_sorted_cmd_filenames(tmp_path):
     )
 
     assert generator.list_generated_files("print_job_1") == [
-        "1001.cmd", "2002.cmd"
+        "print_job_1_1001.cmd", "print_job_1_2002.cmd"
     ]
 
 
-def test_list_generated_files_returns_empty_list_for_missing_folder(tmp_path):
+def test_list_generated_files_returns_empty_list_when_no_match(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)
 

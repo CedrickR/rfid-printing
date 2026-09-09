@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 
-from app.services.cmd_generator import CommandGenerator
+import pytest
+
+from app.services.cmd_generator import CommandGenerator, DuplicateFilenameError
 
 
 def make_asset(bien_id, bien_designation):
@@ -49,6 +51,46 @@ def test_sanitize_filename_empty_value_falls_back_to_default():
     assert generator.sanitize_filename(None) == "bien"
 
 
+def test_render_filename_template_combines_job_and_asset_placeholders():
+
+    generator = CommandGenerator()
+
+    asset = make_asset("1001", "PC Portable")
+
+    assert (
+        generator.render_filename_template(
+            "LOT{{JobId}}_{{BienId}}", 42, asset
+        )
+        == "LOT42_1001"
+    )
+
+
+def test_render_filename_template_leaves_unknown_placeholder_untouched():
+
+    generator = CommandGenerator()
+
+    asset = make_asset("1001", "PC Portable")
+
+    assert (
+        generator.render_filename_template(
+            "{{ChampInexistant}}_{{BienId}}", 42, asset
+        )
+        == "{{ChampInexistant}}_1001"
+    )
+
+
+def test_render_filename_template_sanitizes_invalid_filename_characters():
+
+    generator = CommandGenerator()
+
+    asset = make_asset("2026/0001", "PC Portable")
+
+    assert (
+        generator.render_filename_template("{{BienId}}", 42, asset)
+        == "2026_0001"
+    )
+
+
 def test_generate_writes_one_file_per_asset_directly_in_output_dir(
     tmp_path
 ):
@@ -60,13 +102,11 @@ def test_generate_writes_one_file_per_asset_directly_in_output_dir(
         make_asset("1002", "Ecran"),
     ]
 
-    prefix = generator.generate(job_id=42, assets=assets)
+    filenames = generator.generate(job_id=42, assets=assets)
 
-    assert prefix == "print_job_42"
+    assert filenames == ["print_job_42_1001.cmd", "print_job_42_1002.cmd"]
 
-    assert sorted(f.name for f in tmp_path.glob("*.cmd")) == [
-        "print_job_42_1001.cmd", "print_job_42_1002.cmd"
-    ]
+    assert sorted(f.name for f in tmp_path.glob("*.cmd")) == filenames
 
     content_1001 = (
         tmp_path / "print_job_42_1001.cmd"
@@ -93,11 +133,9 @@ def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):
 
     assets = [make_asset("1001", "PC | Portable\nNeuf")]
 
-    prefix = generator.generate(job_id=1, assets=assets)
+    filenames = generator.generate(job_id=1, assets=assets)
 
-    content = (tmp_path / f"{prefix}_1001.cmd").read_text(
-        encoding="utf-8"
-    )
+    content = (tmp_path / filenames[0]).read_text(encoding="utf-8")
 
     assert "PRINT|bien_id=1001|designation=PC - Portable Neuf" in content
     # Un pipe non échappé dans une valeur casserait le format bien_id=...|designation=...
@@ -108,9 +146,10 @@ def test_generate_with_no_assets_creates_no_cmd_file(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)
 
-    prefix = generator.generate(job_id=7, assets=[])
+    filenames = generator.generate(job_id=7, assets=[])
 
-    assert list(tmp_path.glob(f"{prefix}_*.cmd")) == []
+    assert filenames == []
+    assert list(tmp_path.glob("*.cmd")) == []
 
 
 def test_generate_creates_output_dir_if_missing(tmp_path):
@@ -123,41 +162,46 @@ def test_generate_creates_output_dir_if_missing(tmp_path):
 
     assert output_dir.exists()
 
-    prefix = generator.generate(job_id=1, assets=[make_asset("1001", "PC")])
-
-    assert (output_dir / f"{prefix}_1001.cmd").exists()
-
-
-def test_generate_removes_stale_files_from_previous_generation(tmp_path):
-
-    generator = CommandGenerator(output_dir=tmp_path)
-
-    generator.generate(job_id=1, assets=[make_asset("1001", "PC")])
-    prefix = generator.generate(
-        job_id=1, assets=[make_asset("2002", "Ecran")]
+    filenames = generator.generate(
+        job_id=1, assets=[make_asset("1001", "PC")]
     )
 
-    assert sorted(f.name for f in tmp_path.glob(f"{prefix}_*.cmd")) == [
-        "print_job_1_2002.cmd"
-    ]
+    assert (output_dir / filenames[0]).exists()
 
 
-def test_list_generated_files_returns_sorted_cmd_filenames(tmp_path):
+def test_generate_uses_custom_filename_template(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)
 
-    generator.generate(
-        job_id=1,
-        assets=[make_asset("2002", "Ecran"), make_asset("1001", "PC")]
+    filenames = generator.generate(
+        job_id=42,
+        assets=[make_asset("1001", "PC")],
+        filename_template="ETIQ_{{BienId}}"
     )
 
-    assert generator.list_generated_files("print_job_1") == [
-        "print_job_1_1001.cmd", "print_job_1_2002.cmd"
-    ]
+    assert filenames == ["ETIQ_1001.cmd"]
+    assert (tmp_path / "ETIQ_1001.cmd").exists()
 
 
-def test_list_generated_files_returns_empty_list_when_no_match(tmp_path):
+def test_generate_raises_on_duplicate_filenames_and_writes_nothing(
+    tmp_path
+):
+    """
+    Un gabarit de nom de fichier qui ne varie pas par bien (ex. sans
+    {{BienId}}) écraserait silencieusement les fichiers précédents du
+    même lot : la génération est refusée entièrement plutôt que
+    d'écrire partiellement les fichiers.
+    """
 
     generator = CommandGenerator(output_dir=tmp_path)
 
-    assert generator.list_generated_files("print_job_999") == []
+    assets = [make_asset("1001", "PC"), make_asset("1002", "Ecran")]
+
+    with pytest.raises(DuplicateFilenameError):
+        generator.generate(
+            job_id=1,
+            assets=assets,
+            filename_template="LOT_FIXE"
+        )
+
+    assert list(tmp_path.glob("*.cmd")) == []

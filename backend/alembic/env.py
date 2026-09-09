@@ -26,6 +26,7 @@ from app.models import rfid_scan_model  # noqa: E402,F401
 from app.models import glpi_asset_model  # noqa: E402,F401
 from app.models import destination_model  # noqa: E402,F401
 from app.models import bureau_model  # noqa: E402,F401
+from app.models import destination_bureau_import_model  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

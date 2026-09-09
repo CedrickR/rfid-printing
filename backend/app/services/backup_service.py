@@ -18,6 +18,7 @@ BACKUP_SOURCES = {
     "import_rfid_scan": "Import scan RFID",
     "import_glpi": "Import GLPI",
     "import_bureau": "Import bureaux",
+    "import_majdest": "Import destination/bureau",
     "manuel": "Sauvegarde manuelle"
 }
 

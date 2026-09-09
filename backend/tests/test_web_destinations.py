@@ -1,5 +1,7 @@
 BUREAU_HEADER = "niveau;nom_piece;code_piece_service;nombre_poste_prevu\n"
 
+MAJDEST_HEADER = "numero;Destination;Niveau ;Codes pièces et niveau;Nom pièces\n"
+
 
 def _bureau_row(
     code_piece_service,
@@ -9,6 +11,17 @@ def _bureau_row(
 ):
 
     return f"{niveau};{nom_piece};{code_piece_service};{nombre_poste_prevu}\n"
+
+
+def _majdest_row(
+    numero,
+    destination="MAURICE FAURE",
+    codes="A.00.02 GTP",
+    nom_piece="Accueil",
+    niveau="RdC"
+):
+
+    return f"{numero};{destination};{niveau};{codes};{nom_piece}\n"
 
 
 def _login(client, username="admin", password="Admin123!"):
@@ -33,6 +46,29 @@ def _upload_bureaux(client, code_piece_service="01100021", nom_piece="021"):
         "/admin/destinations/bureaux",
         files={"file": ("bureaux.csv", content, "text/csv")},
         follow_redirects=False
+    )
+
+
+def _upload_majdest(client, rows):
+
+    content = MAJDEST_HEADER + "".join(rows)
+
+    return client.post(
+        "/admin/destinations/majdest",
+        files={"file": ("majdest.csv", content, "text/csv")},
+        follow_redirects=False
+    )
+
+
+def _import_asset(client, bien_id="10001", designation="PC Portable"):
+
+    _login(client)
+
+    csv_content = f"numero;libelle;sortie\n{bien_id};{designation};\n"
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
     )
 
 
@@ -286,3 +322,170 @@ def test_bureaux_upload_triggers_auto_backup(client, admin_user):
 
     assert response.status_code == 200
     assert "Import bureaux" in response.text
+
+
+def test_majdest_upload_updates_matching_asset_destination_and_bureau(
+    client, admin_user
+):
+
+    _import_asset(client, bien_id="10001")
+
+    response = _upload_majdest(
+        client, [_majdest_row("10001", codes="A.00.02 GTP")]
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/destinations?majdest_imported=1&majdest_updated=1&majdest_unmatched=0"
+    )
+
+    assets_page = client.get("/assets")
+
+    assert "MAURICE FAURE" in assets_page.text
+
+
+def test_majdest_upload_counts_bien_id_not_in_inventory_as_unmatched(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = _upload_majdest(client, [_majdest_row("99999")])
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/admin/destinations?majdest_imported=1&majdest_updated=0&majdest_unmatched=1"
+    )
+
+
+def test_majdest_upload_shows_last_import_info(client, admin_user):
+
+    _import_asset(client, bien_id="10001")
+
+    response = _upload_majdest(client, [_majdest_row("10001")])
+
+    listing = client.get(response.headers["location"])
+
+    assert listing.status_code == 200
+    assert "majdest.csv" in listing.text
+    assert "Import Destination/Bureau terminé" in listing.text
+
+
+def test_majdest_upload_clears_existing_value_when_file_value_empty(
+    client, admin_user
+):
+
+    _import_asset(client, bien_id="10001")
+
+    _upload_majdest(client, [_majdest_row("10001", codes="A.00.02 GTP")])
+
+    _upload_majdest(client, [_majdest_row("10001", destination="", codes="")])
+
+    assets_page = client.get("/assets")
+
+    assert "A.00.02 GTP" not in assets_page.text
+
+
+def test_majdest_upload_auto_creates_unknown_destination(
+    client, admin_user
+):
+
+    _import_asset(client, bien_id="10001")
+
+    _upload_majdest(
+        client, [_majdest_row("10001", destination="NOUVELLE DESTINATION")]
+    )
+
+    destinations_page = client.get("/admin/destinations")
+
+    assert "NOUVELLE DESTINATION" in destinations_page.text
+
+
+def test_majdest_upload_never_touches_utilisateur(
+    client, admin_user, standard_user
+):
+    """
+    L'Utilisateur affecté manuellement (hors liste GLPI) n'apparaît en
+    texte brut sur la page Inventaire que pour le profil lecteur (les
+    autres profils affichent une liste déroulante alimentée par les
+    imports GLPI, qui ne contient pas cette valeur manuelle) : on
+    vérifie donc avec ce profil que l'import Destination/Bureau ne l'a
+    pas effacée.
+    """
+
+    _import_asset(client, bien_id="10001")
+
+    # Seul bien importé dans une base de test vierge : id 1 (voir
+    # test_web_jobs.py pour ce même raccourci).
+    client.post(
+        "/assets/1/utilisateur",
+        data={"utilisateur": "Jean Dupont", "next": "/assets"}
+    )
+
+    _upload_majdest(client, [_majdest_row("10001")])
+
+    _login(client, "employe", "Employe123!")
+
+    assets_page = client.get("/assets")
+
+    assert "Jean Dupont" in assets_page.text
+
+
+def test_majdest_upload_rejects_non_csv_file(client, admin_user):
+
+    _login(client)
+
+    response = client.post(
+        "/admin/destinations/majdest",
+        files={"file": ("majdest.txt", MAJDEST_HEADER, "text/plain")}
+    )
+
+    assert response.status_code == 400
+    assert "CSV" in response.text
+
+
+def test_majdest_upload_reports_missing_columns(client, admin_user):
+
+    _login(client)
+
+    response = client.post(
+        "/admin/destinations/majdest",
+        files={"file": ("majdest.csv", "numero;Destination\n10001;X\n", "text/csv")}
+    )
+
+    assert response.status_code == 400
+    assert "Colonnes manquantes" in response.text
+
+
+def test_majdest_upload_reports_duplicate_bien_id(client, admin_user):
+
+    _login(client)
+
+    response = _upload_majdest(
+        client,
+        [_majdest_row("10001"), _majdest_row("10001", destination="VALDELIA")]
+    )
+
+    assert response.status_code == 400
+    assert "doublon" in response.text
+
+
+def test_majdest_upload_requires_admin_role(client, manager_user):
+
+    _login(client, "gestionnaire", "Gestionnaire123!")
+
+    response = _upload_majdest(client, [_majdest_row("10001")])
+
+    assert response.status_code == 403
+
+
+def test_majdest_upload_triggers_auto_backup(client, admin_user):
+
+    _import_asset(client, bien_id="10001")
+
+    _upload_majdest(client, [_majdest_row("10001")])
+
+    response = client.get("/admin/backups")
+
+    assert response.status_code == 200
+    assert "Import destination/bureau" in response.text

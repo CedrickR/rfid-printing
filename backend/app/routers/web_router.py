@@ -36,6 +36,7 @@ from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
 from app.models.glpi_asset_model import GlpiImport, GlpiAsset
 from app.models.destination_model import Destination
 from app.models.bureau_model import BureauImport, BureauMapping
+from app.models.destination_bureau_import_model import DestinationBureauImport
 
 from app.auth import authenticate_user
 from app.auth import create_access_token
@@ -107,6 +108,12 @@ from app.services.bureau_service import (
     InvalidEncodingError as BureauInvalidEncodingError,
     MissingColumnsError as BureauMissingColumnsError,
     DuplicateCodePieceServiceError,
+)
+from app.services.destination_bureau_import_service import (
+    DestinationBureauImportService,
+    InvalidEncodingError as MajdestInvalidEncodingError,
+    MissingColumnsError as MajdestMissingColumnsError,
+    DuplicateBienIdError as MajdestDuplicateBienIdError,
 )
 
 logger = logging.getLogger("rfid_printing")
@@ -610,6 +617,29 @@ def _bureau_error_message(exc: Exception) -> str:
     return "Fichier bureaux invalide."
 
 
+def _majdest_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, MajdestInvalidEncodingError):
+        return "Encodage de fichier invalide : UTF-8 attendu."
+
+    if isinstance(exc, MajdestMissingColumnsError):
+        return f"Colonnes manquantes : {', '.join(exc.missing_columns)}"
+
+    if isinstance(exc, MajdestDuplicateBienIdError):
+        shown = exc.duplicated_ids[:20]
+        suffix = (
+            f" (et {len(exc.duplicated_ids) - 20} de plus)"
+            if len(exc.duplicated_ids) > 20
+            else ""
+        )
+        return (
+            "Bien ID en doublon dans le fichier : "
+            f"{', '.join(shown)}{suffix}"
+        )
+
+    return "Fichier de mise à jour Destination/Bureau invalide."
+
+
 def _render_destinations_page(
     request: Request,
     db: Session,
@@ -623,12 +653,19 @@ def _render_destinations_page(
         .first()
     )
 
+    last_majdest_import = (
+        db.query(DestinationBureauImport)
+        .order_by(DestinationBureauImport.imported_at.desc())
+        .first()
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="destinations.html",
         context={
             "destinations": DestinationService.list_destinations(db),
             "last_bureau_import": last_bureau_import,
+            "last_majdest_import": last_majdest_import,
             "bureau_mappings_count": db.query(BureauMapping).count(),
             "error": error
         },
@@ -800,6 +837,67 @@ async def bureaux_upload(
             "/admin/destinations?bureaux_imported=1"
             f"&added={bureau_import.added_count}"
             f"&updated={bureau_import.updated_count}"
+        ),
+        status_code=303
+    )
+
+
+@router.post("/admin/destinations/majdest")
+async def majdest_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Charge le fichier CSV de mise à jour Destination/Bureau (';', avec
+    en-tête : numero, Destination, Codes pièces et niveau), keyé par
+    Bien ID (voir DestinationBureauImportService).
+    """
+
+    require_admin(current_user)
+
+    if not file.filename.lower().endswith(".csv"):
+
+        return _render_destinations_page(
+            request,
+            db,
+            error="Le fichier doit être un CSV",
+            status_code=400
+        )
+
+    content = await file.read()
+
+    try:
+        rows = DestinationBureauImportService.parse(content)
+
+    except (
+        MajdestInvalidEncodingError,
+        MajdestMissingColumnsError,
+        MajdestDuplicateBienIdError
+    ) as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_majdest_error_message(e),
+            status_code=400
+        )
+
+    majdest_import = DestinationBureauImportService.commit(
+        db,
+        rows,
+        file.filename,
+        current_user["sub"]
+    )
+
+    _auto_backup(db, "import_majdest", current_user["sub"])
+
+    return RedirectResponse(
+        url=(
+            "/admin/destinations?majdest_imported=1"
+            f"&majdest_updated={majdest_import.updated_count}"
+            f"&majdest_unmatched={majdest_import.unmatched_count}"
         ),
         status_code=303
     )

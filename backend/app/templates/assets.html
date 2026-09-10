@@ -62,121 +62,137 @@
                 value="{{ q }}"
             >
 
-            <div class="form-check mr-3 mb-2">
-
-                <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="active_only"
-                    name="active_only"
-                    value="true"
-                    {% if active_only %}checked{% endif %}
-                >
-
-                <label class="form-check-label" for="active_only">
-                    Actifs uniquement
-                </label>
-
-            </div>
-
-            <label class="mr-2 mb-2" for="bien_id_from">
-                Bien ID de
-            </label>
-            <input
-                type="number"
-                class="form-control mr-3 mb-2"
-                style="max-width: 160px;"
-                id="bien_id_from"
-                name="bien_id_from"
-                placeholder="ex. 20260001"
-                value="{{ bien_id_from }}"
-            >
-
-            <label class="mr-2 mb-2" for="bien_id_to">
-                à
-            </label>
-            <input
-                type="number"
-                class="form-control mr-3 mb-2"
-                style="max-width: 160px;"
-                id="bien_id_to"
-                name="bien_id_to"
-                placeholder="ex. 20260020"
-                value="{{ bien_id_to }}"
-            >
-
-            <label class="mr-2 mb-2" for="immeuble">
-                Immeuble
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                style="max-width: 200px;"
-                id="immeuble"
-                name="immeuble"
-            >
-                <option value="">Tous</option>
-                {% for option in immeuble_options %}
-                <option value="{{ option }}" {% if option == immeuble %}selected{% endif %}>
-                    {{ option }}
-                </option>
-                {% endfor %}
-            </select>
-
-            <label class="mr-2 mb-2" for="niveau">
-                Niveau
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                style="max-width: 160px;"
-                id="niveau"
-                name="niveau"
-            >
-                <option value="">Tous</option>
-                {% for option in niveau_options %}
-                <option value="{{ option }}" {% if option == niveau %}selected{% endif %}>
-                    {{ option }}
-                </option>
-                {% endfor %}
-            </select>
-
-            <label class="mr-2 mb-2" for="local">
-                Local
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                style="max-width: 200px;"
-                id="local"
-                name="local"
-            >
-                <option value="">Tous</option>
-                {% for option in local_options %}
-                <option value="{{ option }}" {% if option == local %}selected{% endif %}>
-                    {{ option }}
-                </option>
-                {% endfor %}
-            </select>
-
-            <label class="mr-2 mb-2" for="printed">
-                Étiquette imprimée
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                style="max-width: 180px;"
-                id="printed"
-                name="printed"
-            >
-                <option value="">Tous</option>
-                <option value="oui" {% if printed == "oui" %}selected{% endif %}>
-                    Imprimées
-                </option>
-                <option value="non" {% if printed == "non" %}selected{% endif %}>
-                    Non imprimées
-                </option>
-            </select>
-
-            <button type="submit" class="btn btn-primary mb-2">
+            <button type="submit" class="btn btn-primary mb-2 d-md-none">
                 <i class="fas fa-search fa-sm"></i> Rechercher
             </button>
+
+            <!--
+                Filtres avancés : masqués sur smartphone (au-delà de la
+                barre de recherche), pour se concentrer sur la mise à
+                jour rapide de Destination/Bureau/Utilisateur depuis un
+                mobile. Les champs restent dans le formulaire (valeurs
+                conservées si déjà renseignées), seul leur affichage est
+                masqué.
+            -->
+            <div class="d-none d-md-flex flex-wrap align-items-center">
+
+                <div class="form-check mr-3 mb-2">
+
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="active_only"
+                        name="active_only"
+                        value="true"
+                        {% if active_only %}checked{% endif %}
+                    >
+
+                    <label class="form-check-label" for="active_only">
+                        Actifs uniquement
+                    </label>
+
+                </div>
+
+                <label class="mr-2 mb-2" for="bien_id_from">
+                    Bien ID de
+                </label>
+                <input
+                    type="number"
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 160px;"
+                    id="bien_id_from"
+                    name="bien_id_from"
+                    placeholder="ex. 20260001"
+                    value="{{ bien_id_from }}"
+                >
+
+                <label class="mr-2 mb-2" for="bien_id_to">
+                    à
+                </label>
+                <input
+                    type="number"
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 160px;"
+                    id="bien_id_to"
+                    name="bien_id_to"
+                    placeholder="ex. 20260020"
+                    value="{{ bien_id_to }}"
+                >
+
+                <label class="mr-2 mb-2" for="immeuble">
+                    Immeuble
+                </label>
+                <select
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 200px;"
+                    id="immeuble"
+                    name="immeuble"
+                >
+                    <option value="">Tous</option>
+                    {% for option in immeuble_options %}
+                    <option value="{{ option }}" {% if option == immeuble %}selected{% endif %}>
+                        {{ option }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label class="mr-2 mb-2" for="niveau">
+                    Niveau
+                </label>
+                <select
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 160px;"
+                    id="niveau"
+                    name="niveau"
+                >
+                    <option value="">Tous</option>
+                    {% for option in niveau_options %}
+                    <option value="{{ option }}" {% if option == niveau %}selected{% endif %}>
+                        {{ option }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label class="mr-2 mb-2" for="local">
+                    Local
+                </label>
+                <select
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 200px;"
+                    id="local"
+                    name="local"
+                >
+                    <option value="">Tous</option>
+                    {% for option in local_options %}
+                    <option value="{{ option }}" {% if option == local %}selected{% endif %}>
+                        {{ option }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <label class="mr-2 mb-2" for="printed">
+                    Étiquette imprimée
+                </label>
+                <select
+                    class="form-control mr-3 mb-2"
+                    style="max-width: 180px;"
+                    id="printed"
+                    name="printed"
+                >
+                    <option value="">Tous</option>
+                    <option value="oui" {% if printed == "oui" %}selected{% endif %}>
+                        Imprimées
+                    </option>
+                    <option value="non" {% if printed == "non" %}selected{% endif %}>
+                        Non imprimées
+                    </option>
+                </select>
+
+                <button type="submit" class="btn btn-primary mb-2">
+                    <i class="fas fa-search fa-sm"></i> Rechercher
+                </button>
+
+            </div>
 
         </form>
 
@@ -194,12 +210,12 @@
 
             <h6 class="m-0 font-weight-bold text-primary">
                 Biens
-                <span class="badge badge-primary ml-2">
+                <span class="badge badge-primary ml-2 d-none d-md-inline-block">
                     <span id="selected-count">0</span> sélectionné(s) au total
                 </span>
             </h6>
 
-            <div>
+            <div class="d-none d-md-flex">
                 {% if request.state.role == 'lecteur' %}
                 <button type="button" class="btn btn-outline-primary btn-sm" disabled title="Réservé aux gestionnaires et administrateurs">
                     <i class="fas fa-wifi fa-sm"></i> Export lecteur RFID
@@ -251,27 +267,27 @@
                     <thead>
 
                         <tr>
-                            <th>
+                            <th class="d-none d-md-table-cell">
                                 <input
                                     type="checkbox"
                                     id="select-all-assets"
                                     title="Sélectionner toutes les lignes affichées"
                                 >
                             </th>
-                            <th>ID</th>
+                            <th class="d-none d-md-table-cell">ID</th>
                             <th>Bien ID</th>
-                            <th>Désignation</th>
-                            <th>Numéro local</th>
-                            <th>Immeuble</th>
-                            <th>Niveau</th>
-                            <th>Local</th>
+                            <th class="d-none d-md-table-cell">Désignation</th>
+                            <th class="d-none d-md-table-cell">Numéro local</th>
+                            <th class="d-none d-md-table-cell">Immeuble</th>
+                            <th class="d-none d-md-table-cell">Niveau</th>
+                            <th class="d-none d-md-table-cell">Local</th>
                             <th>Destination</th>
                             <th>Bureau</th>
                             <th>Utilisateur</th>
-                            <th>Numéro de série</th>
-                            <th>Actif</th>
-                            <th>Étiquette imprimée</th>
-                            <th>Lot d'impression</th>
+                            <th class="d-none d-md-table-cell">Numéro de série</th>
+                            <th class="d-none d-md-table-cell">Actif</th>
+                            <th class="d-none d-md-table-cell">Étiquette imprimée</th>
+                            <th class="d-none d-md-table-cell">Lot d'impression</th>
                         </tr>
 
                     </thead>
@@ -282,7 +298,7 @@
 
                         <tr>
 
-                            <td>
+                            <td class="d-none d-md-table-cell">
                                 <input
                                     type="checkbox"
                                     name="asset_ids"
@@ -290,19 +306,19 @@
                                 >
                             </td>
 
-                            <td>{{ asset.id }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.id }}</td>
 
                             <td>{{ asset.bien_id }}</td>
 
-                            <td>{{ asset.bien_designation }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.bien_designation }}</td>
 
-                            <td>{{ asset.local_numero or "" }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.local_numero or "" }}</td>
 
-                            <td>{{ asset.immeuble_libelle or "" }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.immeuble_libelle or "" }}</td>
 
-                            <td>{{ asset.niveau_libelle or "" }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.niveau_libelle or "" }}</td>
 
-                            <td>{{ asset.local_libelle or "" }}</td>
+                            <td class="d-none d-md-table-cell">{{ asset.local_libelle or "" }}</td>
 
                             <td>
                                 {% if request.state.role == 'lecteur' %}
@@ -374,9 +390,9 @@
                                 {% endif %}
                             </td>
 
-                            <td>{{ glpi_info_by_bien_id.get(asset.bien_id, {}).get("numero_serie", "") }}</td>
+                            <td class="d-none d-md-table-cell">{{ glpi_info_by_bien_id.get(asset.bien_id, {}).get("numero_serie", "") }}</td>
 
-                            <td>
+                            <td class="d-none d-md-table-cell">
 
                                 {% if asset.is_active %}
 
@@ -394,7 +410,7 @@
 
                             </td>
 
-                            <td>
+                            <td class="d-none d-md-table-cell">
 
                                 {% if latest_printed_job_by_asset_id.get(asset.id) %}
 
@@ -412,7 +428,7 @@
 
                             </td>
 
-                            <td>
+                            <td class="d-none d-md-table-cell">
                                 {% set printed_job_id = latest_printed_job_by_asset_id.get(asset.id) %}
                                 {% if printed_job_id %}
                                 <a href="/jobs/{{ printed_job_id }}">
@@ -466,13 +482,13 @@
 
 <!-- Export du résultat de la recherche -->
 
-<a href="/assets/export-csv?{{ filters_qs }}" class="btn btn-outline-success btn-sm mb-3">
+<a href="/assets/export-csv?{{ filters_qs }}" class="btn btn-outline-success btn-sm mb-3 d-none d-md-inline-block">
     <i class="fas fa-file-csv fa-sm"></i> Exporter le résultat en CSV
 </a>
 
 <!-- Lignes par page -->
 
-<form method="get" class="form-inline mb-3" id="page-size-form">
+<form method="get" class="form-inline mb-3 d-none d-md-flex" id="page-size-form">
 
     <input type="hidden" name="q" value="{{ q }}">
     {% if active_only %}<input type="hidden" name="active_only" value="true">{% endif %}

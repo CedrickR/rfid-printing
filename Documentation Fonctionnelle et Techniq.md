@@ -772,6 +772,44 @@ Python étant déjà installé sur le serveur, seules les étapes suivantes sont
 
 > Si l'installation de production **existe déjà** et tourne avec ses propres données (il ne s'agit alors pas d'une première mise en ligne mais d'une mise à jour du code), suivre plutôt la procédure de mise à jour classique (§9.2), qui ne touche à aucune donnée existante.
 
+### 8.10 Installation sans accès direct à Internet (proxy d'entreprise bloquant git/pip)
+
+Si le serveur de production n'a pas d'accès sortant utilisable par `git` et `pip` (proxy d'entreprise qui bloque ou filtre ces outils, même quand la navigation web fonctionne), remplacer les étapes réseau de §8.3 par un **paquet hors-ligne** préparé sur une autre machine ayant, elle, un accès Internet fonctionnel (le poste de développement/test fait très bien l'affaire).
+
+1. **Sur la machine avec accès Internet**, avec la **même version de Python que le serveur de production** (3.11 — les paquets Python contiennent des composants compilés spécifiques à la version et à l'OS, idéalement préparer ce paquet depuis une machine Windows pour obtenir les mêmes fichiers `.whl` que ceux attendus en production) :
+
+   ```powershell
+   cd chemin\vers\rfid-printing\backend
+
+   py -3.11 -m pip download -r requirements.txt -d wheelhouse
+   ```
+
+   `wheelhouse\` contient alors tous les paquets nécessaires (et leurs dépendances), prêts à être installés sans aucun accès réseau.
+
+2. **Constituer le paquet à transférer** : le dossier du code source de l'application (`rfid-printing\`, tel quel — un simple export/téléchargement ZIP du dépôt convient, **git n'est pas nécessaire sur le serveur de production**) plus le dossier `wheelhouse\` généré à l'étape précédente. Les regrouper dans une archive unique.
+
+3. **Transférer cette archive vers le serveur de production** par le moyen déjà validé par l'équipe informatique pour ce type de transfert (clé USB, partage réseau interne, outil de dépôt de fichiers interne...) — c'est le seul point de passage réseau/physique nécessaire, indépendant du proxy.
+
+4. **Sur le serveur de production**, extraire l'archive (ex. dans `C:\rfid-printing`) puis installer à partir du dossier `wheelhouse` local, sans jamais solliciter le réseau :
+
+   ```powershell
+   cd C:\rfid-printing\backend
+
+   py -3.11 -m venv venv
+   .\venv\Scripts\Activate.ps1
+   pip install --no-index --find-links=wheelhouse -r requirements.txt
+
+   copy .env.example .env
+   ```
+
+   `--no-index --find-links=wheelhouse` indique à pip de n'utiliser **que** ce dossier local, sans jamais tenter de contacter PyPI — fonctionne même si le proxy bloque `pip` intégralement.
+
+5. **Poursuivre l'installation normalement à partir de l'édition de `.env` en §8.3** (`alembic upgrade head`, etc.).
+
+> **Mise à jour ultérieure de l'application** (§9.2) : même principe — régénérer `wheelhouse` uniquement si `requirements.txt` a changé depuis la dernière installation, transférer la nouvelle version du code (export ZIP à jour, sans `git pull`), puis réinstaller avec `pip install --no-index --find-links=wheelhouse -r requirements.txt` avant de relancer le service.
+
+> Si le blocage n'est pas total mais que le proxy demande simplement d'être configuré (authentification, adresse spécifique), il est parfois plus simple d'essayer d'abord `pip install --proxy http://utilisateur:motdepasse@proxy:port -r requirements.txt` et, pour Git, `git config --global http.proxy http://proxy:port` — à tenter avant de recourir au paquet hors-ligne si l'équipe informatique peut fournir ces informations. Un proxy qui **intercepte le TLS** (certificat d'entreprise réémis) peut en plus nécessiter de faire confiance à ce certificat (`git config --global http.sslCAInfo <chemin>` ; pour pip, `pip config set global.cert <chemin>` ou variable d'environnement `PIP_CERT`).
+
 ---
 
 ## 9. Exploitation et maintenance
@@ -797,6 +835,8 @@ pip install -r requirements.txt   # si les dépendances ont changé
 alembic upgrade head              # au cas où (les migrations s'appliquent aussi seules au démarrage)
 nssm start RfidPrinting
 ```
+
+> Si `git`/`pip` ne peuvent pas atteindre Internet depuis le serveur de production (proxy d'entreprise), voir §8.10 : régénérer `wheelhouse` si les dépendances ont changé, transférer la nouvelle version du code sans `git pull`, puis `pip install --no-index --find-links=wheelhouse -r requirements.txt`.
 
 ### 9.3 Journaux
 

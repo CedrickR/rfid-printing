@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 def _login_web(client, username, password):
 
     client.post(
@@ -128,3 +131,101 @@ def _get_token(client):
     )
 
     return login.json()["access_token"]
+
+
+def test_reset_print_jobs_requires_admin_role(client, standard_user):
+
+    _login_web(client, "employe", "Employe123!")
+
+    response = client.post(
+        "/admin/reset-print-jobs",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_print_jobs_denies_manager_role(client, manager_user):
+
+    _login_web(client, "gestionnaire", "Gestionnaire123!")
+
+    response = client.post(
+        "/admin/reset-print-jobs",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_print_jobs_requires_login(client):
+
+    response = client.post(
+        "/admin/reset-print-jobs",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_reset_print_jobs_wipes_jobs_but_keeps_inventory(
+    client, admin_user
+):
+
+    _login_web(client, "admin", "Admin123!")
+    _seed_assets(client)
+
+    token = _get_token(client)
+
+    assets = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    ).json()
+
+    job_response = client.post(
+        "/api/print/jobs",
+        json={"asset_ids": [assets[0]["id"]]},
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    job_id = job_response.json()["job_id"]
+
+    client.post(
+        f"/api/print/jobs/{job_id}/generate",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    generated_dir = Path(__file__).resolve().parent.parent / "generated"
+
+    assert any(generated_dir.glob("*.cmd"))
+
+    response = client.post(
+        "/admin/reset-print-jobs",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/dashboard?reset_jobs=1"
+
+    assets_after = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert len(assets_after.json()) == 2
+
+    jobs_after = client.get(
+        "/api/print/jobs",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert jobs_after.json() == []
+
+    history_after = client.get(
+        "/api/history",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert history_after.json() == []
+
+    assert not any(generated_dir.glob("*.cmd"))

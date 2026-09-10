@@ -73,7 +73,9 @@ Organisé en deux onglets.
 - **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - **Graphique « Étiquettes imprimées et non imprimées par destination »** (barres horizontales empilées) : pour chaque destination (« Sans destination » incluse), la répartition des biens actifs entre étiquette imprimée et non imprimée — même définition de « imprimée » que le graphique précédent (lot **généré** au moins une fois).
-- Panneau **« Zone sensible »** (administrateur uniquement) : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés). Action irréversible, confirmation JavaScript obligatoire.
+- Panneau **« Zone sensible »** (administrateur uniquement), deux actions irréversibles avec confirmation JavaScript obligatoire :
+  - **Vider la base de données** : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés).
+  - **Réinitialiser les lots d'impression** (`POST /admin/reset-print-jobs`) : supprime uniquement les lots d'impression (lots, lignes de lot, historique des générations/réimpressions) et les fichiers `.cmd` déjà générés sur le disque, **sans toucher à l'inventaire** (biens, imports) ni au reste des données (Destination/Bureau, GLPI, scans RFID, comptes). Utile pour repartir sur un historique d'impression vierge (ex. mise en production, §8.9) sans perdre l'inventaire déjà en place.
 
 **Onglet « Répartition par bureau »** :
 
@@ -231,7 +233,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 - **Tableau des sauvegardes** : date, origine (import inventaire / scan RFID / GLPI / manuelle), auteur, taille, avec pour chaque ligne :
   - **Restaurer** (`POST /admin/backups/{fichier}/restore`) : remplace intégralement la base active par le contenu de cette sauvegarde. Confirmation obligatoire ; action irréversible.
   - **Supprimer** (`POST /admin/backups/{fichier}/delete`) : supprime définitivement cette sauvegarde. Confirmation obligatoire.
-- **Zone sensible** : bouton « Vider la base de données » (même action que sur le tableau de bord, `POST /admin/reset-database`), avec confirmation obligatoire — regroupé ici avec les sauvegardes qui en sont le filet de sécurité.
+- **Zone sensible** : boutons « Vider la base de données » et « Réinitialiser les lots d'impression » (mêmes actions que sur le tableau de bord, §2.2, `POST /admin/reset-database` et `POST /admin/reset-print-jobs`), avec confirmation obligatoire — regroupés ici avec les sauvegardes qui en sont le filet de sécurité.
 - Les fichiers de sauvegarde (`.db`) et leurs métadonnées (`.json`) sont stockés hors de la base elle-même (dossier `backend/backups/`, non versionné), pour rester disponibles et cohérents même après une restauration.
 
 ### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
@@ -470,6 +472,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `GET` | `/logout` | Déconnexion (purge du cookie) |
 | `GET` | `/dashboard` | Tableau de bord |
 | `POST` | `/admin/reset-database` | Réinitialisation de la base métier (administrateur) |
+| `POST` | `/admin/reset-print-jobs` | Réinitialisation des seuls lots d'impression, sans toucher à l'inventaire (administrateur) |
 | `GET` | `/admin/users` | Liste des utilisateurs (administrateur) |
 | `POST` | `/admin/users` | Création d'un utilisateur (administrateur) |
 | `POST` | `/admin/users/{id}/role` | Changement de profil (administrateur) |
@@ -730,6 +733,43 @@ Une fois HTTPS actif, repasser `COOKIE_SECURE=true` dans `.env` (§8.3) si ce n'
 
 - Le service `RfidPrinting` (NSSM, *Startup type* = Automatic) démarre seul après redémarrage de Windows.
 - Vérifier également que le service Apache de XAMPP est configuré pour démarrer automatiquement (panneau de contrôle XAMPP → case à cocher *Service* sur la ligne Apache, ou installation du module Apache comme service Windows via `httpd.exe -k install`).
+
+### 8.9 Mise en production avec les données actuelles (au lieu d'une base vierge)
+
+Variante de la première installation (§8.1 à §8.8) pour le cas où l'environnement de test/développement actuel contient déjà des données qu'on souhaite **reprendre telles quelles** en production (inventaire déjà importé, correspondances Destination/Bureau, rapprochements GLPI...), plutôt que de repartir d'une base vide.
+
+Python étant déjà installé sur le serveur, seules les étapes suivantes sont nécessaires :
+
+1. **Récupérer le code** de cette version sur le serveur de production (ex. `C:\rfid-printing`), par clonage Git ou copie du dossier — voir §8.2/§8.3 pour les prérequis.
+
+2. **Installer l'application normalement (§8.3)**, jusqu'à `pip install -r requirements.txt` inclus, **mais sans exécuter `python -m app.seed`** : cette commande sert uniquement à amorcer un compte administrateur sur une base vide, ce qui est inutile puisque les comptes de l'environnement de test seront repris avec le reste des données.
+
+3. **Copier les données actuelles** depuis l'environnement de test vers `C:\rfid-printing\backend` sur le serveur de production :
+   - `rfid.db` (la base de données complète) ;
+   - le dossier `generated\` (fichiers `.cmd` déjà générés), si on souhaite les conserver.
+
+   > Conserver une copie de ces fichiers à part avant de poursuivre, en plus de la sauvegarde applicative (§9.1) : c'est le filet de sécurité le plus simple en cas d'erreur dans les étapes suivantes.
+
+4. **Mettre la base copiée à jour vers le schéma courant** (la base de test peut avoir été migrée à un moment différent de la version du code déployée) :
+
+   ```powershell
+   cd C:\rfid-printing\backend
+   .\venv\Scripts\Activate.ps1
+   alembic upgrade head
+   ```
+
+   Sans effet si la base était déjà à jour ; applique sinon les migrations manquantes sans perte de données.
+
+5. **Décider du sort des lots d'impression de test**, avant d'ouvrir l'accès aux utilisateurs réels : la base copiée contient très probablement des lots créés pendant les essais, qu'on ne veut généralement pas garder en production.
+
+   - Démarrer temporairement l'application en local (`uvicorn app.main:app --host 127.0.0.1 --port 8000`), se connecter avec un compte administrateur existant, puis :
+     - Pour repartir avec un historique d'impression **vierge** tout en conservant l'inventaire : utiliser le bouton **« Réinitialiser les lots d'impression »** (tableau de bord ou page Sauvegardes, §2.2/§2.11 — `POST /admin/reset-print-jobs`). Supprime les lots, leurs lignes, l'historique des générations/réimpressions et les fichiers `.cmd` déjà générés, **sans toucher à l'inventaire** (biens, imports) ni au reste des données (Destination/Bureau, GLPI, scans RFID, comptes utilisateurs).
+     - Pour conserver l'historique de test tel quel (déconseillé en production) : ne rien faire à cette étape.
+   - Arrêter ce serveur temporaire (Ctrl+C) avant de poursuivre.
+
+6. **Poursuivre l'installation normalement à partir de §8.4** (service Windows NSSM, reverse proxy Apache, HTTPS, pare-feu, démarrage automatique).
+
+> Si l'installation de production **existe déjà** et tourne avec ses propres données (il ne s'agit alors pas d'une première mise en ligne mais d'une mise à jour du code), suivre plutôt la procédure de mise à jour classique (§9.2), qui ne touche à aucune donnée existante.
 
 ---
 

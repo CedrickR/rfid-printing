@@ -776,15 +776,19 @@ Python étant déjà installé sur le serveur, seules les étapes suivantes sont
 
 Si le serveur de production n'a pas d'accès sortant utilisable par `git` et `pip` (proxy d'entreprise qui bloque ou filtre ces outils, même quand la navigation web fonctionne), remplacer les étapes réseau de §8.3 par un **paquet hors-ligne** préparé sur une autre machine ayant, elle, un accès Internet fonctionnel (le poste de développement/test fait très bien l'affaire).
 
-1. **Sur la machine avec accès Internet**, avec la **même version de Python que le serveur de production** (3.11 — les paquets Python contiennent des composants compilés spécifiques à la version et à l'OS, idéalement préparer ce paquet depuis une machine Windows pour obtenir les mêmes fichiers `.whl` que ceux attendus en production) :
+1. **Sur la machine avec accès Internet** (Windows ou non — voir la remarque ci-dessous) :
 
    ```powershell
    cd chemin\vers\rfid-printing\backend
 
-   py -3.11 -m pip download -r requirements.txt -d wheelhouse
+   pip download -r requirements.txt -d wheelhouse --only-binary=:all: --platform win_amd64 --python-version 311 --implementation cp --abi cp311
    ```
 
    `wheelhouse\` contient alors tous les paquets nécessaires (et leurs dépendances), prêts à être installés sans aucun accès réseau.
+
+   > **Ces options `--platform`/`--python-version`/`--implementation`/`--abi` sont indispensables**, pas une simple précaution : plusieurs dépendances (`sqlalchemy`, `pydantic`, `bcrypt`, `pandas`...) contiennent du code compilé, publié sous forme de fichiers `.whl` **spécifiques à chaque OS/version de Python** (ex. `SQLAlchemy‑2.0.51‑cp311‑cp311‑win_amd64.whl`), à la différence de paquets purement Python comme `fastapi`/`uvicorn`/`jinja2` (`...-py3-none-any.whl`, valables partout). Sans ces options, `pip download` ne récupère que les fichiers compatibles avec **la machine sur laquelle la commande tourne** : lancée depuis une machine non-Windows ou une autre version de Python, le `wheelhouse` obtenu ne contiendra pas les bons fichiers pour le serveur de production, et l'installation échouera ensuite avec une erreur du type `No matching distribution found for sqlalchemy==2.0.51` — ces options forcent le téléchargement des `.whl` **Windows / Python 3.11 64 bits**, quelle que soit la machine utilisée pour préparer le paquet. `--only-binary=:all:` exclut les paquets sans `.whl` prêt à l'emploi pour cette cible (aucun de ceux listés dans `requirements.txt` à ce jour).
+   >
+   > **Si le `wheelhouse` transféré s'avère incomplet** (erreur `No matching distribution found for <paquet>` à l'installation, §8.10 étape 4) : vérifier sur le serveur de production avec `dir wheelhouse\*<paquet>*` que le fichier est bien absent, puis relancer la commande ci-dessus **avec ces options** sur la machine de préparation et retransférer le dossier.
 
 2. **Constituer le paquet à transférer** : le dossier du code source de l'application (`rfid-printing\`, tel quel — un simple export/téléchargement ZIP du dépôt convient, **git n'est pas nécessaire sur le serveur de production**) plus le dossier `wheelhouse\` généré à l'étape précédente. Les regrouper dans une archive unique.
 

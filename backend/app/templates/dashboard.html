@@ -27,6 +27,14 @@
 </div>
 {% endif %}
 
+{% if request.query_params.get('reset_jobs') == '1' %}
+<div class="alert alert-success">
+    Lots d'impression réinitialisés : lots, lignes de lot, historique et
+    fichiers .cmd générés ont été supprimés. L'inventaire n'est pas
+    affecté.
+</div>
+{% endif %}
+
 <ul class="nav nav-tabs" id="dashboardTab" role="tablist">
 
     <li class="nav-item">
@@ -250,6 +258,25 @@
         >
             <button type="submit" class="btn btn-danger btn-sm">
                 <i class="fas fa-trash fa-sm"></i> Vider la base de données
+            </button>
+        </form>
+
+        <hr>
+
+        <p class="mb-3">
+            Supprime définitivement uniquement les lots d'impression (lots,
+            lignes de lot, historique) et les fichiers .cmd déjà générés.
+            L'inventaire (biens, imports) et le reste des données ne sont
+            pas affectés. Cette action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/admin/reset-print-jobs"
+            onsubmit="return confirm('Supprimer définitivement les lots d\'impression (lots, lignes de lot, historique, fichiers .cmd générés) ? L\'inventaire ne sera pas affecté. Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Réinitialiser les lots d'impression
             </button>
         </form>
 

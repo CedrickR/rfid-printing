@@ -129,6 +129,15 @@ def test_reader_is_forbidden_from_reset_database(client, standard_user):
     assert response.status_code == 403
 
 
+def test_reader_is_forbidden_from_reset_print_jobs(client, standard_user):
+
+    _login(client, "employe", "Employe123!")
+
+    response = client.post("/admin/reset-print-jobs")
+
+    assert response.status_code == 403
+
+
 MANAGER_ALLOWED_GET_ROUTES = [
     "/dashboard",
     "/import",

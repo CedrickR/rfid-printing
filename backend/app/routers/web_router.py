@@ -459,6 +459,44 @@ def reset_database(
     )
 
 
+@router.post("/admin/reset-print-jobs")
+def reset_print_jobs(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Vide uniquement les lots d'impression (lots, lignes de lot,
+    historique des générations/réimpressions) et supprime les
+    fichiers .cmd déjà générés sur le disque. N'affecte ni l'inventaire
+    (biens, imports) ni les autres données (Destination/Bureau, GLPI,
+    scans RFID, comptes utilisateurs). Réservé aux administrateurs :
+    action irréversible. Utile pour repartir sur un historique
+    d'impression vierge (ex. mise en production) sans perdre
+    l'inventaire déjà en place.
+    """
+
+    require_admin(current_user)
+
+    db.query(PrintHistory).delete()
+    db.query(PrintJobLine).delete()
+    db.query(PrintJob).delete()
+
+    db.commit()
+
+    for cmd_file in CommandGenerator().output_dir.glob("*.cmd"):
+        cmd_file.unlink()
+
+    logger.warning(
+        "Lots d'impression réinitialisés par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/dashboard?reset_jobs=1",
+        status_code=303
+    )
+
+
 def _render_backups_page(
     request: Request,
     db: Session,

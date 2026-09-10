@@ -62,17 +62,56 @@
                 value="{{ q }}"
             >
 
-            <button type="submit" class="btn btn-primary mb-2 d-md-none">
-                <i class="fas fa-search fa-sm"></i> Rechercher
-            </button>
+            <label class="mr-2 mb-2" for="bien_id_from">
+                Bien ID de
+            </label>
+            <input
+                type="number"
+                class="form-control mr-3 mb-2"
+                style="max-width: 160px;"
+                id="bien_id_from"
+                name="bien_id_from"
+                placeholder="ex. 20260001"
+                value="{{ bien_id_from }}"
+            >
+
+            <label class="mr-2 mb-2" for="bien_id_to">
+                à
+            </label>
+            <input
+                type="number"
+                class="form-control mr-3 mb-2"
+                style="max-width: 160px;"
+                id="bien_id_to"
+                name="bien_id_to"
+                placeholder="ex. 20260020"
+                value="{{ bien_id_to }}"
+            >
+
+            <label class="mr-2 mb-2" for="local">
+                Local
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="max-width: 200px;"
+                id="local"
+                name="local"
+            >
+                <option value="">Tous</option>
+                {% for option in local_options %}
+                <option value="{{ option }}" {% if option == local %}selected{% endif %}>
+                    {{ option }}
+                </option>
+                {% endfor %}
+            </select>
 
             <!--
-                Filtres avancés : masqués sur smartphone (au-delà de la
-                barre de recherche), pour se concentrer sur la mise à
-                jour rapide de Destination/Bureau/Utilisateur depuis un
-                mobile. Les champs restent dans le formulaire (valeurs
-                conservées si déjà renseignées), seul leur affichage est
-                masqué.
+                Filtres avancés restants : masqués sur smartphone (au-delà
+                de la barre de recherche, du Bien ID et du Local
+                ci-dessus), pour se concentrer sur la mise à jour rapide
+                de Destination/Bureau/Utilisateur depuis un mobile. Les
+                champs restent dans le formulaire (valeurs conservées si
+                déjà renseignées), seul leur affichage est masqué.
             -->
             <div class="d-none d-md-flex flex-wrap align-items-center">
 
@@ -92,32 +131,6 @@
                     </label>
 
                 </div>
-
-                <label class="mr-2 mb-2" for="bien_id_from">
-                    Bien ID de
-                </label>
-                <input
-                    type="number"
-                    class="form-control mr-3 mb-2"
-                    style="max-width: 160px;"
-                    id="bien_id_from"
-                    name="bien_id_from"
-                    placeholder="ex. 20260001"
-                    value="{{ bien_id_from }}"
-                >
-
-                <label class="mr-2 mb-2" for="bien_id_to">
-                    à
-                </label>
-                <input
-                    type="number"
-                    class="form-control mr-3 mb-2"
-                    style="max-width: 160px;"
-                    id="bien_id_to"
-                    name="bien_id_to"
-                    placeholder="ex. 20260020"
-                    value="{{ bien_id_to }}"
-                >
 
                 <label class="mr-2 mb-2" for="immeuble">
                     Immeuble
@@ -153,23 +166,6 @@
                     {% endfor %}
                 </select>
 
-                <label class="mr-2 mb-2" for="local">
-                    Local
-                </label>
-                <select
-                    class="form-control mr-3 mb-2"
-                    style="max-width: 200px;"
-                    id="local"
-                    name="local"
-                >
-                    <option value="">Tous</option>
-                    {% for option in local_options %}
-                    <option value="{{ option }}" {% if option == local %}selected{% endif %}>
-                        {{ option }}
-                    </option>
-                    {% endfor %}
-                </select>
-
                 <label class="mr-2 mb-2" for="printed">
                     Étiquette imprimée
                 </label>
@@ -188,11 +184,11 @@
                     </option>
                 </select>
 
-                <button type="submit" class="btn btn-primary mb-2">
-                    <i class="fas fa-search fa-sm"></i> Rechercher
-                </button>
-
             </div>
+
+            <button type="submit" class="btn btn-primary mb-2">
+                <i class="fas fa-search fa-sm"></i> Rechercher
+            </button>
 
         </form>
 

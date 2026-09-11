@@ -845,7 +845,9 @@ alembic upgrade head              # au cas où (les migrations s'appliquent auss
 nssm start RfidPrinting
 ```
 
-> Si `git`/`pip` ne peuvent pas atteindre Internet depuis le serveur de production (proxy d'entreprise), voir §8.10 : régénérer `wheelhouse` si les dépendances ont changé, transférer la nouvelle version du code sans `git pull`, puis `pip install --no-index --find-links=wheelhouse -r requirements.txt`.
+> Si `git`/`pip` ne peuvent pas atteindre Internet depuis le serveur de production (proxy d'entreprise), voir §8.10 : régénérer `wheelhouse` si les dépendances ont changé (pour la version de Python **du serveur de production**, pas forcément celle de la machine de préparation), transférer la nouvelle version du code sans `git pull`, puis `pip install --no-index --find-links=wheelhouse -r requirements.txt`.
+>
+> **En copiant le code manuellement (sans `git pull`), ne remplacer que le code** (`app\`, `alembic\`, `requirements.txt`, `alembic.ini`) — **jamais** `.env` (secrets propres à cette installation), `rfid.db` (base de données réelle), `generated\` (fichiers `.cmd` déjà générés) ni `backups\`, sous peine d'écraser les données de production avec celles de l'environnement d'où provient la mise à jour. Le plus sûr est un export/zip du dépôt excluant explicitement ces éléments (ainsi que `venv\`) plutôt qu'une copie brute du dossier complet.
 
 ### 9.3 Journaux
 

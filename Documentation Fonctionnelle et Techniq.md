@@ -50,7 +50,7 @@ RFID PRINTING permet aux utilisateurs autorisés de :
 | Authentification API | JWT porté en en-tête `Authorization: Bearer <token>` |
 | Génération de fichiers | Module Python interne (gabarits à placeholders) |
 
-L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de build Node) : cela évite toute dépendance à npm/Node, incompatible avec le proxy d'entreprise de l'exploitant.
+L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de build Node). Les bibliothèques front-end (Bootstrap/SB Admin 2, jQuery, Font Awesome, police Nunito, Chart.js, JsBarcode) sont **servies directement par l'application** depuis `app/static/vendor/` plutôt que chargées depuis un CDN : l'interface fonctionne donc aussi bien pour un utilisateur derrière un proxy d'entreprise qui bloquerait `cdnjs.cloudflare.com`/`cdn.jsdelivr.net`/`fonts.googleapis.com` (même situation que git/pip, §8.10). Ces fichiers sont récupérés une fois pour toutes via le registre npm (`npm pack`, lui aussi accessible sans configuration particulière dans la plupart des cas) puis committés tels quels dans le dépôt — aucune dépendance à npm/Node n'est nécessaire pour faire fonctionner ou mettre à jour l'application elle-même.
 
 ---
 
@@ -70,7 +70,7 @@ Organisé en deux onglets.
 **Onglet « Vue d'ensemble »** :
 
 - Compteurs : nombre d'imports, de biens actifs, de lots, d'entrées d'historique.
-- **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
+- **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (servi localement, §1.2).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - **Graphique « Étiquettes imprimées et non imprimées par destination »** (barres horizontales empilées) : pour chaque destination (« Sans destination » incluse), la répartition des biens actifs entre étiquette imprimée et non imprimée — même définition de « imprimée » que le graphique précédent (lot **généré** au moins une fois).
 - Panneau **« Zone sensible »** (administrateur uniquement), deux actions irréversibles avec confirmation JavaScript obligatoire :
@@ -127,7 +127,7 @@ Organisé en deux onglets.
     - la **Destination** du bien, agrandie : première lettre en lettrine (grande police), suivie du reste du mot (police réduite, tronqué avec « … » si trop long pour tenir sur une ligne) ;
     - l'**étage**, le **bureau** et le **code pièce et service** correspondants (police réduite, sur 2 lignes maximum, tronqué avec « … » au-delà) ;
     - une ligne de séparation ;
-    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN), préfixé de `261` (ex. Bien ID `20260001` → `26120260001`, même préfixe que l'export « Inventaire immatériel », §2.4), centré, puis en dessous le même numéro préfixé en chiffres (police agrandie), également centré — la largeur de trait est recalculée après un premier rendu pour que le code-barres occupe toujours une largeur physique constante (~72 mm) quel que soit le nombre de chiffres du Bien ID ;
+    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), servi localement, §1.2), préfixé de `261` (ex. Bien ID `20260001` → `26120260001`, même préfixe que l'export « Inventaire immatériel », §2.4), centré, puis en dessous le même numéro préfixé en chiffres (police agrandie), également centré — la largeur de trait est recalculée après un premier rendu pour que le code-barres occupe toujours une largeur physique constante (~72 mm) quel que soit le nombre de chiffres du Bien ID ;
     - le reste de la hauteur disponible est laissé en blanc pour des annotations manuscrites.
     Les tailles de police sont calibrées pour tenir dans les 90 x 36 mm ; en cas de bureau très long, la ligne étage/bureau/code peut être tronquée (jamais le code-barres ni son numéro, prioritaires) — à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
@@ -366,7 +366,10 @@ rfid-printing/
     │   │   └── users.html                 Gestion des utilisateurs
     │   │
     │   └── static/
-    │       └── css/app.css            Styles additionnels + mise en page d'impression (@media print)
+    │       ├── css/app.css            Styles additionnels + mise en page d'impression (@media print)
+    │       └── vendor/                Bibliothèques front-end vendorisées (§1.2) : Bootstrap/
+    │                                   SB Admin 2, jQuery, Font Awesome, police Nunito,
+    │                                   Chart.js, JsBarcode — servies localement, sans CDN
     │
     ├── generated/                     Fichiers .cmd générés (créé au premier lancement, ignoré par git)
     ├── rfid.db                        Base SQLite (créée au premier lancement, ignorée par git)
@@ -776,26 +779,32 @@ Python étant déjà installé sur le serveur, seules les étapes suivantes sont
 
 Si le serveur de production n'a pas d'accès sortant utilisable par `git` et `pip` (proxy d'entreprise qui bloque ou filtre ces outils, même quand la navigation web fonctionne), remplacer les étapes réseau de §8.3 par un **paquet hors-ligne** préparé sur une autre machine ayant, elle, un accès Internet fonctionnel (le poste de développement/test fait très bien l'affaire).
 
-1. **Sur la machine avec accès Internet**, avec la **même version de Python que le serveur de production** (3.11 — les paquets Python contiennent des composants compilés spécifiques à la version et à l'OS, idéalement préparer ce paquet depuis une machine Windows pour obtenir les mêmes fichiers `.whl` que ceux attendus en production) :
+0. **Repérer la version de Python installée sur le serveur de production** (`python --version` ou `py --version`, exécuté **sur ce serveur**) : c'est cette version exacte qui doit être ciblée à l'étape 1 — pas nécessairement 3.11. §8.2 demande « Python 3.11+ » : une version plus récente déjà installée (3.12, 3.13...) convient tout aussi bien, mais **le `wheelhouse` doit être construit pour cette version précise**, sans quoi l'installation échoue avec `No matching distribution found for <paquet>` (les wheels de `sqlalchemy`/`pydantic`/`pandas`... sont spécifiques à chaque version de Python — voir la remarque sous l'étape 1). En cas de doute, `py -0` (ou `py --list`) liste toutes les versions Python installées sur la machine.
+
+1. **Sur la machine avec accès Internet** (Windows ou non — voir la remarque ci-dessous), en remplaçant `3.13` par la version relevée à l'étape 0 (garder le format à deux composants avec le point, ex. `3.11`, `3.12`, `3.13`) :
 
    ```powershell
    cd chemin\vers\rfid-printing\backend
 
-   py -3.11 -m pip download -r requirements.txt -d wheelhouse
+   pip download -r requirements.txt -d wheelhouse --only-binary=:all: --platform win_amd64 --python-version 3.13 --implementation cp --abi cp313
    ```
 
-   `wheelhouse\` contient alors tous les paquets nécessaires (et leurs dépendances), prêts à être installés sans aucun accès réseau.
+   Adapter également `cp313` (dans `--abi`) à la même version, sans point (`cp311` pour 3.11, `cp312` pour 3.12, etc.). `wheelhouse\` contient alors tous les paquets nécessaires (et leurs dépendances), prêts à être installés sans aucun accès réseau.
+
+   > **Ces options `--platform`/`--python-version`/`--implementation`/`--abi` sont indispensables**, pas une simple précaution : plusieurs dépendances (`sqlalchemy`, `pydantic`, `pandas`...) contiennent du code compilé, publié sous forme de fichiers `.whl` **spécifiques à chaque OS/version de Python** (ex. `SQLAlchemy‑2.0.51‑cp313‑cp313‑win_amd64.whl` pour Python 3.13, un fichier différent pour 3.11 ou 3.12), à la différence de paquets purement Python comme `fastapi`/`uvicorn`/`jinja2` (`...-py3-none-any.whl`, valables pour toute version) ou de `bcrypt` (ABI stable `cp36-abi3`, valable de Python 3.6 à la dernière version). Sans ces options, `pip download` ne récupère que les fichiers compatibles avec **la machine sur laquelle la commande tourne** : lancée depuis une machine non-Windows ou une version de Python différente de celle du serveur de production, le `wheelhouse` obtenu ne contiendra pas les bons fichiers, et l'installation échouera ensuite avec une erreur du type `No matching distribution found for sqlalchemy==2.0.51`. `--only-binary=:all:` exclut les paquets sans `.whl` prêt à l'emploi pour cette cible (aucun de ceux listés dans `requirements.txt` à ce jour, quelle que soit la version de Python 3.9+ ciblée).
+   >
+   > **Si le `wheelhouse` transféré s'avère incomplet** (erreur `No matching distribution found for <paquet>` à l'installation, §8.10 étape 4) : vérifier d'abord que la version de Python ciblée à l'étape 1 est bien **identique** à celle du serveur de production (`python --version` sur le serveur), puis sur le serveur avec `dir wheelhouse\*<paquet>*` que le fichier attendu pour cette version est bien absent ; relancer la commande ci-dessus avec la bonne version sur la machine de préparation et retransférer le dossier.
 
 2. **Constituer le paquet à transférer** : le dossier du code source de l'application (`rfid-printing\`, tel quel — un simple export/téléchargement ZIP du dépôt convient, **git n'est pas nécessaire sur le serveur de production**) plus le dossier `wheelhouse\` généré à l'étape précédente. Les regrouper dans une archive unique.
 
 3. **Transférer cette archive vers le serveur de production** par le moyen déjà validé par l'équipe informatique pour ce type de transfert (clé USB, partage réseau interne, outil de dépôt de fichiers interne...) — c'est le seul point de passage réseau/physique nécessaire, indépendant du proxy.
 
-4. **Sur le serveur de production**, extraire l'archive (ex. dans `C:\rfid-printing`) puis installer à partir du dossier `wheelhouse` local, sans jamais solliciter le réseau :
+4. **Sur le serveur de production**, extraire l'archive (ex. dans `C:\rfid-printing`) puis installer à partir du dossier `wheelhouse` local, sans jamais solliciter le réseau — utiliser la **même version de Python** que celle relevée et ciblée à l'étape 0/1 (`py -3.13` ci-dessous à adapter en conséquence, ou `python` tout court si une seule version est installée) :
 
    ```powershell
    cd C:\rfid-printing\backend
 
-   py -3.11 -m venv venv
+   py -3.13 -m venv venv
    .\venv\Scripts\Activate.ps1
    pip install --no-index --find-links=wheelhouse -r requirements.txt
 
@@ -836,7 +845,9 @@ alembic upgrade head              # au cas où (les migrations s'appliquent auss
 nssm start RfidPrinting
 ```
 
-> Si `git`/`pip` ne peuvent pas atteindre Internet depuis le serveur de production (proxy d'entreprise), voir §8.10 : régénérer `wheelhouse` si les dépendances ont changé, transférer la nouvelle version du code sans `git pull`, puis `pip install --no-index --find-links=wheelhouse -r requirements.txt`.
+> Si `git`/`pip` ne peuvent pas atteindre Internet depuis le serveur de production (proxy d'entreprise), voir §8.10 : régénérer `wheelhouse` si les dépendances ont changé (pour la version de Python **du serveur de production**, pas forcément celle de la machine de préparation), transférer la nouvelle version du code sans `git pull`, puis `pip install --no-index --find-links=wheelhouse -r requirements.txt`.
+>
+> **En copiant le code manuellement (sans `git pull`), ne remplacer que le code** (`app\`, `alembic\`, `requirements.txt`, `alembic.ini`) — **jamais** `.env` (secrets propres à cette installation), `rfid.db` (base de données réelle), `generated\` (fichiers `.cmd` déjà générés) ni `backups\`, sous peine d'écraser les données de production avec celles de l'environnement d'où provient la mise à jour. Le plus sûr est un export/zip du dépôt excluant explicitement ces éléments (ainsi que `venv\`) plutôt qu'une copie brute du dossier complet.
 
 ### 9.3 Journaux
 

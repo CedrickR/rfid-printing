@@ -50,7 +50,7 @@ RFID PRINTING permet aux utilisateurs autorisés de :
 | Authentification API | JWT porté en en-tête `Authorization: Bearer <token>` |
 | Génération de fichiers | Module Python interne (gabarits à placeholders) |
 
-L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de build Node) : cela évite toute dépendance à npm/Node, incompatible avec le proxy d'entreprise de l'exploitant.
+L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de build Node). Les bibliothèques front-end (Bootstrap/SB Admin 2, jQuery, Font Awesome, police Nunito, Chart.js, JsBarcode) sont **servies directement par l'application** depuis `app/static/vendor/` plutôt que chargées depuis un CDN : l'interface fonctionne donc aussi bien pour un utilisateur derrière un proxy d'entreprise qui bloquerait `cdnjs.cloudflare.com`/`cdn.jsdelivr.net`/`fonts.googleapis.com` (même situation que git/pip, §8.10). Ces fichiers sont récupérés une fois pour toutes via le registre npm (`npm pack`, lui aussi accessible sans configuration particulière dans la plupart des cas) puis committés tels quels dans le dépôt — aucune dépendance à npm/Node n'est nécessaire pour faire fonctionner ou mettre à jour l'application elle-même.
 
 ---
 
@@ -70,7 +70,7 @@ Organisé en deux onglets.
 **Onglet « Vue d'ensemble »** :
 
 - Compteurs : nombre d'imports, de biens actifs, de lots, d'entrées d'historique.
-- **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (CDN).
+- **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (servi localement, §1.2).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - **Graphique « Étiquettes imprimées et non imprimées par destination »** (barres horizontales empilées) : pour chaque destination (« Sans destination » incluse), la répartition des biens actifs entre étiquette imprimée et non imprimée — même définition de « imprimée » que le graphique précédent (lot **généré** au moins une fois).
 - Panneau **« Zone sensible »** (administrateur uniquement), deux actions irréversibles avec confirmation JavaScript obligatoire :
@@ -127,7 +127,7 @@ Organisé en deux onglets.
     - la **Destination** du bien, agrandie : première lettre en lettrine (grande police), suivie du reste du mot (police réduite, tronqué avec « … » si trop long pour tenir sur une ligne) ;
     - l'**étage**, le **bureau** et le **code pièce et service** correspondants (police réduite, sur 2 lignes maximum, tronqué avec « … » au-delà) ;
     - une ligne de séparation ;
-    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), CDN), préfixé de `261` (ex. Bien ID `20260001` → `26120260001`, même préfixe que l'export « Inventaire immatériel », §2.4), centré, puis en dessous le même numéro préfixé en chiffres (police agrandie), également centré — la largeur de trait est recalculée après un premier rendu pour que le code-barres occupe toujours une largeur physique constante (~72 mm) quel que soit le nombre de chiffres du Bien ID ;
+    - le **Bien ID en code-barres** (Code 128, via [JsBarcode](https://github.com/lindell/JsBarcode), servi localement, §1.2), préfixé de `261` (ex. Bien ID `20260001` → `26120260001`, même préfixe que l'export « Inventaire immatériel », §2.4), centré, puis en dessous le même numéro préfixé en chiffres (police agrandie), également centré — la largeur de trait est recalculée après un premier rendu pour que le code-barres occupe toujours une largeur physique constante (~72 mm) quel que soit le nombre de chiffres du Bien ID ;
     - le reste de la hauteur disponible est laissé en blanc pour des annotations manuscrites.
     Les tailles de police sont calibrées pour tenir dans les 90 x 36 mm ; en cas de bureau très long, la ligne étage/bureau/code peut être tronquée (jamais le code-barres ni son numéro, prioritaires) — à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
@@ -366,7 +366,10 @@ rfid-printing/
     │   │   └── users.html                 Gestion des utilisateurs
     │   │
     │   └── static/
-    │       └── css/app.css            Styles additionnels + mise en page d'impression (@media print)
+    │       ├── css/app.css            Styles additionnels + mise en page d'impression (@media print)
+    │       └── vendor/                Bibliothèques front-end vendorisées (§1.2) : Bootstrap/
+    │                                   SB Admin 2, jQuery, Font Awesome, police Nunito,
+    │                                   Chart.js, JsBarcode — servies localement, sans CDN
     │
     ├── generated/                     Fichiers .cmd générés (créé au premier lancement, ignoré par git)
     ├── rfid.db                        Base SQLite (créée au premier lancement, ignorée par git)

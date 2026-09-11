@@ -8,12 +8,19 @@
 
     <title>RFID Printing</title>
 
-    <!-- Font Awesome + police Nunito (requis par SB Admin 2) -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,300,400,600,700,800,900" rel="stylesheet">
+    <!--
+        Font Awesome + police Nunito (requis par SB Admin 2), Bootstrap,
+        jQuery et Chart.js : servis localement (/static/vendor/), et non
+        depuis un CDN, pour que l'application fonctionne aussi derrière
+        un proxy d'entreprise qui bloquerait cdnjs.cloudflare.com /
+        cdn.jsdelivr.net / fonts.googleapis.com (§8.10 de la
+        documentation technique).
+    -->
+    <link href="/static/vendor/fontawesome/css/all.min.css" rel="stylesheet">
+    <link href="/static/vendor/nunito/nunito.css" rel="stylesheet">
 
     <!-- SB Admin 2 (inclut Bootstrap 4.6) -->
-    <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.4/css/sb-admin-2.min.css" rel="stylesheet">
+    <link href="/static/vendor/sb-admin-2/css/sb-admin-2.min.css" rel="stylesheet">
 
     <link href="/static/css/app.css" rel="stylesheet">
 
@@ -188,11 +195,11 @@
     <i class="fas fa-angle-up"></i>
 </a>
 
-<!-- Scripts SB Admin 2 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.4/js/sb-admin-2.min.js"></script>
+<!-- Scripts SB Admin 2 (servis localement, voir la remarque sur les feuilles de style ci-dessus) -->
+<script src="/static/vendor/jquery/jquery.min.js"></script>
+<script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="/static/vendor/jquery-easing/jquery.easing.min.js"></script>
+<script src="/static/vendor/sb-admin-2/js/sb-admin-2.min.js"></script>
 
 </body>
 

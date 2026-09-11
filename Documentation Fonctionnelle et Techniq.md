@@ -857,6 +857,27 @@ Cas où Apache héberge déjà un ou plusieurs sites sur les ports 80/443, et o�
 
 > **Sans reverse proxy sous-chemin** (accès direct par port, ou VirtualHost/nom d'hôte dédié comme en §8.5) : laisser `URL_PREFIX` vide (comportement par défaut, aucune modification des liens).
 
+### 8.12 Lancer l'application en local sans NSSM (tests)
+
+Pour tester (par exemple la configuration Apache/`URL_PREFIX` du §8.11) avant d'installer le service NSSM (§8.4), le script `backend/scripts/demarrer-serveur.ps1` lance le serveur manuellement dans une console, sans rien installer :
+
+- Il retrouve seul l'emplacement du dossier `backend` (peu importe où le dépôt est cloné), active l'environnement virtuel `venv`, positionne `URL_PREFIX=/rfid` et démarre `uvicorn` sur `http://127.0.0.1:8000`.
+- Si le venv n'existe pas encore, il affiche un message d'erreur clair au lieu d'un plantage (voir §8.3 pour le créer).
+- La fenêtre reste ouverte tant que le serveur tourne ; fermer la fenêtre ou faire `Ctrl+C` pour l'arrêter.
+
+**Créer un raccourci bureau** pour le lancer d'un double-clic :
+
+1. Clic droit sur le Bureau → *Nouveau* → *Raccourci*.
+2. Dans « Emplacement de l'élément », saisir (adapter le chemin au dossier réel du dépôt) :
+   ```
+   powershell.exe -ExecutionPolicy Bypass -File "D:\git\rfid-printing\backend\scripts\demarrer-serveur.ps1"
+   ```
+3. Nommer le raccourci, par exemple « RFID Printing (test) ».
+
+`-ExecutionPolicy Bypass` n'affecte que ce lancement précis (pas la politique globale du poste) : c'est nécessaire car un `.ps1` ne s'exécute pas par double-clic direct sous Windows (il s'ouvrirait dans l'éditeur de script).
+
+> Si l'application doit être testée directement sur le port 8000 sans passer par Apache (pas de sous-chemin), modifier la ligne `$env:URL_PREFIX = "/rfid"` du script pour la mettre à `""`.
+
 ---
 
 ## 9. Exploitation et maintenance

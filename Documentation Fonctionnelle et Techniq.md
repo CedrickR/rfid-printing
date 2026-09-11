@@ -819,6 +819,44 @@ Si le serveur de production n'a pas d'accès sortant utilisable par `git` et `pi
 
 > Si le blocage n'est pas total mais que le proxy demande simplement d'être configuré (authentification, adresse spécifique), il est parfois plus simple d'essayer d'abord `pip install --proxy http://utilisateur:motdepasse@proxy:port -r requirements.txt` et, pour Git, `git config --global http.proxy http://proxy:port` — à tenter avant de recourir au paquet hors-ligne si l'équipe informatique peut fournir ces informations. Un proxy qui **intercepte le TLS** (certificat d'entreprise réémis) peut en plus nécessiter de faire confiance à ce certificat (`git config --global http.sslCAInfo <chemin>` ; pour pip, `pip config set global.cert <chemin>` ou variable d'environnement `PIP_CERT`).
 
+### 8.11 Servir l'application sous un sous-chemin d'un site Apache existant (ex. `/rfid`)
+
+Cas où Apache héberge déjà un ou plusieurs sites sur les ports 80/443, et où l'on souhaite ajouter cette application sous un **sous-chemin** d'un site existant (ex. `http://mon-serveur/rfid`) plutôt que lui dédier un nom d'hôte séparé (§8.5).
+
+> **Un simple `ProxyPass /rfid ...` ne suffit pas seul** : l'application génère ses liens en chemins absolus (`href="/dashboard"`, `<link href="/static/...">`, redirections...) en supposant qu'elle est servie à la racine du site. Sans traitement particulier, la page d'accueil sous `/rfid` s'afficherait mais tous ses liens internes pointeraient hors de `/rfid` (404). L'application intègre pour cela un mécanisme dédié (variable `URL_PREFIX`, §10.1) qui réécrit automatiquement ces chemins ; il suffit de l'activer et de configurer Apache pour qu'il retire le préfixe avant de transmettre la requête.
+
+1. **Activer les modules nécessaires** (comme en §8.5, souvent déjà fait si un autre reverse proxy est déjà configuré) :
+
+   ```apache
+   LoadModule proxy_module modules/mod_proxy.so
+   LoadModule proxy_http_module modules/mod_proxy_http.so
+   ```
+
+2. **Ajouter, dans le(s) `<VirtualHost>` existant(s)** (port 80, et 443 s'il y a lieu) — **sans créer de nouveau VirtualHost** puisqu'il s'agit d'ajouter un sous-chemin à un site déjà présent :
+
+   ```apache
+   ProxyPass /rfid http://127.0.0.1:8000
+   ProxyPassReverse /rfid http://127.0.0.1:8000
+   ```
+
+   Sans slash final ni sur `/rfid` ni sur l'URL cible, des deux côtés : Apache retire alors exactement le segment `/rfid` avant de transmettre à l'application (`http://mon-serveur/rfid/dashboard` → `http://127.0.0.1:8000/dashboard`), qui continue de router normalement à partir de la racine.
+
+   > Ne pas placer ce bloc dans un `<VirtualHost>` ou une `<Location>` qui capturerait aussi `/rfid-scans`, `/rfid-quelquechose`, etc. : `ProxyPass /rfid ...` ne matche que `/rfid` et `/rfid/...`, pas les chemins qui commencent simplement par les mêmes lettres — aucune précaution supplémentaire n'est nécessaire ici.
+
+3. **Activer le préfixe côté application**, dans la configuration du service (`.env` et/ou l'onglet *Environment* du service NSSM, §8.4 — s'assurer que la variable atteint bien le **process** lancé par NSSM, pas seulement le fichier `.env`) :
+
+   ```ini
+   URL_PREFIX=/rfid
+   ```
+
+   Puis redémarrer le service (`nssm restart RfidPrinting`).
+
+4. **Redémarrer Apache** (panneau de contrôle XAMPP, Stop puis Start sur la ligne Apache).
+
+5. **Vérifier** : `http://mon-serveur/rfid/login` doit afficher la page de connexion normalement stylée, et la navigation dans l'application (menu, formulaires, génération de fichiers, aperçus Ajax comme celui du Modèle CMD) doit rester sous `/rfid` sans jamais retomber à la racine du site.
+
+> **Sans reverse proxy sous-chemin** (accès direct par port, ou VirtualHost/nom d'hôte dédié comme en §8.5) : laisser `URL_PREFIX` vide (comportement par défaut, aucune modification des liens).
+
 ---
 
 ## 9. Exploitation et maintenance
@@ -874,6 +912,7 @@ nssm start RfidPrinting
 | `RFID_SECRET_KEY` | Clé de signature des jetons JWT — **obligatoire en production** (sans elle, une clé aléatoire temporaire est générée à chaque démarrage, invalidant toutes les sessions) | *(aucune — avertissement au démarrage si absente)* |
 | `CORS_ALLOWED_ORIGINS` | Origines externes autorisées à appeler l'API depuis un navigateur (liste séparée par des virgules) ; inutile pour l'UI Jinja2, servie en same-origin | *(vide)* |
 | `COOKIE_SECURE` | `true` pour restreindre le cookie de session aux connexions HTTPS | `false` |
+| `URL_PREFIX` | Sous-chemin sous lequel l'application est servie derrière un reverse proxy existant (ex. `/rfid`), §8.11 | *(vide — application servie à la racine)* |
 
 ### 10.2 Commandes de référence
 

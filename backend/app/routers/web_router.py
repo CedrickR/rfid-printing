@@ -1,6 +1,7 @@
 import base64
 import csv
 import logging
+import os
 from datetime import UTC, datetime
 from io import StringIO
 from types import SimpleNamespace
@@ -142,6 +143,13 @@ router = APIRouter(
 templates = Jinja2Templates(
     directory="app/templates"
 )
+
+# Sous-chemin de service éventuel (voir app/main.py) : exposé aux
+# templates pour les rares endroits où un chemin absolu est construit
+# en JavaScript plutôt que dans un attribut HTML usuel (non couvert
+# par le middleware de réécriture de app/main.py).
+URL_PREFIX = os.environ.get("URL_PREFIX", "").rstrip("/")
+templates.env.globals["url_prefix"] = URL_PREFIX
 
 
 @router.get("/login")
@@ -3075,7 +3083,9 @@ def _glpi_locations_url(
 
     query = urlencode(params)
 
-    return f"/glpi-locations?{query}" if query else "/glpi-locations"
+    base = f"{URL_PREFIX}/glpi-locations"
+
+    return f"{base}?{query}" if query else base
 
 
 def _glpi_discrepancies(

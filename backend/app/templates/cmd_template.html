@@ -185,7 +185,7 @@
 
         previewButton.disabled = true;
 
-        fetch("/settings/cmd-template/preview", {
+        fetch("{{ url_prefix }}/settings/cmd-template/preview", {
             method: "POST",
             body: formData,
             credentials: "same-origin"

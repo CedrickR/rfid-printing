@@ -123,6 +123,47 @@ def test_generate_writes_one_file_per_asset_directly_in_output_dir(
     assert "1001" not in content_1002
 
 
+def test_generate_starts_directly_with_line_content_no_leading_blank_line(
+    tmp_path
+):
+    """
+    Cas réel remonté par un utilisateur : le logiciel d'impression
+    n'accepte le fichier .cmd que si le premier champ (itemTypeName)
+    est en toute première ligne. Une ligne vide en tête (ex. issue de
+    l'ancien mécanisme d'en-tête de lot, désormais supprimé) faisait
+    échouer l'import côté imprimante alors qu'un fichier identique sans
+    cette ligne vide fonctionnait.
+    """
+
+    generator = CommandGenerator(output_dir=tmp_path)
+
+    asset = make_asset(
+        "19570001", "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE"
+    )
+
+    line_template = (
+        'itemTypeName = "{{Designation}}"\n'
+        'codeItem = "{{BienId}}"\n'
+        '@serialqty = "1"\n'
+        '\n'
+    )
+
+    filenames = generator.generate(
+        job_id=11,
+        assets=[asset],
+        line_template=line_template
+    )
+
+    content = (tmp_path / filenames[0]).read_text(encoding="utf-8")
+
+    assert content == (
+        'itemTypeName = "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE"\n'
+        'codeItem = "19570001"\n'
+        '@serialqty = "1"\n'
+        '\n'
+    )
+
+
 def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)

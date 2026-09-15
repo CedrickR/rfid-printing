@@ -1209,7 +1209,6 @@ def cmd_template_page(
         request=request,
         name="cmd_template.html",
         context={
-            "header_template": template.header_template,
             "line_template": template.line_template,
             "filename_template": template.filename_template,
             "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
@@ -1222,7 +1221,6 @@ def cmd_template_page(
 @router.post("/settings/cmd-template")
 def cmd_template_update(
     request: Request,
-    header_template: str = Form(...),
     line_template: str = Form(...),
     filename_template: str = Form(...),
     current_user=Depends(get_current_user_web),
@@ -1244,7 +1242,6 @@ def cmd_template_update(
             request=request,
             name="cmd_template.html",
             context={
-                "header_template": header_template,
                 "line_template": line_template,
                 "filename_template": filename_template,
                 "asset_placeholders": sorted(ASSET_PLACEHOLDERS.keys()),
@@ -1256,7 +1253,6 @@ def cmd_template_update(
 
     CmdTemplateService.update(
         db,
-        header_template,
         line_template,
         filename_template,
         current_user["sub"]
@@ -1275,7 +1271,6 @@ def cmd_template_update(
 
 @router.post("/settings/cmd-template/preview")
 def cmd_template_preview(
-    header_template: str = Form(...),
     line_template: str = Form(...),
     filename_template: str = Form(...),
     current_user=Depends(get_current_user_web),
@@ -1289,11 +1284,6 @@ def cmd_template_preview(
     generator = CommandGenerator()
 
     return {
-        "header": generator.render_template(
-            header_template,
-            JOB_PLACEHOLDERS,
-            42
-        ),
         "line": generator.render_template(
             line_template,
             ASSET_PLACEHOLDERS,

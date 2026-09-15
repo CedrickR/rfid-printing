@@ -205,9 +205,20 @@ class CommandGenerator:
             files.append((asset_filename, line))
 
         for asset_filename, content in files:
+
+            # Le logiciel d'impression (Windows) exige des retours à la
+            # ligne CRLF ("\r\n") et n'accepte pas un fichier en LF
+            # seul ("\n") : plutôt que de compter sur la traduction
+            # implicite de Python selon l'OS (peu fiable en pratique,
+            # ex. un gabarit déjà en CRLF y échapperait sinon), on
+            # normalise explicitement ici et on écrit avec newline=""
+            # pour empêcher toute retraduction ultérieure.
+            normalized = content.replace("\r\n", "\n").replace("\n", "\r\n")
+
             (self.output_dir / asset_filename).write_text(
-                content,
-                encoding="utf-8"
+                normalized,
+                encoding="utf-8",
+                newline=""
             )
 
         return sorted(filename for filename, _ in files)

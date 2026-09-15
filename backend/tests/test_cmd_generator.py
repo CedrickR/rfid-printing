@@ -123,6 +123,99 @@ def test_generate_writes_one_file_per_asset_directly_in_output_dir(
     assert "1001" not in content_1002
 
 
+def test_generate_starts_directly_with_line_content_no_leading_blank_line(
+    tmp_path
+):
+    """
+    Cas réel remonté par un utilisateur : le logiciel d'impression
+    n'accepte le fichier .cmd que si le premier champ (itemTypeName)
+    est en toute première ligne. Une ligne vide en tête (ex. issue de
+    l'ancien mécanisme d'en-tête de lot, désormais supprimé) faisait
+    échouer l'import côté imprimante alors qu'un fichier identique sans
+    cette ligne vide fonctionnait.
+    """
+
+    generator = CommandGenerator(output_dir=tmp_path)
+
+    asset = make_asset(
+        "19570001", "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE"
+    )
+
+    line_template = (
+        'itemTypeName = "{{Designation}}"\n'
+        'codeItem = "{{BienId}}"\n'
+        '@serialqty = "1"\n'
+        '\n'
+    )
+
+    filenames = generator.generate(
+        job_id=11,
+        assets=[asset],
+        line_template=line_template
+    )
+
+    # Lu en octets bruts (et non via read_text, qui retraduirait
+    # silencieusement le CRLF écrit sur disque en LF à la lecture et
+    # masquerait donc une régression sur les fins de ligne réellement
+    # présentes dans le fichier).
+    content = (tmp_path / filenames[0]).read_bytes().decode("utf-8")
+
+    assert content == (
+        'itemTypeName = "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE"\r\n'
+        'codeItem = "19570001"\r\n'
+        '@serialqty = "1"\r\n'
+        '\r\n'
+    )
+
+
+def test_generate_always_writes_crlf_line_endings(tmp_path):
+    """
+    Le logiciel d'impression (Windows) n'accepte pas un fichier .cmd en
+    LF seul : quel que soit l'OS d'exécution de l'application (la
+    traduction implicite de Python selon la plateforme n'est pas fiable
+    en pratique), les retours à la ligne écrits sur disque doivent
+    toujours être CRLF.
+    """
+
+    generator = CommandGenerator(output_dir=tmp_path)
+
+    asset = make_asset("1001", "PC Portable")
+
+    filenames = generator.generate(
+        job_id=1,
+        assets=[asset],
+        line_template='L1\nL2\n{{BienId}}'
+    )
+
+    raw = (tmp_path / filenames[0]).read_bytes()
+
+    assert raw == b"L1\r\nL2\r\n1001"
+
+
+def test_generate_does_not_double_carriage_return_on_already_crlf_template(
+    tmp_path
+):
+    """
+    Un gabarit déjà saisi avec des CRLF (ex. normalisation faite par le
+    navigateur à la soumission du formulaire) ne doit pas se retrouver
+    avec un CR en trop ("\\r\\r\\n") après écriture.
+    """
+
+    generator = CommandGenerator(output_dir=tmp_path)
+
+    asset = make_asset("1001", "PC Portable")
+
+    filenames = generator.generate(
+        job_id=1,
+        assets=[asset],
+        line_template='L1\r\nL2\r\n{{BienId}}'
+    )
+
+    raw = (tmp_path / filenames[0]).read_bytes()
+
+    assert raw == b"L1\r\nL2\r\n1001"
+
+
 def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):
 
     generator = CommandGenerator(output_dir=tmp_path)

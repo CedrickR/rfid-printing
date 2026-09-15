@@ -30,21 +30,9 @@
                 <form method="post" action="/settings/cmd-template" id="template-form">
 
                     <div class="form-group">
-                        <label for="header_template">
-                            En-tête du fichier (une fois par lot)
-                        </label>
-                        <textarea
-                            class="form-control"
-                            id="header_template"
-                            name="header_template"
-                            rows="4"
-                            style="font-family: monospace;"
-                        >{{ header_template }}</textarea>
-                    </div>
-
-                    <div class="form-group">
                         <label for="line_template">
-                            Ligne par bien (répétée pour chaque étiquette)
+                            Contenu du fichier (un bien = une étiquette
+                            = un fichier, sans en-tête de lot)
                         </label>
                         <textarea
                             class="form-control"
@@ -124,26 +112,19 @@
 
             <div class="card-body">
 
-                <p class="font-weight-bold mb-1">En-tête</p>
+                <p class="font-weight-bold mb-1">Bien (contenu et nom de fichier)</p>
                 <ul class="mb-3">
-                    {% for name in job_placeholders %}
-                    <li><code>{{ '{{' }}{{ name }}{{ '}}' }}</code></li>
-                    {% endfor %}
-                </ul>
-
-                <p class="font-weight-bold mb-1">Ligne par bien</p>
-                <ul class="mb-0">
                     {% for name in asset_placeholders %}
                     <li><code>{{ '{{' }}{{ name }}{{ '}}' }}</code></li>
                     {% endfor %}
                 </ul>
 
-                <hr>
-
-                <p class="text-muted small mb-0">
-                    Le nom de fichier accepte les placeholders des deux
-                    catégories ci-dessus (en-tête et ligne).
-                </p>
+                <p class="font-weight-bold mb-1">Lot (nom de fichier uniquement)</p>
+                <ul class="mb-0">
+                    {% for name in job_placeholders %}
+                    <li><code>{{ '{{' }}{{ name }}{{ '}}' }}</code></li>
+                    {% endfor %}
+                </ul>
 
                 <hr>
 
@@ -165,7 +146,6 @@
 (function () {
 
     var previewButton = document.getElementById("preview-button");
-    var headerInput = document.getElementById("header_template");
     var lineInput = document.getElementById("line_template");
     var filenameInput = document.getElementById("filename_template");
     var resultBox = document.getElementById("preview-result");
@@ -179,7 +159,6 @@
         resultBox.style.display = "none";
 
         var formData = new FormData();
-        formData.append("header_template", headerInput.value);
         formData.append("line_template", lineInput.value);
         formData.append("filename_template", filenameInput.value);
 
@@ -204,7 +183,7 @@
                 }
 
                 filenameBox.textContent = result.data.filename;
-                contentBox.textContent = result.data.header + result.data.line;
+                contentBox.textContent = result.data.line;
                 resultBox.style.display = "block";
             })
             .catch(function () {

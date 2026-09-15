@@ -63,7 +63,6 @@ class PrintJobService:
         filenames = generator.generate(
             job_id=job.id,
             assets=assets,
-            header_template=template.header_template,
             line_template=template.line_template,
             filename_template=template.filename_template
         )

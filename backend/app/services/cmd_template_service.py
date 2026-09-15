@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from app.models.cmd_template_model import CmdTemplate
 from app.services.cmd_generator import (
-    DEFAULT_HEADER_TEMPLATE,
     DEFAULT_LINE_TEMPLATE,
     DEFAULT_FILENAME_TEMPLATE,
 )
@@ -28,7 +27,6 @@ class CmdTemplateService:
         if template is None:
 
             template = CmdTemplate(
-                header_template=DEFAULT_HEADER_TEMPLATE,
                 line_template=DEFAULT_LINE_TEMPLATE,
                 filename_template=DEFAULT_FILENAME_TEMPLATE,
                 updated_by="system",
@@ -40,14 +38,12 @@ class CmdTemplateService:
     @staticmethod
     def update(
         db,
-        header_template: str,
         line_template: str,
         filename_template: str,
         username: str
     ) -> CmdTemplate:
 
         template = CmdTemplate(
-            header_template=header_template,
             line_template=line_template,
             filename_template=filename_template,
             updated_by=username,

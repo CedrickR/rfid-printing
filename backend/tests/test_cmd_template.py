@@ -66,7 +66,6 @@ def test_cmd_template_update_and_reload(client, admin_user):
     response = client.post(
         "/settings/cmd-template",
         data={
-            "header_template": "### LOT {{JobId}} ###\n",
             "line_template": "ETIQUETTE;{{BienId}};{{Designation}}",
             "filename_template": "ETIQ_{{BienId}}"
         },
@@ -91,7 +90,6 @@ def test_cmd_template_update_rejects_empty_line_template(
     response = client.post(
         "/settings/cmd-template",
         data={
-            "header_template": "REM {{JobId}}",
             "line_template": "   ",
             "filename_template": "print_job_{{JobId}}_{{BienId}}"
         }
@@ -110,7 +108,6 @@ def test_cmd_template_update_rejects_empty_filename_template(
     response = client.post(
         "/settings/cmd-template",
         data={
-            "header_template": "REM {{JobId}}",
             "line_template": "PRINT|{{BienId}}",
             "filename_template": "   "
         }
@@ -129,7 +126,6 @@ def test_cmd_template_preview_uses_sample_asset_on_empty_database(
     response = client.post(
         "/settings/cmd-template/preview",
         data={
-            "header_template": "JOB {{JobId}}\n",
             "line_template": "{{BienId}}|{{Designation}}|{{Immeuble}}",
             "filename_template": "print_job_{{JobId}}_{{BienId}}"
         }
@@ -139,7 +135,6 @@ def test_cmd_template_preview_uses_sample_asset_on_empty_database(
 
     data = response.json()
 
-    assert data["header"] == "JOB 42\n"
     assert "EXEMPLE001" in data["line"]
     assert data["filename"] == "print_job_42_EXEMPLE001.cmd"
 
@@ -163,7 +158,6 @@ def test_cmd_template_preview_uses_real_asset_when_available(
     response = client.post(
         "/settings/cmd-template/preview",
         data={
-            "header_template": "JOB {{JobId}}\n",
             "line_template": "{{BienId}}|{{Designation}}|{{Immeuble}}",
             "filename_template": "print_job_{{JobId}}_{{BienId}}"
         }
@@ -186,7 +180,6 @@ def test_cmd_template_preview_leaves_unknown_placeholder_untouched(
     response = client.post(
         "/settings/cmd-template/preview",
         data={
-            "header_template": "JOB {{JobId}}\n",
             "line_template": "{{BienId}}|{{ChampInexistant}}",
             "filename_template": "{{ChampInexistant}}_{{BienId}}"
         }
@@ -209,7 +202,6 @@ def test_cmd_template_preview_shows_custom_filename_with_prefix(
     response = client.post(
         "/settings/cmd-template/preview",
         data={
-            "header_template": "JOB {{JobId}}\n",
             "line_template": "{{BienId}}",
             "filename_template": "MONPREFIXE_{{JobId}}_{{BienId}}"
         }
@@ -240,7 +232,6 @@ def test_custom_template_is_used_when_generating_a_print_job(
     client.post(
         "/settings/cmd-template",
         data={
-            "header_template": "### LOT {{JobId}} ###\n",
             "line_template": (
                 "ETIQUETTE;{{BienId}};{{Designation}};{{Immeuble}}"
             ),
@@ -289,8 +280,7 @@ def test_custom_template_is_used_when_generating_a_print_job(
         generator.output_dir / filenames[0]
     ).read_text(encoding="utf-8")
 
-    assert f"### LOT {job_id} ###" in content
-    assert "ETIQUETTE;10001;PC Portable;SIEGE" in content
+    assert content == "ETIQUETTE;10001;PC Portable;SIEGE"
 
 
 def test_generate_rejects_filename_template_without_bien_placeholder(
@@ -313,7 +303,6 @@ def test_generate_rejects_filename_template_without_bien_placeholder(
     client.post(
         "/settings/cmd-template",
         data={
-            "header_template": "REM {{JobId}}",
             "line_template": "PRINT|{{BienId}}",
             "filename_template": "LOT_FIXE"
         }

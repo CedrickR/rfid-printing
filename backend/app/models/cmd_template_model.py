@@ -23,11 +23,6 @@ class CmdTemplate(Base):
         primary_key=True
     )
 
-    header_template = Column(
-        Text,
-        nullable=False
-    )
-
     line_template = Column(
         Text,
         nullable=False

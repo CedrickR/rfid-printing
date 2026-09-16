@@ -441,3 +441,146 @@ def test_dashboard_counts_asset_validated_via_local_check(
     response = client.get("/dashboard")
 
     assert _validated_by_local_check_count(response.text) == 1
+
+
+def _mobilier_repartition_row_counts(page_text, code_piece_service):
+    """
+    Le code pièce et service apparaît aussi sur l'onglet "Répartition
+    par bureau" (autres colonnes) : on isole d'abord le contenu de
+    l'onglet "Répartition du mobilier par bureau" avant de chercher la
+    ligne du bureau demandé.
+    """
+
+    mobilier_section = page_text.split(
+        'id="mobilier-repartition-pane"'
+    )[1]
+
+    row_html = mobilier_section.split(code_piece_service)[1].split(
+        "</tr>"
+    )[0]
+
+    return re.findall(r'text-center">(\d+)</td>', row_html)
+
+
+def test_dashboard_mobilier_repartition_shows_no_type_message(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Répartition du mobilier par bureau" in response.text
+    assert "Aucun type de bien défini" in response.text
+
+
+def test_dashboard_mobilier_repartition_counts_by_type_and_bureau(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Bureau Fauteuil"})
+    client.post("/admin/asset-types", data={"libelle": "Caisson"})
+
+    _upload_bureau(client, code_piece_service="01100021", nom_piece="021")
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inv.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;Fauteuil 1;;01100021\n"
+                "1002;Fauteuil 2;;01100021\n"
+                "1003;Caisson 1;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    token = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "Admin123!"}
+    ).json()["access_token"]
+
+    assets = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    ).json()
+
+    asset_types_page = client.get("/admin/destinations").text
+
+    def _asset_type_id(libelle):
+
+        position = asset_types_page.index(libelle)
+
+        return re.search(
+            r'/admin/asset-types/(\d+)/update', asset_types_page[position:]
+        ).group(1)
+
+    fauteuil_type_id = _asset_type_id("Bureau Fauteuil")
+    caisson_type_id = _asset_type_id("Caisson")
+
+    for asset in assets:
+
+        type_id = (
+            fauteuil_type_id
+            if asset["bien_id"] in ("1001", "1002")
+            else caisson_type_id
+        )
+
+        client.post(
+            f"/assets/{asset['id']}/type-bien",
+            data={"type_bien_id": type_id}
+        )
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "01100021" in response.text
+
+    counts = _mobilier_repartition_row_counts(response.text, "01100021")
+
+    assert counts == ["2", "1"]
+
+
+def test_dashboard_mobilier_repartition_ignores_assets_without_type(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Bureau Fauteuil"})
+
+    _upload_bureau(client, code_piece_service="01100021", nom_piece="021")
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inv.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;Sans type;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.get("/dashboard")
+
+    counts = _mobilier_repartition_row_counts(response.text, "01100021")
+
+    assert counts == ["0"]
+
+
+def test_dashboard_mobilier_repartition_denies_reader_role(
+    client, standard_user
+):
+
+    _login(client, "employe", "Employe123!")
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 403

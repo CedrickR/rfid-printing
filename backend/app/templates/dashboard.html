@@ -61,6 +61,18 @@
         </a>
     </li>
 
+    <li class="nav-item">
+        <a
+            class="nav-link"
+            id="mobilier-repartition-tab"
+            data-toggle="tab"
+            href="#mobilier-repartition-pane"
+            role="tab"
+        >
+            Répartition du mobilier par bureau
+        </a>
+    </li>
+
 </ul>
 
 <div class="tab-content" id="dashboardTabContent">
@@ -384,6 +396,85 @@
                 </table>
 
             </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Onglet Répartition du mobilier par bureau -->
+
+<div class="tab-pane fade" id="mobilier-repartition-pane" role="tabpanel">
+
+    <div class="card shadow mb-4 mt-3">
+
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Mobilier par bureau
+            </h6>
+        </div>
+
+        <div class="card-body">
+
+            <small class="form-text text-muted mb-3">
+                Nombre de biens actifs dont le Type de bien (§2.4/§2.12)
+                est renseigné, par bureau (numéro local correspondant au
+                code pièce et service) et par type de bien. Biens sans
+                Type de bien renseigné non comptés.
+            </small>
+
+            {% if mobilier_asset_types %}
+
+            <div class="table-responsive mt-3">
+
+                <table class="table table-bordered table-hover table-sm">
+
+                    <thead>
+                        <tr>
+                            <th>Niveau</th>
+                            <th>Nom pièce</th>
+                            <th>Code pièce et service</th>
+                            {% for asset_type in mobilier_asset_types %}
+                            <th class="text-center">{{ asset_type.libelle }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for bureau in mobilier_repartition %}
+
+                        <tr>
+                            <td>{{ bureau.niveau }}</td>
+                            <td>{{ bureau.nom_piece }}</td>
+                            <td>{{ bureau.code_piece_service }}</td>
+                            {% for count in bureau.counts %}
+                            <td class="text-center">{{ count }}</td>
+                            {% endfor %}
+                        </tr>
+
+                        {% else %}
+
+                        <tr>
+                            <td colspan="{{ 3 + (mobilier_asset_types | length) }}" class="text-center text-muted">
+                                Aucun bureau importé.
+                            </td>
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            {% else %}
+            <p class="text-muted mb-0">
+                Aucun type de bien défini (§2.12).
+            </p>
+            {% endif %}
 
         </div>
 

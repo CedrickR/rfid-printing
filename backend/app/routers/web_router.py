@@ -337,6 +337,10 @@ def dashboard(
 
     printed_by_destination = _compute_printed_by_destination(db)
 
+    mobilier_asset_types, mobilier_repartition = (
+        _compute_mobilier_repartition(db)
+    )
+
     validated_by_local_check_count = (
         db.query(InventoryCheckLine.asset_id)
         .filter(InventoryCheckLine.asset_id.isnot(None))
@@ -360,6 +364,8 @@ def dashboard(
             "labels_not_generated_count": labels_not_generated_count,
             "bureau_repartition": bureau_repartition,
             "printed_by_destination": printed_by_destination,
+            "mobilier_asset_types": mobilier_asset_types,
+            "mobilier_repartition": mobilier_repartition,
             "role": current_user["role"]
         }
     )
@@ -483,6 +489,60 @@ def _compute_bureau_repartition(db: Session):
         })
 
     return repartition
+
+
+def _compute_mobilier_repartition(db: Session):
+    """
+    Pour chaque bureau connu (BureauMapping), le nombre de biens actifs
+    dont le Type de bien (§2.4/§2.12) est renseigné, ventilé par type
+    de bien (colonnes = tous les types de bien existants). Biens sans
+    Type de bien renseigné ignorés (ils ne relèvent d'aucune colonne).
+    """
+
+    asset_types = AssetTypeService.list_asset_types(db)
+
+    counts_by_code = (
+        db.query(
+            Asset.local_numero,
+            Asset.type_bien_id,
+            func.count(Asset.id)
+        )
+        .filter(Asset.is_active == True)
+        .filter(Asset.local_numero.isnot(None))
+        .filter(Asset.type_bien_id.isnot(None))
+        .group_by(Asset.local_numero, Asset.type_bien_id)
+        .all()
+    )
+
+    actual_counts = {}
+
+    for local_numero, type_bien_id, count in counts_by_code:
+
+        actual_counts.setdefault(local_numero, {})[type_bien_id] = count
+
+    mappings = (
+        db.query(BureauMapping)
+        .order_by(BureauMapping.niveau, BureauMapping.nom_piece)
+        .all()
+    )
+
+    repartition = []
+
+    for mapping in mappings:
+
+        counts_for_bureau = actual_counts.get(mapping.code_piece_service, {})
+
+        repartition.append({
+            "niveau": mapping.niveau,
+            "nom_piece": mapping.nom_piece,
+            "code_piece_service": mapping.code_piece_service,
+            "counts": [
+                counts_for_bureau.get(asset_type.id, 0)
+                for asset_type in asset_types
+            ]
+        })
+
+    return asset_types, repartition
 
 
 @router.post("/admin/reset-database")

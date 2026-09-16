@@ -263,7 +263,9 @@ Gère les listes de référence et les mises à jour en masse utilisées par les
 
 ### 2.13 Suivi de l'inventaire par local (`/inventaire-local`, administrateur et gestionnaire)
 
-Contrôle physique de l'inventaire local par local (vérification sur le terrain que les biens attendus sont bien présents), distinct de l'Inventaire (§2.4) qui reste la source de vérité des biens eux-mêmes.
+Contrôle physique de l'inventaire local par local (vérification sur le terrain que les biens attendus sont bien présents), distinct de l'Inventaire (§2.4) qui reste la source de vérité des biens eux-mêmes. Deux onglets.
+
+**Onglet « Par local »** :
 
 - **Sélection d'un local** : liste déroulante alimentée par les valeurs de **Local** déjà présentes dans l'inventaire (mêmes valeurs que le filtre Local de l'Inventaire, §2.4). Rien ne s'affiche tant qu'aucun local n'est choisi.
 - **Lignes affichées** : dès qu'un local est sélectionné, une ligne est créée (une seule fois, aux affichages suivants la ligne déjà créée est réutilisée) pour chaque **bien actif actuellement affecté à ce local** dans l'inventaire, avec :
@@ -274,7 +276,15 @@ Contrôle physique de l'inventaire local par local (vérification sur le terrain
 - **Export** :
   - **Exporter en CSV** (`GET /inventaire-local/export-csv?local=...`) : CSV (`;`, avec en-tête) des lignes du local sélectionné — Bien ID, Désignation, Type de bien, Commentaire, Statut.
   - **Imprimer** : bouton déclenchant l'impression navigateur (`window.print()`, comme les étiquettes §2.4 et l'export PDF des lots §2.5) — l'utilisateur choisit « Enregistrer au format PDF » dans la boîte de dialogue d'impression. Aucune dépendance PDF côté serveur.
-- Réservé aux profils **administrateur** et **gestionnaire** (403 pour le profil lecteur, y compris pour la simple consultation — contrairement à l'Inventaire qui reste consultable par tous).
+
+**Onglet « Biens à traiter »** :
+
+- Recherche **tous locaux confondus**, à l'opposé de l'onglet Par local : liste déroulante de statut limitée à **Absent** et **En Trop** (Présent n'a pas d'intérêt à être recherché globalement, c'est l'état attendu). Rien ne s'affiche tant qu'aucun statut n'est choisi.
+- **Ne crée jamais de ligne** (contrairement à l'onglet Par local) : seules les lignes déjà **explicitement enregistrées** à ce statut apparaissent, quel que soit leur local.
+- Tableau en lecture seule (pas d'édition ici, ça reste sur l'onglet Par local ou l'Inventaire) : Local, Bien ID (coloré comme ci-dessus), Désignation, Type de bien, Commentaire, Statut.
+- **Exporter en CSV** (`GET /inventaire-local/export-csv-statut?statut=Absent|En Trop`) : CSV (`;`, avec en-tête) des biens au statut sélectionné, tous locaux confondus — Bien ID, Désignation, Type de bien, Commentaire, Statut (sans la colonne Local).
+
+Réservé aux profils **administrateur** et **gestionnaire**, les deux onglets (403 pour le profil lecteur, y compris pour la simple consultation — contrairement à l'Inventaire qui reste consultable par tous).
 
 ---
 

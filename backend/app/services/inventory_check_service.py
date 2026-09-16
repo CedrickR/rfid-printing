@@ -109,6 +109,24 @@ class InventoryCheckService:
         return known_lines + extra_lines
 
     @staticmethod
+    def list_lines_by_statut(db: Session, statut: str):
+        """
+        Renvoie toutes les lignes existantes (tous locaux confondus)
+        ayant ce statut, sans en créer de nouvelle — contrairement à
+        list_lines_for_local, une ligne "Absent"/"En Trop" n'existe
+        que si un utilisateur l'a explicitement enregistrée (le statut
+        par défaut à la création est toujours "Présent"). Triées par
+        local, puis Bien ID pour les biens connus.
+        """
+
+        return (
+            db.query(InventoryCheckLine)
+            .filter(InventoryCheckLine.statut == statut)
+            .order_by(InventoryCheckLine.local_libelle, InventoryCheckLine.id)
+            .all()
+        )
+
+    @staticmethod
     def add_extra_line(
         db: Session,
         local_libelle: str,

@@ -57,233 +57,405 @@
 </div>
 {% endif %}
 
-<div class="card shadow mb-4 no-print">
+<ul class="nav nav-tabs no-print" id="inventaireLocalTab" role="tablist">
 
-    <div class="card-body">
+    <li class="nav-item">
+        <a
+            class="nav-link {% if not statut_filter %}active{% endif %}"
+            id="par-local-tab"
+            data-toggle="tab"
+            href="#par-local-pane"
+            role="tab"
+        >
+            Par local
+        </a>
+    </li>
 
-        <form method="get" class="form-inline">
+    <li class="nav-item">
+        <a
+            class="nav-link {% if statut_filter %}active{% endif %}"
+            id="biens-a-traiter-tab"
+            data-toggle="tab"
+            href="#biens-a-traiter-pane"
+            role="tab"
+        >
+            Biens à traiter
+        </a>
+    </li>
 
-            <label class="mr-2" for="local-select">
-                Local
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                style="min-width: 260px;"
-                id="local-select"
-                name="local"
-                onchange="this.form.submit()"
-            >
-                <option value="">-- Sélectionner un local --</option>
-                {% for option in local_options %}
-                <option value="{{ option }}" {% if option == local %}selected{% endif %}>
-                    {{ option }}
-                </option>
-                {% endfor %}
-            </select>
+</ul>
 
-        </form>
+<div class="tab-content" id="inventaireLocalTabContent">
 
-    </div>
+    <!-- Onglet Par local -->
 
-</div>
+    <div
+        class="tab-pane fade {% if not statut_filter %}show active{% endif %}"
+        id="par-local-pane"
+        role="tabpanel"
+    >
 
-{% if local %}
+        <div class="card shadow mb-4 mt-3 no-print">
 
-<div class="card shadow mb-4">
+            <div class="card-body">
 
-    <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-            Biens du local « {{ local }} » ({{ rows | length }})
-        </h6>
-    </div>
+                <form method="get" class="form-inline">
 
-    <div class="card-body">
+                    <label class="mr-2" for="local-select">
+                        Local
+                    </label>
+                    <select
+                        class="form-control mr-3 mb-2"
+                        style="min-width: 260px;"
+                        id="local-select"
+                        name="local"
+                        onchange="this.form.submit()"
+                    >
+                        <option value="">-- Sélectionner un local --</option>
+                        {% for option in local_options %}
+                        <option value="{{ option }}" {% if option == local %}selected{% endif %}>
+                            {{ option }}
+                        </option>
+                        {% endfor %}
+                    </select>
 
-        <div class="table-responsive">
+                </form>
 
-            <table class="table table-bordered table-hover">
-
-                <thead>
-                    <tr>
-                        <th>Bien ID</th>
-                        <th>Désignation</th>
-                        <th>Type de bien</th>
-                        <th style="min-width: 220px;">Commentaire</th>
-                        <th style="min-width: 200px;">Statut</th>
-                        <th class="no-print" style="width: 60px;"></th>
-                    </tr>
-                </thead>
-
-                <tbody>
-
-                    {% for row in rows %}
-
-                    <tr>
-
-                        <td class="align-middle">
-                            <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
-                                {{ row.bien_id }}
-                            </span>
-                            {% if row.is_extra %}
-                            <span class="badge badge-warning ml-1">
-                                En trop
-                            </span>
-                            {% endif %}
-                        </td>
-
-                        <td class="align-middle">{{ row.designation }}</td>
-
-                        <td colspan="3">
-                            <form
-                                method="post"
-                                action="/inventaire-local/lines/{{ row.line.id }}/update"
-                                class="form-inline flex-nowrap"
-                            >
-                                <input type="hidden" name="local" value="{{ local }}">
-                                <select
-                                    class="form-control form-control-sm mr-2 mb-1"
-                                    style="min-width: 160px;"
-                                    name="type_bien_id"
-                                >
-                                    <option value="">-- Aucun --</option>
-                                    {% for option in asset_type_options %}
-                                    <option
-                                        value="{{ option.id }}"
-                                        {% if option.id == row.type_bien_id %}selected{% endif %}
-                                    >
-                                        {{ option.libelle }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <input
-                                    type="text"
-                                    class="form-control form-control-sm mr-2 mb-1"
-                                    style="min-width: 200px;"
-                                    name="commentaire"
-                                    value="{{ row.line.commentaire or '' }}"
-                                >
-                                <select
-                                    class="form-control form-control-sm mr-2 mb-1"
-                                    style="min-width: 140px;"
-                                    name="statut"
-                                >
-                                    {% for statut in statuts %}
-                                    <option
-                                        value="{{ statut }}"
-                                        {% if statut == row.line.statut %}selected{% endif %}
-                                    >
-                                        {{ statut }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <button type="submit" class="btn btn-primary btn-sm mb-1 no-print">
-                                    <i class="fas fa-save fa-sm"></i>
-                                </button>
-                            </form>
-                        </td>
-
-                        <td class="no-print align-middle">
-                            {% if row.is_extra %}
-                            <form
-                                method="post"
-                                action="/inventaire-local/lines/{{ row.line.id }}/delete"
-                                onsubmit="return confirm('Supprimer cette ligne « en trop » ?');"
-                            >
-                                <input type="hidden" name="local" value="{{ local }}">
-                                <button type="submit" class="btn btn-danger btn-sm">
-                                    <i class="fas fa-trash fa-sm"></i>
-                                </button>
-                            </form>
-                            {% endif %}
-                        </td>
-
-                    </tr>
-
-                    {% else %}
-
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">
-                            Aucun bien actif affecté à ce local.
-                        </td>
-                    </tr>
-
-                    {% endfor %}
-
-                </tbody>
-
-            </table>
+            </div>
 
         </div>
 
+        {% if local %}
+
+        <div class="card shadow mb-4">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Biens du local « {{ local }} » ({{ rows | length }})
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <div class="table-responsive">
+
+                    <table class="table table-bordered table-hover">
+
+                        <thead>
+                            <tr>
+                                <th>Bien ID</th>
+                                <th>Désignation</th>
+                                <th>Type de bien</th>
+                                <th style="min-width: 220px;">Commentaire</th>
+                                <th style="min-width: 200px;">Statut</th>
+                                <th class="no-print" style="width: 60px;"></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for row in rows %}
+
+                            <tr>
+
+                                <td class="align-middle">
+                                    <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
+                                        {{ row.bien_id }}
+                                    </span>
+                                    {% if row.is_extra %}
+                                    <span class="badge badge-warning ml-1">
+                                        En trop
+                                    </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="align-middle">{{ row.designation }}</td>
+
+                                <td colspan="3">
+                                    <form
+                                        method="post"
+                                        action="/inventaire-local/lines/{{ row.line.id }}/update"
+                                        class="form-inline flex-nowrap"
+                                    >
+                                        <input type="hidden" name="local" value="{{ local }}">
+                                        <select
+                                            class="form-control form-control-sm mr-2 mb-1"
+                                            style="min-width: 160px;"
+                                            name="type_bien_id"
+                                        >
+                                            <option value="">-- Aucun --</option>
+                                            {% for option in asset_type_options %}
+                                            <option
+                                                value="{{ option.id }}"
+                                                {% if option.id == row.type_bien_id %}selected{% endif %}
+                                            >
+                                                {{ option.libelle }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm mr-2 mb-1"
+                                            style="min-width: 200px;"
+                                            name="commentaire"
+                                            value="{{ row.line.commentaire or '' }}"
+                                        >
+                                        <select
+                                            class="form-control form-control-sm mr-2 mb-1"
+                                            style="min-width: 140px;"
+                                            name="statut"
+                                        >
+                                            {% for statut in statuts %}
+                                            <option
+                                                value="{{ statut }}"
+                                                {% if statut == row.line.statut %}selected{% endif %}
+                                            >
+                                                {{ statut }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-primary btn-sm mb-1 no-print">
+                                            <i class="fas fa-save fa-sm"></i>
+                                        </button>
+                                    </form>
+                                </td>
+
+                                <td class="no-print align-middle">
+                                    {% if row.is_extra %}
+                                    <form
+                                        method="post"
+                                        action="/inventaire-local/lines/{{ row.line.id }}/delete"
+                                        onsubmit="return confirm('Supprimer cette ligne « en trop » ?');"
+                                    >
+                                        <input type="hidden" name="local" value="{{ local }}">
+                                        <button type="submit" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash fa-sm"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </td>
+
+                            </tr>
+
+                            {% else %}
+
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    Aucun bien actif affecté à ce local.
+                                </td>
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card shadow mb-4 no-print">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Ajouter un bien en trop
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <small class="form-text text-muted mb-3">
+                    Bien physiquement présent dans ce local mais non affecté à
+                    celui-ci dans l'inventaire (ou inconnu). Ajouté avec le statut
+                    « Présent ».
+                </small>
+
+                <form method="post" action="/inventaire-local/add" class="form-inline">
+
+                    <input type="hidden" name="local" value="{{ local }}">
+
+                    <label class="mr-2 mb-2" for="extra-bien-id">
+                        Bien ID
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control mr-3 mb-2"
+                        id="extra-bien-id"
+                        name="bien_id"
+                        required
+                    >
+
+                    <label class="mr-2 mb-2" for="extra-type-bien">
+                        Type de bien
+                    </label>
+                    <select
+                        class="form-control mr-3 mb-2"
+                        id="extra-type-bien"
+                        name="type_bien_id"
+                    >
+                        <option value="">-- Aucun --</option>
+                        {% for option in asset_type_options %}
+                        <option value="{{ option.id }}">{{ option.libelle }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label class="mr-2 mb-2" for="extra-commentaire">
+                        Commentaire
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control mr-3 mb-2"
+                        id="extra-commentaire"
+                        name="commentaire"
+                    >
+
+                    <button type="submit" class="btn btn-success mb-2">
+                        <i class="fas fa-plus fa-sm"></i> Ajouter
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+    <!-- Onglet Biens à traiter -->
+
+    <div
+        class="tab-pane fade {% if statut_filter %}show active{% endif %}"
+        id="biens-a-traiter-pane"
+        role="tabpanel"
+    >
+
+        <div class="card shadow mb-4 mt-3 no-print">
+
+            <div class="card-body">
+
+                <form method="get" class="form-inline">
+
+                    <label class="mr-2" for="statut-filter-select">
+                        Statut
+                    </label>
+                    <select
+                        class="form-control mr-3 mb-2"
+                        style="min-width: 200px;"
+                        id="statut-filter-select"
+                        name="statut_filter"
+                        onchange="this.form.submit()"
+                    >
+                        <option value="">-- Sélectionner un statut --</option>
+                        {% for option in statut_filter_options %}
+                        <option
+                            value="{{ option }}"
+                            {% if option == statut_filter %}selected{% endif %}
+                        >
+                            {{ option }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    {% if statut_filter %}
+                    <a
+                        href="/inventaire-local/export-csv-statut?statut={{ statut_filter | urlencode }}"
+                        class="btn btn-outline-primary mb-2"
+                    >
+                        <i class="fas fa-file-csv fa-sm"></i> Exporter en CSV
+                    </a>
+                    {% endif %}
+
+                </form>
+
+            </div>
+
+        </div>
+
+        {% if statut_filter %}
+
+        <div class="card shadow mb-4">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Biens au statut « {{ statut_filter }} » ({{ statut_rows | length }})
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <div class="table-responsive">
+
+                    <table class="table table-bordered table-hover">
+
+                        <thead>
+                            <tr>
+                                <th>Local</th>
+                                <th>Bien ID</th>
+                                <th>Désignation</th>
+                                <th>Type de bien</th>
+                                <th>Commentaire</th>
+                                <th>Statut</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for row in statut_rows %}
+
+                            <tr>
+
+                                <td class="align-middle">{{ row.local_libelle }}</td>
+
+                                <td class="align-middle">
+                                    <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
+                                        {{ row.bien_id }}
+                                    </span>
+                                    {% if row.is_extra %}
+                                    <span class="badge badge-warning ml-1">
+                                        En trop
+                                    </span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="align-middle">{{ row.designation }}</td>
+
+                                <td class="align-middle">{{ row.type_bien_libelle }}</td>
+
+                                <td class="align-middle">{{ row.line.commentaire or "" }}</td>
+
+                                <td class="align-middle">{{ row.line.statut }}</td>
+
+                            </tr>
+
+                            {% else %}
+
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    Aucun bien à ce statut.
+                                </td>
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        {% endif %}
+
     </div>
 
 </div>
-
-<div class="card shadow mb-4 no-print">
-
-    <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">
-            Ajouter un bien en trop
-        </h6>
-    </div>
-
-    <div class="card-body">
-
-        <small class="form-text text-muted mb-3">
-            Bien physiquement présent dans ce local mais non affecté à
-            celui-ci dans l'inventaire (ou inconnu). Ajouté avec le statut
-            « Présent ».
-        </small>
-
-        <form method="post" action="/inventaire-local/add" class="form-inline">
-
-            <input type="hidden" name="local" value="{{ local }}">
-
-            <label class="mr-2 mb-2" for="extra-bien-id">
-                Bien ID
-            </label>
-            <input
-                type="text"
-                class="form-control mr-3 mb-2"
-                id="extra-bien-id"
-                name="bien_id"
-                required
-            >
-
-            <label class="mr-2 mb-2" for="extra-type-bien">
-                Type de bien
-            </label>
-            <select
-                class="form-control mr-3 mb-2"
-                id="extra-type-bien"
-                name="type_bien_id"
-            >
-                <option value="">-- Aucun --</option>
-                {% for option in asset_type_options %}
-                <option value="{{ option.id }}">{{ option.libelle }}</option>
-                {% endfor %}
-            </select>
-
-            <label class="mr-2 mb-2" for="extra-commentaire">
-                Commentaire
-            </label>
-            <input
-                type="text"
-                class="form-control mr-3 mb-2"
-                id="extra-commentaire"
-                name="commentaire"
-            >
-
-            <button type="submit" class="btn btn-success mb-2">
-                <i class="fas fa-plus fa-sm"></i> Ajouter
-            </button>
-
-        </form>
-
-    </div>
-
-</div>
-
-{% endif %}
 
 {% endblock %}

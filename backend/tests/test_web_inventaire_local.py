@@ -566,3 +566,196 @@ def test_export_csv_includes_known_and_extra_lines(client, admin_user):
     assert lines[0] == "Bien ID;Désignation;Type de bien;Commentaire;Statut"
     assert "10001;PC Portable;;;Présent" in lines
     assert "EXTRA1;;;trouvé sur place;Présent" in lines
+
+
+def _line_id_for_bien(page_text, bien_id):
+    """
+    Extrait l'id de ligne associé à un Bien ID précis (et non le
+    premier de la page) : nécessaire dès qu'un local affiche plusieurs
+    biens, triés par Bien ID, pour ne pas mettre à jour la mauvaise
+    ligne.
+    """
+
+    position = page_text.index(bien_id)
+
+    match = re.search(
+        r'/inventaire-local/lines/(\d+)/update', page_text[position:]
+    )
+
+    return match.group(1)
+
+
+def _mark_line(client, local, bien_id, designation, statut, commentaire=""):
+
+    _import_asset(client, bien_id, designation, local)
+
+    page = client.get("/inventaire-local", params={"local": local})
+
+    line_id = _line_id_for_bien(page.text, bien_id)
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": local, "statut": statut, "commentaire": commentaire}
+    )
+
+
+def test_biens_a_traiter_tab_shows_filter_options(client, admin_user):
+
+    _login(client)
+
+    response = client.get("/inventaire-local")
+
+    assert "Biens à traiter" in response.text
+    assert "Absent" in response.text
+    assert "En Trop" in response.text
+
+
+def test_biens_a_traiter_shows_no_table_without_filter(client, admin_user):
+
+    _login(client)
+
+    response = client.get("/inventaire-local")
+
+    assert "Aucun bien à ce statut." not in response.text
+
+
+def test_statut_filter_lists_absent_biens_across_locals(client, admin_user):
+
+    _login(client)
+
+    _mark_line(client, "SALLE 101", "10001", "PC Portable", "Absent")
+    _mark_line(client, "SALLE 202", "20002", "Ecran", "Absent")
+    _mark_line(client, "SALLE 101", "10003", "Imprimante", "Présent")
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    assert response.status_code == 200
+    assert "10001" in response.text
+    assert "20002" in response.text
+    assert "10003" not in response.text
+    assert "SALLE 101" in response.text
+    assert "SALLE 202" in response.text
+
+
+def test_statut_filter_lists_en_trop_biens(client, admin_user):
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "En Trop"}
+    )
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    assert "EXTRA1" in response.text
+
+
+def test_statut_filter_does_not_create_lines(client, admin_user):
+    """
+    Contrairement à l'onglet Par local, l'onglet Biens à traiter ne
+    doit jamais créer de ligne automatiquement : les biens actifs d'un
+    local jamais consulté ne doivent pas apparaître comme "Absent" par
+    défaut.
+    """
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    assert "10001" not in response.text
+
+
+def test_biens_a_traiter_denies_reader_role(client, standard_user):
+
+    _login_reader(client)
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_export_csv_statut_includes_expected_columns(client, admin_user):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Copieur"})
+
+    asset_type_id = client.get(
+        "/admin/destinations"
+    ).text.split('/admin/asset-types/')[1].split('/update')[0]
+
+    _mark_line(
+        client, "SALLE 101", "10001", "PC Portable", "Absent",
+        commentaire="non retrouvé"
+    )
+
+    asset_id = client.get(
+        "/api/import/assets",
+        headers={
+            "Authorization": "Bearer "
+            + client.post(
+                "/auth/login",
+                json={"username": "admin", "password": "Admin123!"}
+            ).json()["access_token"]
+        }
+    ).json()[0]["id"]
+
+    client.post(
+        f"/assets/{asset_id}/type-bien",
+        data={"type_bien_id": asset_type_id}
+    )
+
+    response = client.get(
+        "/inventaire-local/export-csv-statut", params={"statut": "Absent"}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == "Bien ID;Désignation;Type de bien;Commentaire;Statut"
+    assert "10001;PC Portable;Copieur;non retrouvé;Absent" in lines
+
+
+def test_export_csv_statut_rejects_invalid_statut(client, admin_user):
+
+    _login(client)
+
+    response = client.get(
+        "/inventaire-local/export-csv-statut", params={"statut": "Présent"}
+    )
+
+    assert response.status_code == 400
+
+
+def test_export_csv_statut_requires_manager_role(client, standard_user):
+
+    _login_reader(client)
+
+    response = client.get(
+        "/inventaire-local/export-csv-statut", params={"statut": "Absent"}
+    )
+
+    assert response.status_code == 403

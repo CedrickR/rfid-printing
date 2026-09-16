@@ -49,6 +49,12 @@ class Asset(Base):
         String(255)
     )
 
+    type_bien_id = Column(
+        Integer,
+        ForeignKey("asset_types.id"),
+        nullable=True
+    )
+
     utilisateur = Column(
         String(255)
     )

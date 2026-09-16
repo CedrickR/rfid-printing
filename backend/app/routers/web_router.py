@@ -36,6 +36,8 @@ from app.models.print_job_line_model import PrintJobLine
 from app.models.rfid_scan_model import RfidScanFile, RfidScanLine
 from app.models.glpi_asset_model import GlpiImport, GlpiAsset
 from app.models.destination_model import Destination
+from app.models.asset_type_model import AssetType
+from app.models.inventory_check_line_model import InventoryCheckLine
 from app.models.bureau_model import BureauImport, BureauMapping
 from app.models.destination_bureau_import_model import DestinationBureauImport
 
@@ -103,6 +105,18 @@ from app.services.destination_service import (
     DuplicateDestinationError,
     InvalidDestinationError,
     DestinationNotFoundError,
+)
+from app.services.asset_type_service import (
+    AssetTypeService,
+    DuplicateAssetTypeError,
+    InvalidAssetTypeError,
+    AssetTypeNotFoundError,
+)
+from app.services.inventory_check_service import (
+    InventoryCheckService,
+    InventoryCheckLineNotFoundError,
+    NotExtraLineError,
+    STATUTS,
 )
 from app.services.bureau_service import (
     BureauImportService,
@@ -640,6 +654,20 @@ def _destination_error_message(exc: Exception) -> str:
     return "Action impossible."
 
 
+def _asset_type_error_message(exc: Exception) -> str:
+
+    if isinstance(exc, DuplicateAssetTypeError):
+        return "Ce type de bien existe déjà."
+
+    if isinstance(exc, InvalidAssetTypeError):
+        return "Le libellé du type de bien est obligatoire."
+
+    if isinstance(exc, AssetTypeNotFoundError):
+        return "Type de bien introuvable."
+
+    return "Action impossible."
+
+
 def _bureau_error_message(exc: Exception) -> str:
 
     if isinstance(exc, BureauInvalidEncodingError):
@@ -710,6 +738,7 @@ def _render_destinations_page(
         name="destinations.html",
         context={
             "destinations": DestinationService.list_destinations(db),
+            "asset_types": AssetTypeService.list_asset_types(db),
             "last_bureau_import": last_bureau_import,
             "last_majdest_import": last_majdest_import,
             "bureau_mappings_count": db.query(BureauMapping).count(),
@@ -822,6 +851,101 @@ def destinations_delete(
 
     return RedirectResponse(
         url="/admin/destinations?deleted=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/asset-types")
+def asset_types_create(
+    request: Request,
+    libelle: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        AssetTypeService.create_asset_type(db, libelle)
+
+    except (DuplicateAssetTypeError, InvalidAssetTypeError) as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_asset_type_error_message(e),
+            status_code=400
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?type_created=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/asset-types/{asset_type_id}/update")
+def asset_types_update(
+    request: Request,
+    asset_type_id: int,
+    libelle: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        AssetTypeService.update_asset_type(db, asset_type_id, libelle)
+
+    except (
+        DuplicateAssetTypeError,
+        InvalidAssetTypeError,
+        AssetTypeNotFoundError
+    ) as e:
+
+        status_code = (
+            404
+            if isinstance(e, AssetTypeNotFoundError)
+            else 400
+        )
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_asset_type_error_message(e),
+            status_code=status_code
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?type_updated=1",
+        status_code=303
+    )
+
+
+@router.post("/admin/asset-types/{asset_type_id}/delete")
+def asset_types_delete(
+    request: Request,
+    asset_type_id: int,
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_admin(current_user)
+
+    try:
+        AssetTypeService.delete_asset_type(db, asset_type_id)
+
+    except AssetTypeNotFoundError as e:
+
+        return _render_destinations_page(
+            request,
+            db,
+            error=_asset_type_error_message(e),
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url="/admin/destinations?type_deleted=1",
         status_code=303
     )
 
@@ -1753,6 +1877,13 @@ def assets(
         for destination in DestinationService.list_destinations(db)
     ]
 
+    asset_type_options = AssetTypeService.list_asset_types(db)
+
+    asset_type_libelle_by_id = {
+        asset_type.id: asset_type.libelle
+        for asset_type in asset_type_options
+    }
+
     return templates.TemplateResponse(
         request=request,
         name="assets.html",
@@ -1770,6 +1901,8 @@ def assets(
             "niveau_options": _distinct_values(db, Asset.niveau_libelle),
             "local_options": _distinct_values(db, Asset.local_libelle),
             "destination_options": destination_options,
+            "asset_type_options": asset_type_options,
+            "asset_type_libelle_by_id": asset_type_libelle_by_id,
             "bureau_by_codelieu": bureau_by_codelieu,
             "bureau_options": _bureau_options(db),
             "glpi_info_by_bien_id": glpi_info_by_bien_id,
@@ -1781,6 +1914,40 @@ def assets(
             "last_import": last_import
         }
     )
+
+
+@router.post("/assets/{asset_id}/type-bien")
+def update_asset_type_bien(
+    asset_id: int,
+    type_bien_id: str = Form(default=""),
+    next: str = Form(default="/assets"),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Affecte (ou efface) le type de bien d'un bien depuis la page
+    Inventaire. La valeur vient de la liste déroulante gérée sur
+    /admin/destinations (onglet Types de bien).
+    """
+
+    require_manager(current_user)
+
+    asset = (
+        db.query(Asset)
+        .filter(Asset.id == asset_id)
+        .first()
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Bien introuvable")
+
+    asset.type_bien_id = int(type_bien_id) if type_bien_id else None
+
+    db.commit()
+
+    redirect_url = next if next.startswith("/assets") else "/assets"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.post("/assets/{asset_id}/destination")
@@ -1935,6 +2102,11 @@ def export_assets_csv(
         db, asset_ids
     )
 
+    asset_type_libelle_by_id = {
+        asset_type.id: asset_type.libelle
+        for asset_type in AssetTypeService.list_asset_types(db)
+    }
+
     buffer = StringIO()
 
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
@@ -1947,6 +2119,7 @@ def export_assets_csv(
             "Immeuble",
             "Niveau",
             "Local",
+            "Type de bien",
             "Destination",
             "Bureau",
             "Utilisateur",
@@ -1970,6 +2143,7 @@ def export_assets_csv(
                 asset.immeuble_libelle or "",
                 asset.niveau_libelle or "",
                 asset.local_libelle or "",
+                asset_type_libelle_by_id.get(asset.type_bien_id, ""),
                 asset.destination or "",
                 bureau_by_codelieu.get(asset.local_numero, "") or "",
                 asset.utilisateur or glpi_info.get("utilisateur", ""),
@@ -1982,6 +2156,266 @@ def export_assets_csv(
 
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"inventaire_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+def _inventaire_local_rows(db: Session, lines):
+    """
+    Pour chaque ligne, résout le Bien ID/la désignation/le type de
+    bien à afficher : lus en direct sur l'Asset lié pour un bien connu
+    (jamais dupliqués sur la ligne, voir InventoryCheckLine), ou
+    depuis la ligne elle-même pour un bien "en trop".
+    """
+
+    asset_ids = {line.asset_id for line in lines if line.asset_id}
+
+    assets_by_id = {
+        asset.id: asset
+        for asset in (
+            db.query(Asset).filter(Asset.id.in_(asset_ids)).all()
+            if asset_ids else []
+        )
+    }
+
+    asset_type_libelle_by_id = {
+        asset_type.id: asset_type.libelle
+        for asset_type in AssetTypeService.list_asset_types(db)
+    }
+
+    rows = []
+
+    for line in lines:
+
+        asset = assets_by_id.get(line.asset_id) if line.asset_id else None
+
+        rows.append(
+            {
+                "line": line,
+                "bien_id": asset.bien_id if asset else (line.bien_id or ""),
+                "designation": asset.bien_designation if asset else "",
+                "type_bien_libelle": asset_type_libelle_by_id.get(
+                    asset.type_bien_id if asset else line.type_bien_id,
+                    ""
+                ),
+                "is_extra": asset is None
+            }
+        )
+
+    return rows
+
+
+def _render_inventaire_local_page(
+    request: Request,
+    db: Session,
+    local: str,
+    error: str = None,
+    status_code: int = 200
+):
+
+    lines = InventoryCheckService.list_lines_for_local(db, local)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="inventaire_local.html",
+        context={
+            "local": local,
+            "local_options": _distinct_values(db, Asset.local_libelle),
+            "asset_type_options": AssetTypeService.list_asset_types(db),
+            "rows": _inventaire_local_rows(db, lines),
+            "statuts": STATUTS,
+            "error": error
+        },
+        status_code=status_code
+    )
+
+
+@router.get("/inventaire-local")
+def inventaire_local_page(
+    request: Request,
+    local: str = Query(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    return _render_inventaire_local_page(request, db, local)
+
+
+@router.post("/inventaire-local/add")
+def inventaire_local_add(
+    request: Request,
+    local: str = Form(...),
+    bien_id: str = Form(...),
+    type_bien_id: str = Form(default=""),
+    commentaire: str = Form(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Ajoute un bien "en trop" : physiquement présent dans le local mais
+    non affecté à celui-ci dans l'inventaire (ou inconnu). Bien ID
+    obligatoire ; type de bien et commentaire facultatifs.
+    """
+
+    require_manager(current_user)
+
+    bien_id = bien_id.strip()
+
+    if not local or not bien_id:
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local,
+            error="Le local et le Bien ID sont obligatoires.",
+            status_code=400
+        )
+
+    InventoryCheckService.add_extra_line(
+        db,
+        local_libelle=local,
+        bien_id=bien_id,
+        type_bien_id=int(type_bien_id) if type_bien_id else None,
+        commentaire=commentaire.strip(),
+        username=current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url=f"/inventaire-local?local={quote(local)}&added=1",
+        status_code=303
+    )
+
+
+@router.post("/inventaire-local/lines/{line_id}/update")
+def inventaire_local_update_line(
+    request: Request,
+    line_id: int,
+    local: str = Form(...),
+    statut: str = Form(...),
+    commentaire: str = Form(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    if statut not in STATUTS:
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local,
+            error="Statut invalide.",
+            status_code=400
+        )
+
+    try:
+        InventoryCheckService.update_line(
+            db, line_id, statut, commentaire.strip(), current_user["sub"]
+        )
+
+    except InventoryCheckLineNotFoundError:
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local,
+            error="Ligne introuvable.",
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url=f"/inventaire-local?local={quote(local)}&updated=1",
+        status_code=303
+    )
+
+
+@router.post("/inventaire-local/lines/{line_id}/delete")
+def inventaire_local_delete_line(
+    request: Request,
+    line_id: int,
+    local: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    try:
+        InventoryCheckService.delete_extra_line(db, line_id)
+
+    except (InventoryCheckLineNotFoundError, NotExtraLineError) as e:
+
+        is_not_found = isinstance(e, InventoryCheckLineNotFoundError)
+
+        message = (
+            "Ligne introuvable."
+            if is_not_found
+            else "Seul un bien « en trop » peut être supprimé."
+        )
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local,
+            error=message,
+            status_code=404 if is_not_found else 400
+        )
+
+    return RedirectResponse(
+        url=f"/inventaire-local?local={quote(local)}&deleted=1",
+        status_code=303
+    )
+
+
+@router.get("/inventaire-local/export-csv")
+def inventaire_local_export_csv(
+    local: str = Query(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+
+    require_manager(current_user)
+
+    lines = InventoryCheckService.list_lines_for_local(db, local)
+
+    rows = _inventaire_local_rows(db, lines)
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(
+        ["Bien ID", "Désignation", "Type de bien", "Commentaire", "Statut"]
+    )
+
+    for row in rows:
+
+        writer.writerow(
+            [
+                row["bien_id"],
+                row["designation"],
+                row["type_bien_libelle"],
+                row["line"].commentaire or "",
+                row["line"].statut
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+    safe_local = "".join(
+        c if c.isalnum() else "_" for c in local
+    ) or "local"
+
+    filename = f"inventaire_local_{safe_local}_{timestamp}.csv"
 
     return Response(
         content=buffer.getvalue(),

@@ -92,6 +92,13 @@
             </a>
         </li>
 
+        <li class="nav-item {% if request.url.path == '/inventaire-local' %}active{% endif %}">
+            <a class="nav-link" href="/inventaire-local">
+                <i class="fas fa-fw fa-clipboard-check"></i>
+                <span>Suivi par local</span>
+            </a>
+        </li>
+
         {% endif %}
 
         {% if request.state.role == 'administrateur' %}

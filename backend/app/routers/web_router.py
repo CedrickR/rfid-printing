@@ -2272,6 +2272,7 @@ def _inventaire_local_rows(db: Session, lines):
         rows.append(
             {
                 "line": line,
+                "local_libelle": line.local_libelle,
                 "bien_id": asset.bien_id if asset else (line.bien_id or ""),
                 "designation": asset.bien_designation if asset else "",
                 "type_bien_id": current_type_bien_id,
@@ -2287,15 +2288,33 @@ def _inventaire_local_rows(db: Session, lines):
     return rows
 
 
+# Filtre "Biens à traiter" (onglet dédié, tous locaux confondus) :
+# volontairement limité à Absent/En Trop — Présent n'a pas besoin
+# d'être recherché à travers tous les locaux, seul l'onglet Par local
+# a vocation à afficher les biens présents.
+STATUT_FILTER_OPTIONS = (STATUT_ABSENT, STATUT_EN_TROP)
+
+
 def _render_inventaire_local_page(
     request: Request,
     db: Session,
     local: str,
+    statut_filter: str = "",
     error: str = None,
     status_code: int = 200
 ):
 
     lines = InventoryCheckService.list_lines_for_local(db, local)
+
+    statut_rows = []
+
+    if statut_filter in STATUT_FILTER_OPTIONS:
+
+        statut_lines = InventoryCheckService.list_lines_by_statut(
+            db, statut_filter
+        )
+
+        statut_rows = _inventaire_local_rows(db, statut_lines)
 
     return templates.TemplateResponse(
         request=request,
@@ -2306,6 +2325,9 @@ def _render_inventaire_local_page(
             "asset_type_options": AssetTypeService.list_asset_types(db),
             "rows": _inventaire_local_rows(db, lines),
             "statuts": STATUTS,
+            "statut_filter": statut_filter,
+            "statut_filter_options": STATUT_FILTER_OPTIONS,
+            "statut_rows": statut_rows,
             "error": error
         },
         status_code=status_code
@@ -2316,13 +2338,14 @@ def _render_inventaire_local_page(
 def inventaire_local_page(
     request: Request,
     local: str = Query(default=""),
+    statut_filter: str = Query(default=""),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
     require_manager(current_user)
 
-    return _render_inventaire_local_page(request, db, local)
+    return _render_inventaire_local_page(request, db, local, statut_filter)
 
 
 @router.post("/inventaire-local/add")
@@ -2498,6 +2521,63 @@ def inventaire_local_export_csv(
     ) or "local"
 
     filename = f"inventaire_local_{safe_local}_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get("/inventaire-local/export-csv-statut")
+def inventaire_local_export_csv_statut(
+    statut: str = Query(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Export de l'onglet "Biens à traiter" (§2.13) : tous les biens
+    (tous locaux confondus) au statut demandé (Absent ou En Trop).
+    """
+
+    require_manager(current_user)
+
+    if statut not in STATUT_FILTER_OPTIONS:
+        raise HTTPException(status_code=400, detail="Statut de filtre invalide.")
+
+    lines = InventoryCheckService.list_lines_by_statut(db, statut)
+
+    rows = _inventaire_local_rows(db, lines)
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(
+        ["Bien ID", "Désignation", "Type de bien", "Commentaire", "Statut"]
+    )
+
+    for row in rows:
+
+        writer.writerow(
+            [
+                row["bien_id"],
+                row["designation"],
+                row["type_bien_libelle"],
+                row["line"].commentaire or "",
+                row["line"].statut
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+
+    safe_statut = "".join(
+        c if c.isalnum() else "_" for c in statut
+    ) or "statut"
+
+    filename = f"inventaire_local_{safe_statut}_{timestamp}.csv"
 
     return Response(
         content=buffer.getvalue(),

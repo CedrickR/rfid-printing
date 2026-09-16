@@ -1,3 +1,6 @@
+import re
+
+
 def _login(client, username="admin", password="Admin123!"):
 
     client.post(
@@ -269,6 +272,88 @@ def test_update_line_changes_statut_and_commentaire(client, admin_user):
     page = client.get("/inventaire-local", params={"local": "SALLE 101"})
 
     assert "non trouvé lors du contrôle" in page.text
+
+
+def test_update_line_sets_type_bien_on_known_asset(client, admin_user):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Copieur"})
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    asset_type_id = client.get(
+        "/admin/destinations"
+    ).text.split('/admin/asset-types/')[1].split('/update')[0]
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={
+            "local": "SALLE 101",
+            "statut": "Présent",
+            "type_bien_id": asset_type_id
+        }
+    )
+
+    # Reflété sur l'Inventaire : une seule valeur partagée, pas une
+    # copie propre à la ligne de suivi.
+    inventaire_page = client.get("/assets")
+
+    assert re.search(
+        r'value="' + asset_type_id + r'"\s*selected', inventaire_page.text
+    )
+
+    local_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert re.search(
+        r'value="' + asset_type_id + r'"\s*selected', local_page.text
+    )
+
+
+def test_update_line_sets_type_bien_on_extra_line(client, admin_user):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Caisson"})
+
+    asset_type_id = client.get(
+        "/admin/destinations"
+    ).text.split('/admin/asset-types/')[1].split('/update')[0]
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={
+            "local": "SALLE 101",
+            "statut": "Présent",
+            "type_bien_id": asset_type_id
+        }
+    )
+
+    local_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert re.search(
+        r'value="' + asset_type_id + r'"\s*selected', local_page.text
+    )
 
 
 def test_update_line_rejects_invalid_statut(client, admin_user):

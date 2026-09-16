@@ -148,8 +148,17 @@ class InventoryCheckService:
         line_id: int,
         statut: str,
         commentaire: str,
+        type_bien_id,
         username: str
     ) -> InventoryCheckLine:
+        """
+        Le type de bien d'une ligne liée à un bien connu (asset_id
+        renseigné) n'est jamais stocké sur la ligne elle-même (voir
+        InventoryCheckLine) : le modifier ici met à jour l'Asset lié,
+        exactement comme depuis l'Inventaire (§2.4) — une seule valeur
+        partagée entre les deux pages. Pour un bien "en trop", le type
+        de bien est propre à la ligne.
+        """
 
         line = (
             db.query(InventoryCheckLine)
@@ -159,6 +168,20 @@ class InventoryCheckService:
 
         if not line:
             raise InventoryCheckLineNotFoundError()
+
+        if line.asset_id is not None:
+
+            asset = (
+                db.query(Asset)
+                .filter(Asset.id == line.asset_id)
+                .first()
+            )
+
+            if asset:
+                asset.type_bien_id = type_bien_id
+
+        else:
+            line.type_bien_id = type_bien_id
 
         line.statut = statut
         line.commentaire = commentaire or None

@@ -310,6 +310,14 @@ def dashboard(
 
     printed_by_destination = _compute_printed_by_destination(db)
 
+    validated_by_local_check_count = (
+        db.query(InventoryCheckLine.asset_id)
+        .filter(InventoryCheckLine.asset_id.isnot(None))
+        .filter(InventoryCheckLine.updated_by != "system")
+        .distinct()
+        .count()
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -318,6 +326,7 @@ def dashboard(
             "assets_count": assets_count,
             "jobs_count": jobs_count,
             "history_count": history_count,
+            "validated_by_local_check_count": validated_by_local_check_count,
             "destination_labels": destination_labels,
             "destination_values": destination_values,
             "labels_generated_count": labels_generated_count,
@@ -2195,13 +2204,18 @@ def _inventaire_local_rows(db: Session, lines):
 
         asset = assets_by_id.get(line.asset_id) if line.asset_id else None
 
+        current_type_bien_id = (
+            asset.type_bien_id if asset else line.type_bien_id
+        )
+
         rows.append(
             {
                 "line": line,
                 "bien_id": asset.bien_id if asset else (line.bien_id or ""),
                 "designation": asset.bien_designation if asset else "",
+                "type_bien_id": current_type_bien_id,
                 "type_bien_libelle": asset_type_libelle_by_id.get(
-                    asset.type_bien_id if asset else line.type_bien_id,
+                    current_type_bien_id,
                     ""
                 ),
                 "is_extra": asset is None
@@ -2300,6 +2314,7 @@ def inventaire_local_update_line(
     line_id: int,
     local: str = Form(...),
     statut: str = Form(...),
+    type_bien_id: str = Form(default=""),
     commentaire: str = Form(default=""),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
@@ -2319,7 +2334,12 @@ def inventaire_local_update_line(
 
     try:
         InventoryCheckService.update_line(
-            db, line_id, statut, commentaire.strip(), current_user["sub"]
+            db,
+            line_id,
+            statut,
+            commentaire.strip(),
+            int(type_bien_id) if type_bien_id else None,
+            current_user["sub"]
         )
 
     except InventoryCheckLineNotFoundError:

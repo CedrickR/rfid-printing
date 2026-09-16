@@ -377,3 +377,67 @@ def test_dashboard_bureau_repartition_denies_reader_role(
     response = client.get("/dashboard")
 
     assert response.status_code == 403
+
+
+def _validated_by_local_check_count(page_text):
+
+    match = re.search(
+        r'Biens validés \(suivi par local\)\s*</div>\s*'
+        r'<div class="h5 mb-0 font-weight-bold text-gray-800">\s*'
+        r'(\d+)\s*</div>',
+        page_text
+    )
+
+    assert match, "Compteur 'Biens validés (suivi par local)' introuvable"
+
+    return int(match.group(1))
+
+
+def test_dashboard_shows_zero_validated_by_local_check_without_activity(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert _validated_by_local_check_count(response.text) == 0
+
+
+def test_dashboard_counts_asset_validated_via_local_check(
+    client, admin_user
+):
+
+    _login(client)
+
+    csv_content = (
+        "numero;libelle;sortie;local_libelle\n"
+        "10001;PC Portable;;SALLE 101\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    # Le seul affichage du local crée la ligne (statut par défaut,
+    # auteur "system") mais ne doit pas encore compter comme validé.
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    response = client.get("/dashboard")
+
+    assert _validated_by_local_check_count(response.text) == 0
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Présent"}
+    )
+
+    response = client.get("/dashboard")
+
+    assert _validated_by_local_check_count(response.text) == 1

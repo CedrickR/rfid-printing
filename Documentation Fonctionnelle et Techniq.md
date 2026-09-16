@@ -65,7 +65,7 @@ L'UI est **entièrement rendue côté serveur** (pas de framework JS / pas de bu
 
 ### 2.2 Tableau de bord (`/dashboard`)
 
-Organisé en deux onglets.
+Organisé en trois onglets.
 
 **Onglet « Vue d'ensemble »** :
 
@@ -83,6 +83,12 @@ Organisé en deux onglets.
   - **Attendu** : dérivé du `nombre_poste_prevu` du bureau — 1 ordinateur et 2 écrans par poste prévu (règle fixe).
   - **Réel** : biens actifs dont le **numéro local** correspond au **code pièce et service** du bureau, comptés par type — le type (ordinateur ou écran) est déterminé par le **rapprochement GLPI** (§2.7, `GlpiAsset.glpi_type`, valeurs `ordinateur`/`moniteur`) via le Bien ID commun ; un bien jamais rapproché via un import GLPI ne compte dans aucune des deux colonnes.
 - **Écart** = réel − attendu, pour les ordinateurs et pour les écrans séparément. Tout écart non nul est **mis en évidence** (fond rouge, texte en gras).
+
+**Onglet « Répartition du mobilier par bureau »** :
+
+- Un tableau, une ligne par bureau connu (même source que l'onglet précédent), avec **une colonne par type de bien** existant (`/admin/destinations`, onglet Types de bien, §2.12) : le nombre de biens **actifs** dont le **Type de bien** est renseigné, dont le **numéro local** correspond au **code pièce et service** du bureau, ventilés par type de bien.
+- Un bien dont le Type de bien n'est pas renseigné n'est compté dans **aucune** colonne.
+- Aucun tableau affiché tant qu'aucun type de bien n'existe.
 
 ### 2.3 Import de l'inventaire (`/import`)
 

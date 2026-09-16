@@ -218,17 +218,51 @@ def test_add_extra_line_appears_with_present_status(client, admin_user):
     assert "trouvé sous le bureau" in page.text
 
 
-def test_add_extra_line_requires_bien_id(client, admin_user):
+def test_add_extra_line_requires_local(client, admin_user):
 
     _login(client)
 
     response = client.post(
         "/inventaire-local/add",
-        data={"local": "SALLE 101", "bien_id": "   "}
+        data={"local": "   ", "bien_id": "EXTRA1"}
     )
 
     assert response.status_code == 400
-    assert "obligatoires" in response.text
+    assert "obligatoire" in response.text
+
+
+def test_add_extra_line_without_bien_id_generates_temporary_reference(
+    client, admin_user
+):
+    """
+    Bien physiquement présent mais non étiqueté (ex. fauteuil non
+    identifié) : le Bien ID peut être laissé vide, une référence
+    temporaire "SN-<id>" est alors générée automatiquement et la ligne
+    est marquée "Sans numéro" en attendant d'être rattachée à son vrai
+    Bien ID (voir InventoryCheckService.attach_bien_id).
+    """
+
+    _login(client)
+
+    response = client.post(
+        "/inventaire-local/add",
+        data={
+            "local": "SALLE 101",
+            "bien_id": "   ",
+            "designation": "Fauteuil de bureau non identifié",
+            "commentaire": "trouvé dans le fond de la pièce"
+        },
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert "SN-" in page.text
+    assert "Sans numéro" in page.text
+    assert "Fauteuil de bureau non identifié" in page.text
+    assert "trouvé dans le fond de la pièce" in page.text
 
 
 def test_add_extra_line_requires_manager_role(client, standard_user):
@@ -669,9 +703,12 @@ def test_export_csv_includes_known_and_extra_lines(client, admin_user):
 
     lines = response.text.strip("\n").split("\n")
 
-    assert lines[0] == "Bien ID;Désignation;Type de bien;Commentaire;Statut"
-    assert "10001;PC Portable;;;Présent" in lines
-    assert "EXTRA1;;;trouvé sur place;Présent" in lines
+    assert lines[0] == (
+        "Bien ID;Bien ID confirmé;Désignation;Type de bien;Commentaire;"
+        "Statut"
+    )
+    assert "10001;Oui;PC Portable;;;Présent" in lines
+    assert "EXTRA1;Oui;;;trouvé sur place;Présent" in lines
 
 
 def _line_id_for_bien(page_text, bien_id):
@@ -921,9 +958,13 @@ def test_export_csv_statut_includes_expected_columns(client, admin_user):
     lines = response.text.strip("\n").split("\n")
 
     assert lines[0] == (
-        "Local;Bien ID;Désignation;Type de bien;Commentaire;Statut"
+        "Local;Bien ID;Bien ID confirmé;Désignation;Type de bien;"
+        "Commentaire;Statut"
     )
-    assert "SALLE 101;10001;PC Portable;Copieur;non retrouvé;Absent" in lines
+    assert (
+        "SALLE 101;10001;Oui;PC Portable;Copieur;non retrouvé;Absent"
+        in lines
+    )
 
 
 def test_export_csv_statut_rejects_invalid_statut(client, admin_user):
@@ -946,3 +987,175 @@ def test_export_csv_statut_requires_manager_role(client, standard_user):
     )
 
     assert response.status_code == 403
+
+
+def _add_temp_line(client, local, designation="Fauteuil non identifié"):
+    """
+    Ajoute une ligne "sans numéro" et renvoie son id — recherché en
+    partant du texte de la référence temporaire "SN-..." (et non du
+    premier lien /update de la page) pour rester correct même si
+    d'autres lignes sont déjà présentes dans ce local.
+    """
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": local, "bien_id": "", "designation": designation}
+    )
+
+    page = client.get("/inventaire-local", params={"local": local})
+
+    temp_bien_id = re.search(r'SN-\d+', page.text).group(0)
+
+    return _line_id_for_bien(page.text, temp_bien_id)
+
+
+def test_attach_bien_id_links_temp_line_to_existing_asset(
+    client, admin_user
+):
+    """
+    Une fois le vrai Bien ID d'un bien "sans numéro" retrouvé, s'il
+    correspond à un bien connu de l'inventaire, la ligne devient une
+    ligne normale liée à cet Asset — Bien ID, désignation et type de
+    bien lus en direct sur l'Asset, comme pour toute ligne connue.
+    """
+
+    _login(client)
+    _import_asset(client, "20005", "Fauteuil catalogué", "SALLE 999")
+
+    line_id = _add_temp_line(client, "SALLE 101")
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/attach-bien-id",
+        data={"bien_id": "20005", "local": "SALLE 101"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/inventaire-local?local=SALLE%20101&attached=1"
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert "20005" in page.text
+    assert "Fauteuil catalogué" in page.text
+    assert "badge-secondary" not in page.text
+    assert "Fauteuil non identifié" not in page.text
+
+
+def test_attach_bien_id_without_matching_asset_keeps_extra_line(
+    client, admin_user
+):
+    """
+    Si le Bien ID indiqué ne correspond à aucun bien connu (pas encore
+    importé côté inventaire), la ligne reste un bien "en trop" — elle
+    n'est simplement plus "sans numéro".
+    """
+
+    _login(client)
+
+    line_id = _add_temp_line(client, "SALLE 101")
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/attach-bien-id",
+        data={"bien_id": "NOUVEAU123", "local": "SALLE 101"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert "NOUVEAU123" in page.text
+    assert "badge-secondary" not in page.text
+    assert "En trop" in page.text
+    assert "Fauteuil non identifié" in page.text
+
+
+def test_attach_bien_id_rejects_non_temporary_line(client, admin_user):
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/attach-bien-id",
+        data={"bien_id": "AUTRE", "local": "SALLE 101"}
+    )
+
+    assert response.status_code == 400
+    assert "rattachement" in response.text
+
+
+def test_attach_bien_id_rejects_asset_already_tracked_in_local(
+    client, admin_user
+):
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    # Crée la ligne connue pour ce bien dans SALLE 101.
+    client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = _add_temp_line(client, "SALLE 101")
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/attach-bien-id",
+        data={"bien_id": "10001", "local": "SALLE 101"}
+    )
+
+    assert response.status_code == 400
+    assert "déjà suivi" in response.text
+
+
+def test_attach_bien_id_missing_line_returns_404(client, admin_user):
+
+    _login(client)
+
+    response = client.post(
+        "/inventaire-local/lines/999/attach-bien-id",
+        data={"bien_id": "10001", "local": "SALLE 101"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_attach_bien_id_requires_manager_role(client, standard_user):
+
+    _login_reader(client)
+
+    response = client.post(
+        "/inventaire-local/lines/1/attach-bien-id",
+        data={"bien_id": "10001", "local": "SALLE 101"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_attach_bien_id_from_biens_a_traiter_redirects_with_statut_filter(
+    client, admin_user
+):
+
+    _login(client)
+
+    line_id = _add_temp_line(client, "SALLE 101")
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/attach-bien-id",
+        data={"bien_id": "NOUVEAU123", "statut_filter": "En Trop"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/inventaire-local?statut_filter=En%20Trop&attached=1"
+    )

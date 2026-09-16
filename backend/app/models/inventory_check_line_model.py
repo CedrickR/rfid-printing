@@ -1,6 +1,7 @@
 from datetime import datetime
 from datetime import UTC
 
+from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
@@ -16,13 +17,19 @@ class InventoryCheckLine(Base):
     Ligne du suivi de l'inventaire par local (§2.13) : soit un bien
     actif connu de l'inventaire actuellement affecté à ce local
     (`asset_id` renseigné), soit un bien "en trop" ajouté manuellement
-    (`asset_id` NULL, `bien_id`/`type_bien_id` alors renseignés
-    directement ici).
+    (`asset_id` NULL, `bien_id`/`designation`/`type_bien_id` alors
+    renseignés directement ici).
 
     Pour une ligne liée à un bien connu, le Bien ID, la désignation et
     le type de bien affichés viennent toujours en direct de l'Asset
     lié (jamais dupliqués ici) : seuls le statut et le commentaire
     sont propres à la ligne.
+
+    Un bien "en trop" dont le Bien ID est inconnu sur le terrain (ex.
+    fauteuil non étiqueté) peut être ajouté sans Bien ID : une
+    référence temporaire ("SN-<id>") est alors générée et
+    `bien_id_temporaire` vaut True, le temps que la ligne soit
+    rattachée à son vrai Bien ID (InventoryCheckService.attach_bien_id).
     """
 
     __tablename__ = "inventory_check_lines"
@@ -46,6 +53,16 @@ class InventoryCheckLine(Base):
     # Renseignés uniquement pour un bien "en trop" (asset_id NULL).
     bien_id = Column(
         String(100)
+    )
+
+    bien_id_temporaire = Column(
+        Boolean,
+        nullable=False,
+        default=False
+    )
+
+    designation = Column(
+        String(255)
     )
 
     type_bien_id = Column(

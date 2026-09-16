@@ -116,6 +116,9 @@ from app.services.inventory_check_service import (
     InventoryCheckService,
     InventoryCheckLineNotFoundError,
     NotExtraLineError,
+    NotTemporaryBienIdError,
+    BienIdRequiredError,
+    AssetAlreadyTrackedInLocalError,
     STATUTS,
     STATUT_PRESENT,
     STATUT_ABSENT,
@@ -2437,13 +2440,19 @@ def _inventaire_local_rows(db: Session, lines):
                 "line": line,
                 "local_libelle": line.local_libelle,
                 "bien_id": asset.bien_id if asset else (line.bien_id or ""),
-                "designation": asset.bien_designation if asset else "",
+                "designation": (
+                    asset.bien_designation if asset
+                    else (line.designation or "")
+                ),
                 "type_bien_id": current_type_bien_id,
                 "type_bien_libelle": asset_type_libelle_by_id.get(
                     current_type_bien_id,
                     ""
                 ),
                 "is_extra": asset is None,
+                "bien_id_temporaire": (
+                    line.bien_id_temporaire if asset is None else False
+                ),
                 "is_validated": line.updated_by != "system"
             }
         )
@@ -2530,7 +2539,8 @@ def inventaire_local_page(
 def inventaire_local_add(
     request: Request,
     local: str = Form(...),
-    bien_id: str = Form(...),
+    bien_id: str = Form(default=""),
+    designation: str = Form(default=""),
     type_bien_id: str = Form(default=""),
     commentaire: str = Form(default=""),
     current_user=Depends(get_current_user_web),
@@ -2538,28 +2548,32 @@ def inventaire_local_add(
 ):
     """
     Ajoute un bien "en trop" : physiquement présent dans le local mais
-    non affecté à celui-ci dans l'inventaire (ou inconnu). Bien ID
-    obligatoire ; type de bien et commentaire facultatifs.
+    non affecté à celui-ci dans l'inventaire (ou inconnu). Le Bien ID
+    est facultatif : s'il n'est pas connu sur le terrain (bien non
+    étiqueté), une référence temporaire est générée automatiquement
+    (InventoryCheckService.add_extra_line) — la désignation permet
+    alors de décrire l'objet en attendant son rattachement.
     """
 
     require_manager(current_user)
 
-    bien_id = bien_id.strip()
+    local = local.strip()
 
-    if not local or not bien_id:
+    if not local:
 
         return _render_inventaire_local_page(
             request,
             db,
             local,
-            error="Le local et le Bien ID sont obligatoires.",
+            error="Le local est obligatoire.",
             status_code=400
         )
 
     InventoryCheckService.add_extra_line(
         db,
         local_libelle=local,
-        bien_id=bien_id,
+        bien_id=bien_id.strip(),
+        designation=designation.strip(),
         type_bien_id=int(type_bien_id) if type_bien_id else None,
         commentaire=commentaire.strip(),
         username=current_user["sub"]
@@ -2702,6 +2716,77 @@ def inventaire_local_validate_line(
     )
 
 
+@router.post("/inventaire-local/lines/{line_id}/attach-bien-id")
+def inventaire_local_attach_bien_id(
+    request: Request,
+    line_id: int,
+    bien_id: str = Form(...),
+    local: str = Form(default=""),
+    statut_filter: str = Form(default=""),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Rattache un bien "sans numéro" (badge dédié, voir
+    InventoryCheckService.add_extra_line) à son vrai Bien ID, retrouvé
+    entretemps sur le terrain ou dans le logiciel de gestion
+    d'inventaire externe. Accessible depuis l'onglet "Par local" (avec
+    `local`) comme depuis l'onglet "Biens à traiter" (avec
+    `statut_filter`) : on revient sur la même vue après rattachement.
+    """
+
+    require_manager(current_user)
+
+    try:
+        InventoryCheckService.attach_bien_id(
+            db, line_id, bien_id, current_user["sub"]
+        )
+
+    except InventoryCheckLineNotFoundError:
+
+        return _render_inventaire_local_page(
+            request, db, local, statut_filter=statut_filter,
+            error="Ligne introuvable.", status_code=404
+        )
+
+    except BienIdRequiredError:
+
+        return _render_inventaire_local_page(
+            request, db, local, statut_filter=statut_filter,
+            error="Le Bien ID est obligatoire.", status_code=400
+        )
+
+    except NotTemporaryBienIdError:
+
+        return _render_inventaire_local_page(
+            request, db, local, statut_filter=statut_filter,
+            error="Cette ligne n'est pas en attente de rattachement.",
+            status_code=400
+        )
+
+    except AssetAlreadyTrackedInLocalError:
+
+        return _render_inventaire_local_page(
+            request, db, local, statut_filter=statut_filter,
+            error="Ce Bien ID est déjà suivi dans ce local.",
+            status_code=400
+        )
+
+    if statut_filter:
+        return RedirectResponse(
+            url=(
+                f"/inventaire-local?statut_filter={quote(statut_filter)}"
+                "&attached=1"
+            ),
+            status_code=303
+        )
+
+    return RedirectResponse(
+        url=f"/inventaire-local?local={quote(local)}&attached=1",
+        status_code=303
+    )
+
+
 @router.get("/inventaire-local/export-csv")
 def inventaire_local_export_csv(
     local: str = Query(default=""),
@@ -2720,7 +2805,10 @@ def inventaire_local_export_csv(
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
 
     writer.writerow(
-        ["Bien ID", "Désignation", "Type de bien", "Commentaire", "Statut"]
+        [
+            "Bien ID", "Bien ID confirmé", "Désignation", "Type de bien",
+            "Commentaire", "Statut"
+        ]
     )
 
     for row in rows:
@@ -2728,6 +2816,7 @@ def inventaire_local_export_csv(
         writer.writerow(
             [
                 row["bien_id"],
+                "Non" if row["bien_id_temporaire"] else "Oui",
                 row["designation"],
                 row["type_bien_libelle"],
                 row["line"].commentaire or "",
@@ -2781,8 +2870,8 @@ def inventaire_local_export_csv_statut(
 
     writer.writerow(
         [
-            "Local", "Bien ID", "Désignation", "Type de bien",
-            "Commentaire", "Statut"
+            "Local", "Bien ID", "Bien ID confirmé", "Désignation",
+            "Type de bien", "Commentaire", "Statut"
         ]
     )
 
@@ -2792,6 +2881,7 @@ def inventaire_local_export_csv_statut(
             [
                 row["local_libelle"],
                 row["bien_id"],
+                "Non" if row["bien_id_temporaire"] else "Oui",
                 row["designation"],
                 row["type_bien_libelle"],
                 row["line"].commentaire or "",

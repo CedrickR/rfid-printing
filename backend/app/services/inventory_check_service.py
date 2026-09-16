@@ -30,6 +30,29 @@ class NotExtraLineError(Exception):
     pass
 
 
+class NotTemporaryBienIdError(Exception):
+    """
+    Rattachement à un Bien ID demandé sur une ligne qui n'est pas en
+    attente de rattachement (bien_id_temporaire=False) : soit déjà
+    liée à un bien connu, soit déjà pourvue de son vrai Bien ID.
+    """
+    pass
+
+
+class BienIdRequiredError(Exception):
+    pass
+
+
+class AssetAlreadyTrackedInLocalError(Exception):
+    """
+    Rattachement demandé vers un Bien ID déjà suivi (ligne connue,
+    asset_id renseigné) dans ce même local : ce bien a déjà sa propre
+    ligne, le rattacher créerait un doublon pour le même bien dans le
+    même local.
+    """
+    pass
+
+
 class InventoryCheckService:
     """
     Suivi de l'inventaire par local (§2.13) : pour un local donné, une
@@ -157,6 +180,7 @@ class InventoryCheckService:
         db: Session,
         local_libelle: str,
         bien_id: str,
+        designation: str,
         type_bien_id,
         commentaire: str,
         username: str
@@ -167,12 +191,23 @@ class InventoryCheckService:
         Statut toujours "Présent" à la création (le bien vient d'être
         constaté sur place) ; modifiable ensuite comme les autres
         lignes.
+
+        Le Bien ID est facultatif : s'il n'est pas connu sur le
+        terrain (ex. fauteuil non étiqueté), une référence temporaire
+        "SN-<id>" est générée automatiquement (bien_id_temporaire=True)
+        — à rattacher plus tard à son vrai Bien ID via
+        attach_bien_id.
         """
+
+        bien_id = (bien_id or "").strip()
+        is_temporaire = not bien_id
 
         line = InventoryCheckLine(
             local_libelle=local_libelle,
             asset_id=None,
-            bien_id=bien_id,
+            bien_id=bien_id or None,
+            bien_id_temporaire=is_temporaire,
+            designation=(designation or "").strip() or None,
             type_bien_id=type_bien_id,
             commentaire=commentaire or None,
             statut=STATUT_PRESENT,
@@ -183,6 +218,10 @@ class InventoryCheckService:
         db.add(line)
         db.commit()
         db.refresh(line)
+
+        if is_temporaire:
+            line.bien_id = f"SN-{line.id}"
+            db.commit()
 
         return line
 
@@ -229,6 +268,80 @@ class InventoryCheckService:
 
         line.statut = statut
         line.commentaire = commentaire or None
+        line.updated_by = username
+        line.updated_at = datetime.now(UTC)
+
+        db.commit()
+
+        return line
+
+    @staticmethod
+    def attach_bien_id(
+        db: Session, line_id: int, bien_id: str, username: str
+    ) -> InventoryCheckLine:
+        """
+        Rattache une ligne "sans numéro" (bien_id_temporaire=True,
+        voir add_extra_line) à son vrai Bien ID, une fois celui-ci
+        retrouvé sur le terrain ou dans le logiciel de gestion
+        d'inventaire externe. Le commentaire et le statut de la ligne
+        sont conservés (pas de recréation).
+
+        - Si ce Bien ID correspond à un bien actif connu de
+          l'inventaire, la ligne devient une ligne "normale" liée à
+          cet Asset (asset_id renseigné, bien_id/designation/
+          type_bien_id propres à la ligne effacés — Bien ID,
+          désignation et type de bien sont alors lus en direct sur
+          l'Asset, comme pour toute ligne connue).
+        - Sinon, la référence temporaire est simplement remplacée par
+          le Bien ID indiqué : la ligne reste un bien "en trop" (donc
+          toujours à reporter dans le logiciel de gestion
+          d'inventaire externe), mais n'est plus "sans numéro".
+        """
+
+        bien_id = (bien_id or "").strip()
+
+        if not bien_id:
+            raise BienIdRequiredError()
+
+        line = (
+            db.query(InventoryCheckLine)
+            .filter(InventoryCheckLine.id == line_id)
+            .first()
+        )
+
+        if not line:
+            raise InventoryCheckLineNotFoundError()
+
+        if not line.bien_id_temporaire:
+            raise NotTemporaryBienIdError()
+
+        asset = (
+            db.query(Asset)
+            .filter(Asset.bien_id == bien_id)
+            .filter(Asset.is_active.is_(True))
+            .first()
+        )
+
+        if asset:
+
+            already_tracked = (
+                db.query(InventoryCheckLine)
+                .filter(InventoryCheckLine.local_libelle == line.local_libelle)
+                .filter(InventoryCheckLine.asset_id == asset.id)
+                .first()
+            )
+
+            if already_tracked:
+                raise AssetAlreadyTrackedInLocalError()
+
+            line.asset_id = asset.id
+            line.bien_id = None
+            line.designation = None
+            line.type_bien_id = None
+        else:
+            line.bien_id = bien_id
+
+        line.bien_id_temporaire = False
         line.updated_by = username
         line.updated_at = datetime.now(UTC)
 

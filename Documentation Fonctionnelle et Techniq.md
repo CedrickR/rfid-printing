@@ -111,7 +111,8 @@ Organisé en deux onglets.
   - Filtres par **immeuble**, **niveau**, **local** (listes déroulantes alimentées par les valeurs distinctes présentes en base).
   - Filtre **« Étiquette imprimée »** (`?printed=oui|non`) : Tous / Imprimées / Non imprimées — un bien est considéré imprimé s'il a été inclus dans au moins un lot d'impression **généré** (`PrintJob.status == "GENERATED"`).
   - Choix du nombre de lignes affichées par page (10 / 25 / 50).
-- Colonnes **Destination**, **Bureau**, **Utilisateur**, **Numéro de série**, **Étiquette imprimée** et **Lot d'impression** :
+- Colonnes **Type de bien**, **Destination**, **Bureau**, **Utilisateur**, **Numéro de série**, **Étiquette imprimée** et **Lot d'impression** :
+  - **Type de bien** : liste déroulante par ligne (`POST /assets/{id}/type-bien`), alimentée par la liste gérée sur `/admin/destinations` (onglet Types de bien, §2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Destination** : liste déroulante par ligne (`POST /assets/{id}/destination`), alimentée par la liste gérée sur `/admin/destinations` (§2.12). Modifier la valeur l'enregistre immédiatement. Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Bureau** : liste déroulante par ligne (`POST /assets/{id}/bureau`), alimentée par les bureaux connus (import `/admin/destinations`, §2.12) — chaque option affiche `niveau - nom_piece (code_piece_service) - N poste(s)`, incluant le **nombre de poste prévu** du bureau. Choisir une valeur enregistre le **code pièce et service** correspondant dans le **numéro local** du bien (même colonne utilisée pour le rapprochement automatique affiché ensuite dans la colonne). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
   - **Utilisateur** : liste déroulante par ligne (`POST /assets/{id}/utilisateur`), alimentée par tous les utilisateurs distincts connus via les imports GLPI (§2.7). Tant qu'aucune valeur n'est choisie, la colonne affiche l'utilisateur calculé par rapprochement GLPI (jointure sur le Bien ID) ; choisir une valeur enregistre une **correction manuelle** qui prend le dessus sur ce calcul automatique (y compris lors d'imports GLPI ultérieurs). Réservé aux profils gestionnaire et administrateur ; en lecture seule (texte, sans liste déroulante) pour le profil lecteur.
@@ -132,15 +133,15 @@ Organisé en deux onglets.
     Les tailles de police sont calibrées pour tenir dans les 90 x 36 mm ; en cas de bureau très long, la ligne étage/bureau/code peut être tronquée (jamais le code-barres ni son numéro, prioritaires) — à ajuster si besoin après un premier essai sur l'imprimante réelle.
 - Actions indépendantes de la sélection :
   - **Export lecteur RFID** (`GET /assets/export-rfid-reader`) : CSV (`;`, sans en-tête) de **tous les biens actifs**, colonnes Bien ID + désignation, destiné à alimenter le lecteur RFID.
-  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée, y compris le filtre « Étiquette imprimée »). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Destination, Bureau, Utilisateur, Numéro de série, Actif, Étiquette imprimée, Lot d'impression (numéro du lot, vide si jamais imprimé).
+  - **Exporter le résultat en CSV** (`GET /assets/export-csv`, en bas du tableau) : CSV (`;`, avec en-tête) de **l'intégralité** des biens correspondant aux critères de recherche courants (pas seulement la page affichée, y compris le filtre « Étiquette imprimée »). Colonnes : Bien ID, Désignation, Numéro local, Immeuble, Niveau, Local, Type de bien, Destination, Bureau, Utilisateur, Numéro de série, Actif, Étiquette imprimée, Lot d'impression (numéro du lot, vide si jamais imprimé).
 - Pour le profil **lecteur**, les boutons « Export lecteur RFID », « Inventaire immatériel », « Étiquettes (PDF) » et « Créer un lot d'impression » sont désactivés à l'écran **et** refusés côté serveur (403) s'ils sont sollicités directement.
-- **Vue simplifiée sur smartphone** (en dessous du seuil `md` de Bootstrap, ~768 px, écrans purement CSS — pas de page ni de route distincte) : seuls restent visibles, dans la recherche, le texte libre, la **plage de Bien ID** et le filtre **Local** (« Actifs uniquement », Immeuble, Niveau et « Étiquette imprimée » sont masqués), et dans le tableau les colonnes **Bien ID**, **Destination**, **Bureau** et **Utilisateur** (toutes les autres colonnes, la sélection multiple, les boutons d'action et l'export CSV sont masqués). Objectif : pouvoir mettre à jour Destination/Bureau/Utilisateur en se déplaçant avec un téléphone, sans l'encombrement du tableau complet. Les filtres masqués restent actifs s'ils étaient déjà renseignés (valeur conservée dans l'URL) ; ils redeviennent visibles au-delà du seuil (tablette/desktop).
+- **Vue simplifiée sur smartphone** (en dessous du seuil `md` de Bootstrap, ~768 px, écrans purement CSS — pas de page ni de route distincte) : seuls restent visibles, dans la recherche, le texte libre, la **plage de Bien ID** et le filtre **Local** (« Actifs uniquement », Immeuble, Niveau et « Étiquette imprimée » sont masqués), et dans le tableau les colonnes **Bien ID**, **Type de bien**, **Destination**, **Bureau** et **Utilisateur** (toutes les autres colonnes, la sélection multiple, les boutons d'action et l'export CSV sont masqués). Objectif : pouvoir mettre à jour Destination/Bureau/Utilisateur en se déplaçant avec un téléphone, sans l'encombrement du tableau complet. Les filtres masqués restent actifs s'ils étaient déjà renseignés (valeur conservée dans l'URL) ; ils redeviennent visibles au-delà du seuil (tablette/desktop).
 
 ### 2.5 Lots d'impression (`/jobs`)
 
 - Liste des lots, recherche par Bien ID (retrouve les lots contenant un bien donné) via `GET /jobs/search`.
 - Détail d'un lot (`/jobs/{id}`) : statut, nombre d'étiquettes, créateur, liste des biens associés.
-- **Génération des fichiers .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.8) : **un fichier .cmd par bien du lot** (et non plus un fichier unique pour tout le lot), déposés directement dans le dossier racine `generated/` (pas de sous-dossier), nommés d'après le gabarit de nom de fichier configurable (ex. `print_job_5_20260001.cmd` avec le gabarit par défaut) — chaque fichier contient l'en-tête du gabarit suivi de la ligne de ce seul bien. Un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré ; un gabarit de nom de fichier qui ne produit pas un nom distinct par bien (ex. sans `{{BienId}}`) est refusé, pour ne pas écraser silencieusement des fichiers du même lot. Les fichiers sont accessibles uniquement sur le disque du serveur (aucun téléchargement via l'application) ; la page du lot en liste le nombre et les noms.
+- **Génération des fichiers .cmd** (`POST /jobs/{id}/generate`) à partir du gabarit courant (§2.8) : **un fichier .cmd par bien du lot** (et non plus un fichier unique pour tout le lot), déposés directement dans le dossier racine `generated/` (pas de sous-dossier), nommés d'après le gabarit de nom de fichier configurable (ex. `print_job_5_20260001.cmd` avec le gabarit par défaut) — chaque fichier ne contient que la ligne de ce seul bien (pas d'en-tête de lot), avec des retours à la ligne CRLF (toujours, quel que soit l'OS d'exécution du serveur) pour rester compatible avec le logiciel d'impression Windows. Un lot ne peut être généré qu'une seule fois (sinon utiliser la réimpression via l'API, `POST /api/print/jobs/{id}/reprint`) ; un lot vide ne peut pas être généré ; un gabarit de nom de fichier qui ne produit pas un nom distinct par bien (ex. sans `{{BienId}}`) est refusé, pour ne pas écraser silencieusement des fichiers du même lot. Les fichiers sont accessibles uniquement sur le disque du serveur (aucun téléchargement via l'application) ; la page du lot en liste le nombre et les noms.
 - **Export du tableau du lot** :
   - **Exporter en PDF** : bouton déclenchant l'impression navigateur (`window.print()`) sur une mise en page dédiée (menu, boutons et bannières masqués via une feuille de style `@media print`) — l'utilisateur choisit « Enregistrer au format PDF » dans la boîte de dialogue d'impression.
   - **Exporter en CSV** (`GET /jobs/{id}/export-csv`) : CSV (`;`, avec en-tête Bien ID/Désignation) de la liste des biens du lot.
@@ -194,11 +195,11 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.8 Modèle du fichier CMD (`/settings/cmd-template`, administrateur uniquement)
 
-- Gabarit **d'en-tête** (une fois par lot), **de ligne** (répétée par bien) et **de nom de fichier** (un par bien, sans l'extension `.cmd` toujours ajoutée automatiquement), avec substitution de placeholders `{{Placeholder}}` :
+- Gabarit **de ligne** (le contenu intégral du fichier généré pour un bien — pas d'en-tête de lot : un bien = une étiquette = un fichier, voir §2.5) et **de nom de fichier** (un par bien, sans l'extension `.cmd` toujours ajoutée automatiquement), avec substitution de placeholders `{{Placeholder}}` :
 
   | Placeholder | Portée | Valeur |
   |---|---|---|
-  | `{{JobId}}` | En-tête, nom de fichier | Identifiant du lot |
+  | `{{JobId}}` | Nom de fichier uniquement | Identifiant du lot |
   | `{{BienId}}` | Ligne, nom de fichier | Bien ID |
   | `{{Designation}}` | Ligne, nom de fichier | Désignation du bien |
   | `{{DateSortie}}` | Ligne, nom de fichier | Date de sortie |
@@ -210,7 +211,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 - Le gabarit de nom de fichier combine un préfixe libre et des placeholders (ex. `print_job_{{JobId}}_{{BienId}}`, le défaut) ; le résultat est nettoyé des caractères invalides dans un nom de fichier. Il doit produire un nom **distinct par bien du lot** (donc généralement inclure `{{BienId}}` ou un autre placeholder qui varie par bien) : sinon la génération du lot est refusée (§2.5).
 - Un placeholder inconnu (faute de frappe) est laissé tel quel dans le fichier généré (ou le nom de fichier), pour rester visible plutôt que de disparaître silencieusement.
-- Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple ; affiche l'en-tête, la ligne et le nom de fichier qui seraient générés.
+- Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple ; affiche la ligne et le nom de fichier qui seraient générés.
 - Le gabarit actif est toujours **le dernier enregistré** (historique conservé en base, une ligne par modification).
 
 ### 2.9 Historique (`/history`)
@@ -239,12 +240,15 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 ### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
 
-Gère les listes de référence et les mises à jour en masse utilisées par les colonnes **Destination** et **Bureau** de l'Inventaire (§2.4), et par l'onglet « Répartition par bureau » du tableau de bord (§2.2), sur trois onglets.
+Gère les listes de référence et les mises à jour en masse utilisées par les colonnes **Type de bien**, **Destination** et **Bureau** de l'Inventaire (§2.4), et par l'onglet « Répartition par bureau » du tableau de bord (§2.2), sur quatre onglets.
 
 - **Onglet Destinations** :
   - Tableau des destinations existantes, avec pour chaque ligne un champ de renommage (`POST /admin/destinations/{id}/update`) et un bouton de suppression (`POST /admin/destinations/{id}/delete`, confirmation obligatoire).
   - Formulaire d'ajout (`POST /admin/destinations`) : libellé obligatoire et unique.
   - Supprimer une destination n'efface pas la valeur déjà affectée aux biens qui l'utilisaient (simple valeur de liste, pas de clé étrangère).
+- **Onglet Types de bien** :
+  - Même principe que l'onglet Destinations (liste de simples valeurs), pour la colonne **Type de bien** de l'Inventaire (§2.4) et du Suivi de l'inventaire par local (§2.13) : tableau avec renommage (`POST /admin/asset-types/{id}/update`) et suppression (`POST /admin/asset-types/{id}/delete`), formulaire d'ajout (`POST /admin/asset-types`, libellé obligatoire et unique). Supprimer un type de bien n'efface pas la valeur déjà affectée aux biens qui l'utilisaient.
+  - Valeurs créées automatiquement à l'installation (migration Alembic) : Bureau Fauteuil, Caisson, Armoire haute, Armoire basse, Porte-Manteau, Copieur — librement modifiables ou supprimables ensuite.
 - **Onglet Bureaux** :
   - Import d'un fichier CSV (`POST /admin/destinations/bureaux`, `;`, avec en-tête) — colonnes attendues : `niveau`, `nom_piece`, `code_piece_service`, `nombre_poste_prevu`. Le `code_piece_service` est comparé au **numéro local** de l'inventaire pour afficher le bureau correspondant sur la page Inventaire, et le `nombre_poste_prevu` alimente l'onglet « Répartition par bureau » du tableau de bord (1 poste = 1 ordinateur + 2 écrans).
   - **Jamais de doublon** : si le code pièce et service existe déjà (import précédent), ses informations sont **mises à jour** ; sinon une nouvelle ligne est créée. Un fichier contenant plusieurs fois le même code pièce et service est rejeté (import à corriger).
@@ -255,6 +259,20 @@ Gère les listes de référence et les mises à jour en masse utilisées par les
   - La colonne **Utilisateur** n'est **jamais modifiée** par cet import (le fichier ne contient pas de nom de personne).
   - Les Bien ID du fichier absents de l'inventaire sont **ignorés** (comptés à part, pas d'erreur) ; un fichier contenant plusieurs fois le même Bien ID est rejeté (import à corriger).
   - Affiche le dernier fichier chargé (date, auteur, nombre de lignes, biens mis à jour, Bien ID non trouvés).
+
+### 2.13 Suivi de l'inventaire par local (`/inventaire-local`, administrateur et gestionnaire)
+
+Contrôle physique de l'inventaire local par local (vérification sur le terrain que les biens attendus sont bien présents), distinct de l'Inventaire (§2.4) qui reste la source de vérité des biens eux-mêmes.
+
+- **Sélection d'un local** : liste déroulante alimentée par les valeurs de **Local** déjà présentes dans l'inventaire (mêmes valeurs que le filtre Local de l'Inventaire, §2.4). Rien ne s'affiche tant qu'aucun local n'est choisi.
+- **Lignes affichées** : dès qu'un local est sélectionné, une ligne est créée (une seule fois, aux affichages suivants la ligne déjà créée est réutilisée) pour chaque **bien actif actuellement affecté à ce local** dans l'inventaire, avec :
+  - **Bien ID**, **Désignation** et **Type de bien** : toujours lus en direct depuis l'Inventaire (jamais dupliqués ici), donc toujours à jour même si ces informations changent par ailleurs.
+  - **Commentaire** (texte libre) et **Statut** (liste déroulante : **Présent**, **Absent**, **En Trop**) : propres à cette ligne de suivi, modifiables à tout moment (`POST /inventaire-local/lines/{id}/update`) et enregistrées immédiatement au clic sur le bouton d'enregistrement de la ligne. Statut « Présent » par défaut.
+- **Ajouter un bien en trop** (`POST /inventaire-local/add`) : pour un bien physiquement présent dans le local mais non affecté à celui-ci dans l'inventaire (ou totalement inconnu) — Bien ID (obligatoire, texte libre), Type de bien et commentaire (facultatifs). Statut toujours **Présent** à l'ajout (le bien vient d'être constaté sur place) ; modifiable ensuite comme les autres lignes. Repéré dans le tableau par un badge « En trop » à côté du Bien ID. Seule une ligne « en trop » peut être supprimée (`POST /inventaire-local/lines/{id}/delete`) — une ligne liée à un bien connu de l'inventaire ne peut pas l'être (elle serait de toute façon recréée au prochain affichage du local tant que le bien y reste affecté).
+- **Export** :
+  - **Exporter en CSV** (`GET /inventaire-local/export-csv?local=...`) : CSV (`;`, avec en-tête) des lignes du local sélectionné — Bien ID, Désignation, Type de bien, Commentaire, Statut.
+  - **Imprimer** : bouton déclenchant l'impression navigateur (`window.print()`, comme les étiquettes §2.4 et l'export PDF des lots §2.5) — l'utilisateur choisit « Enregistrer au format PDF » dans la boîte de dialogue d'impression. Aucune dépendance PDF côté serveur.
+- Réservé aux profils **administrateur** et **gestionnaire** (403 pour le profil lecteur, y compris pour la simple consultation — contrairement à l'Inventaire qui reste consultable par tous).
 
 ---
 
@@ -275,17 +293,18 @@ Trois profils (champ `role` de la table `users`) :
 | Tableau de bord | ✅ | ✅ | ❌ |
 | Import CSV | ✅ | ✅ | ❌ |
 | Inventaire (consultation) | ✅ | ✅ | ✅ |
-| Modifier la Destination d'un bien | ✅ | ✅ | ❌ |
+| Modifier le Type de bien ou la Destination d'un bien | ✅ | ✅ | ❌ |
 | Export résultat de recherche (CSV) | ✅ | ✅ | ✅ |
 | Créer un lot / Inventaire immatériel / Export lecteur RFID | ✅ | ✅ | ❌ |
 | Lots (liste, détail, génération CMD, export PDF/CSV) | ✅ | ✅ | ❌ |
 | Historique | ✅ | ✅ | ❌ |
 | Fichiers RFID | ✅ | ✅ | ❌ |
+| Suivi de l'inventaire par local | ✅ | ✅ | ❌ |
 | Mise à jour des codes lieux (GLPI) | ✅ | ❌ | ❌ |
 | Modèle CMD | ✅ | ❌ | ❌ |
 | Utilisateurs et profils | ✅ | ❌ | ❌ |
 | Sauvegardes de la base de données | ✅ | ❌ | ❌ |
-| Destination et Bureau (listes de référence) | ✅ | ❌ | ❌ |
+| Destination et Bureau et Types de bien (listes de référence) | ✅ | ❌ | ❌ |
 | Réinitialiser la base de données | ✅ | ❌ | ❌ |
 
 Chaque restriction est appliquée **côté serveur** (403 explicite), l'affichage conditionnel du menu et des boutons n'étant qu'un confort d'usage, pas la seule protection.
@@ -397,16 +416,18 @@ rfid-printing/
 |---|---|---|
 | `users` | Comptes et profils | `id`, `username` (unique), `password_hash`, `role` |
 | `imports` | Historique des imports CSV inventaire | `id`, `filename`, `imported_by`, `imported_at`, `total_rows`, `active_assets`, `excluded_assets` |
-| `assets` | Biens de l'inventaire | `id`, `bien_id`, `bien_designation`, `bien_amort_date_sortie`, `local_numero`, `immeuble_libelle`, `niveau_libelle`, `local_libelle`, `is_active`, `import_id` (FK → `imports`) |
+| `assets` | Biens de l'inventaire | `id`, `bien_id`, `bien_designation`, `bien_amort_date_sortie`, `local_numero`, `immeuble_libelle`, `niveau_libelle`, `local_libelle`, `destination`, `type_bien_id` (FK → `asset_types`, nullable), `utilisateur`, `is_active`, `import_id` (FK → `imports`) |
 | `print_jobs` | Lots d'impression | `id`, `created_by`, `created_at`, `status` (`PENDING`/`GENERATED`), `labels_count`, `generated_files` (noms des fichiers `.cmd` du lot déposés à la racine de `generated/`, un par ligne), `generated_at` |
 | `print_job_lines` | Association bien ↔ lot | `id`, `job_id` (FK), `asset_id` (FK) |
 | `print_history` | Journal des générations/réimpressions | `id`, `job_id`, `username`, `action` (`GENERATED`/`REPRINTED`), `file_name`, `labels_count`, `created_at` |
-| `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `header_template`, `line_template`, `filename_template`, `updated_by`, `updated_at` |
+| `cmd_templates` | Historique des gabarits de fichier `.cmd` | `id`, `line_template`, `filename_template`, `updated_by`, `updated_at` |
+| `asset_types` | Types de bien possibles (§2.12) | `id`, `libelle` (unique) |
 | `rfid_scan_files` | Fichiers de scan RFID chargés | `id`, `filename`, `imported_by`, `imported_at` |
 | `rfid_scan_lines` | Lignes d'un fichier de scan | `id`, `scan_file_id` (FK), `lieu_numero`, `bien_id` |
 | `glpi_imports` | Historique des imports GLPI | `id`, `glpi_type`, `filename`, `imported_by`, `imported_at`, `total_rows`, `added_count`, `updated_count` |
 | `glpi_assets` | Informations GLPI par Bien ID (unique, mises à jour à chaque import) | `id`, `bien_id` (unique), `numero_piece`, `lieu`, `statut`, `glpi_type`, `import_id` (FK → `glpi_imports`), `updated_at` |
 | `destination_bureau_imports` | Historique des imports Destination/Bureau par Bien ID (§2.12) | `id`, `filename`, `imported_by`, `imported_at`, `total_rows`, `updated_count`, `unmatched_count` |
+| `inventory_check_lines` | Lignes du suivi de l'inventaire par local (§2.13) | `id`, `local_libelle`, `asset_id` (FK → `assets`, nullable — NULL pour un bien "en trop"), `bien_id`/`type_bien_id` (renseignés uniquement si `asset_id` est NULL), `commentaire`, `statut` (`Présent`/`Absent`/`En Trop`), `updated_by`, `updated_at` |
 
 Schéma versionné avec Alembic (`backend/alembic/versions/`) ; aucune modification manuelle du schéma ne doit être faite hors migration.
 

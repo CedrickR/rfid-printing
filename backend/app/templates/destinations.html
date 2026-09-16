@@ -22,6 +22,18 @@
 <div class="alert alert-success">
     Destination supprimée.
 </div>
+{% elif request.query_params.get('type_created') == '1' %}
+<div class="alert alert-success">
+    Type de bien créé.
+</div>
+{% elif request.query_params.get('type_updated') == '1' %}
+<div class="alert alert-success">
+    Type de bien mis à jour.
+</div>
+{% elif request.query_params.get('type_deleted') == '1' %}
+<div class="alert alert-success">
+    Type de bien supprimé.
+</div>
 {% elif request.query_params.get('bureaux_imported') == '1' %}
 <div class="alert alert-success">
     Import bureaux terminé :
@@ -48,6 +60,18 @@
             role="tab"
         >
             Destinations
+        </a>
+    </li>
+
+    <li class="nav-item">
+        <a
+            class="nav-link"
+            id="asset-types-tab"
+            data-toggle="tab"
+            href="#asset-types-pane"
+            role="tab"
+        >
+            Types de bien
         </a>
     </li>
 
@@ -192,6 +216,135 @@
                         type="text"
                         class="form-control mr-3 mb-2"
                         id="libelle"
+                        name="libelle"
+                        required
+                    >
+
+                    <button type="submit" class="btn btn-success mb-2">
+                        <i class="fas fa-plus fa-sm"></i> Ajouter
+                    </button>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Onglet Types de bien -->
+
+    <div class="tab-pane fade" id="asset-types-pane" role="tabpanel">
+
+        <div class="card shadow mb-4 mt-3">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Liste des types de bien
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <small class="form-text text-muted mb-3">
+                    Ces valeurs alimentent la liste déroulante de la colonne
+                    "Type de bien" de l'Inventaire. Supprimer un type de
+                    bien n'efface pas la valeur déjà affectée aux biens qui
+                    l'utilisaient.
+                </small>
+
+                <div class="table-responsive mt-3">
+
+                    <table class="table table-bordered table-hover">
+
+                        <thead>
+                            <tr>
+                                <th>Libellé</th>
+                                <th style="width: 220px;">Renommer</th>
+                                <th style="width: 80px;"></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+
+                            {% for asset_type in asset_types %}
+
+                            <tr>
+
+                                <td class="align-middle">{{ asset_type.libelle }}</td>
+
+                                <td>
+                                    <form
+                                        method="post"
+                                        action="/admin/asset-types/{{ asset_type.id }}/update"
+                                        class="form-inline"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm mr-2"
+                                            name="libelle"
+                                            value="{{ asset_type.libelle }}"
+                                            required
+                                        >
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-save fa-sm"></i>
+                                        </button>
+                                    </form>
+                                </td>
+
+                                <td>
+                                    <form
+                                        method="post"
+                                        action="/admin/asset-types/{{ asset_type.id }}/delete"
+                                        onsubmit="return confirm('Supprimer définitivement le type de bien « {{ asset_type.libelle }} » ?');"
+                                    >
+                                        <button type="submit" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash fa-sm"></i>
+                                        </button>
+                                    </form>
+                                </td>
+
+                            </tr>
+
+                            {% else %}
+
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">
+                                    Aucun type de bien.
+                                </td>
+                            </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="card shadow mb-4">
+
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Ajouter un type de bien
+                </h6>
+            </div>
+
+            <div class="card-body">
+
+                <form method="post" action="/admin/asset-types" class="form-inline">
+
+                    <label class="mr-2 mb-2" for="asset-type-libelle">
+                        Libellé
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control mr-3 mb-2"
+                        id="asset-type-libelle"
                         name="libelle"
                         required
                     >

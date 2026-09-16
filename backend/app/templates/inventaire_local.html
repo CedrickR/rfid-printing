@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    @media print {
+        /* À l'impression, les champs commentaire/statut doivent se
+           lire comme du texte simple plutôt que comme des contrôles
+           de formulaire (bordures, flèche de liste déroulante...). */
+        .table .form-control {
+            border: none;
+            background: transparent;
+            padding: 0;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+    }
+</style>
+
+<div class="no-print d-flex justify-content-between align-items-center mb-4">
+
+    <h1 class="h3 mb-0 text-gray-800">
+        Suivi de l'inventaire par local
+    </h1>
+
+    {% if local %}
+    <div>
+        <a
+            href="/inventaire-local/export-csv?local={{ local | urlencode }}"
+            class="btn btn-outline-primary"
+        >
+            <i class="fas fa-file-csv fa-sm"></i> Exporter en CSV
+        </a>
+        <button type="button" class="btn btn-success" onclick="window.print()">
+            <i class="fas fa-print fa-sm"></i> Imprimer
+        </button>
+    </div>
+    {% endif %}
+
+</div>
+
+{% if error %}
+<div class="alert alert-danger no-print">
+    {{ error }}
+</div>
+{% elif request.query_params.get('added') == '1' %}
+<div class="alert alert-success no-print">
+    Bien ajouté.
+</div>
+{% elif request.query_params.get('updated') == '1' %}
+<div class="alert alert-success no-print">
+    Ligne mise à jour.
+</div>
+{% elif request.query_params.get('deleted') == '1' %}
+<div class="alert alert-success no-print">
+    Ligne supprimée.
+</div>
+{% endif %}
+
+<div class="card shadow mb-4 no-print">
+
+    <div class="card-body">
+
+        <form method="get" class="form-inline">
+
+            <label class="mr-2" for="local-select">
+                Local
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                style="min-width: 260px;"
+                id="local-select"
+                name="local"
+                onchange="this.form.submit()"
+            >
+                <option value="">-- Sélectionner un local --</option>
+                {% for option in local_options %}
+                <option value="{{ option }}" {% if option == local %}selected{% endif %}>
+                    {{ option }}
+                </option>
+                {% endfor %}
+            </select>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% if local %}
+
+<div class="card shadow mb-4">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Biens du local « {{ local }} » ({{ rows | length }})
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <div class="table-responsive">
+
+            <table class="table table-bordered table-hover">
+
+                <thead>
+                    <tr>
+                        <th>Bien ID</th>
+                        <th>Désignation</th>
+                        <th>Type de bien</th>
+                        <th style="min-width: 220px;">Commentaire</th>
+                        <th style="min-width: 200px;">Statut</th>
+                        <th class="no-print" style="width: 60px;"></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for row in rows %}
+
+                    <tr>
+
+                        <td class="align-middle">
+                            {{ row.bien_id }}
+                            {% if row.is_extra %}
+                            <span class="badge badge-warning ml-1">
+                                En trop
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="align-middle">{{ row.designation }}</td>
+
+                        <td class="align-middle">{{ row.type_bien_libelle }}</td>
+
+                        <td colspan="2">
+                            <form
+                                method="post"
+                                action="/inventaire-local/lines/{{ row.line.id }}/update"
+                                class="form-inline flex-nowrap"
+                            >
+                                <input type="hidden" name="local" value="{{ local }}">
+                                <input
+                                    type="text"
+                                    class="form-control form-control-sm mr-2 mb-1"
+                                    style="min-width: 200px;"
+                                    name="commentaire"
+                                    value="{{ row.line.commentaire or '' }}"
+                                >
+                                <select
+                                    class="form-control form-control-sm mr-2 mb-1"
+                                    style="min-width: 140px;"
+                                    name="statut"
+                                >
+                                    {% for statut in statuts %}
+                                    <option
+                                        value="{{ statut }}"
+                                        {% if statut == row.line.statut %}selected{% endif %}
+                                    >
+                                        {{ statut }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-primary btn-sm mb-1 no-print">
+                                    <i class="fas fa-save fa-sm"></i>
+                                </button>
+                            </form>
+                        </td>
+
+                        <td class="no-print align-middle">
+                            {% if row.is_extra %}
+                            <form
+                                method="post"
+                                action="/inventaire-local/lines/{{ row.line.id }}/delete"
+                                onsubmit="return confirm('Supprimer cette ligne « en trop » ?');"
+                            >
+                                <input type="hidden" name="local" value="{{ local }}">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-trash fa-sm"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+
+                    </tr>
+
+                    {% else %}
+
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            Aucun bien actif affecté à ce local.
+                        </td>
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="card shadow mb-4 no-print">
+
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">
+            Ajouter un bien en trop
+        </h6>
+    </div>
+
+    <div class="card-body">
+
+        <small class="form-text text-muted mb-3">
+            Bien physiquement présent dans ce local mais non affecté à
+            celui-ci dans l'inventaire (ou inconnu). Ajouté avec le statut
+            « Présent ».
+        </small>
+
+        <form method="post" action="/inventaire-local/add" class="form-inline">
+
+            <input type="hidden" name="local" value="{{ local }}">
+
+            <label class="mr-2 mb-2" for="extra-bien-id">
+                Bien ID
+            </label>
+            <input
+                type="text"
+                class="form-control mr-3 mb-2"
+                id="extra-bien-id"
+                name="bien_id"
+                required
+            >
+
+            <label class="mr-2 mb-2" for="extra-type-bien">
+                Type de bien
+            </label>
+            <select
+                class="form-control mr-3 mb-2"
+                id="extra-type-bien"
+                name="type_bien_id"
+            >
+                <option value="">-- Aucun --</option>
+                {% for option in asset_type_options %}
+                <option value="{{ option.id }}">{{ option.libelle }}</option>
+                {% endfor %}
+            </select>
+
+            <label class="mr-2 mb-2" for="extra-commentaire">
+                Commentaire
+            </label>
+            <input
+                type="text"
+                class="form-control mr-3 mb-2"
+                id="extra-commentaire"
+                name="commentaire"
+            >
+
+            <button type="submit" class="btn btn-success mb-2">
+                <i class="fas fa-plus fa-sm"></i> Ajouter
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endif %}
+
+{% endblock %}

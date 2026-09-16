@@ -277,6 +277,7 @@
                             <th class="d-none d-md-table-cell">Immeuble</th>
                             <th class="d-none d-md-table-cell">Niveau</th>
                             <th class="d-none d-md-table-cell">Local</th>
+                            <th>Type de bien</th>
                             <th>Destination</th>
                             <th>Bureau</th>
                             <th>Utilisateur</th>
@@ -315,6 +316,29 @@
                             <td class="d-none d-md-table-cell">{{ asset.niveau_libelle or "" }}</td>
 
                             <td class="d-none d-md-table-cell">{{ asset.local_libelle or "" }}</td>
+
+                            <td>
+                                {% if request.state.role == 'lecteur' %}
+                                {{ asset_type_libelle_by_id.get(asset.type_bien_id, "") }}
+                                {% else %}
+                                <select
+                                    class="form-control form-control-sm"
+                                    name="type_bien_id"
+                                    form="type-bien-form-{{ asset.id }}"
+                                    onchange="document.getElementById('type-bien-form-{{ asset.id }}').submit()"
+                                >
+                                    <option value="">-- Aucun --</option>
+                                    {% for option in asset_type_options %}
+                                    <option
+                                        value="{{ option.id }}"
+                                        {% if option.id == asset.type_bien_id %}selected{% endif %}
+                                    >
+                                        {{ option.libelle }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </td>
 
                             <td>
                                 {% if request.state.role == 'lecteur' %}
@@ -450,6 +474,14 @@
 </form>
 
 {% for asset in assets %}
+<form
+    id="type-bien-form-{{ asset.id }}"
+    method="post"
+    action="/assets/{{ asset.id }}/type-bien"
+    style="display: none;"
+>
+    <input type="hidden" name="next" value="{{ current_qs }}">
+</form>
 <form
     id="destination-form-{{ asset.id }}"
     method="post"

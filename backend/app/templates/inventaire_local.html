@@ -59,6 +59,10 @@
 <div class="alert alert-success no-print">
     Bien validé.
 </div>
+{% elif request.query_params.get('attached') == '1' %}
+<div class="alert alert-success no-print">
+    Bien rattaché à son Bien ID.
+</div>
 {% endif %}
 
 <ul class="nav nav-tabs no-print" id="inventaireLocalTab" role="tablist">
@@ -152,7 +156,7 @@
                                 <th>Type de bien</th>
                                 <th style="min-width: 220px;">Commentaire</th>
                                 <th style="min-width: 200px;">Statut</th>
-                                <th class="no-print" style="width: 60px;"></th>
+                                <th class="no-print" style="width: 150px;"></th>
                             </tr>
                         </thead>
 
@@ -166,7 +170,11 @@
                                     <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
                                         {{ row.bien_id }}
                                     </span>
-                                    {% if row.is_extra %}
+                                    {% if row.bien_id_temporaire %}
+                                    <span class="badge badge-secondary ml-1">
+                                        Sans numéro
+                                    </span>
+                                    {% elif row.is_extra %}
                                     <span class="badge badge-warning ml-1">
                                         En trop
                                     </span>
@@ -225,6 +233,30 @@
                                 </td>
 
                                 <td class="no-print align-middle">
+                                    {% if row.bien_id_temporaire %}
+                                    <form
+                                        method="post"
+                                        action="/inventaire-local/lines/{{ row.line.id }}/attach-bien-id"
+                                        class="form-inline flex-nowrap mb-1"
+                                    >
+                                        <input type="hidden" name="local" value="{{ local }}">
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm mr-1"
+                                            style="min-width: 110px;"
+                                            name="bien_id"
+                                            placeholder="Vrai Bien ID"
+                                            required
+                                        >
+                                        <button
+                                            type="submit"
+                                            class="btn btn-primary btn-sm"
+                                            title="Rattacher à ce Bien ID"
+                                        >
+                                            <i class="fas fa-link fa-sm"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                     {% if row.is_extra %}
                                     <form
                                         method="post"
@@ -274,7 +306,11 @@
                 <small class="form-text text-muted mb-3">
                     Bien physiquement présent dans ce local mais non affecté à
                     celui-ci dans l'inventaire (ou inconnu). Ajouté avec le statut
-                    « Présent ».
+                    « Présent ». Si le Bien ID n'est pas connu sur place (bien non
+                    étiqueté), laissez-le vide : une référence temporaire est générée
+                    automatiquement, avec le badge « Sans numéro » — décrivez l'objet
+                    dans la désignation et rattachez-le plus tard à son vrai Bien ID
+                    (bouton <i class="fas fa-link fa-sm"></i> dans le tableau).
                 </small>
 
                 <form method="post" action="/inventaire-local/add" class="form-inline">
@@ -289,7 +325,18 @@
                         class="form-control mr-3 mb-2"
                         id="extra-bien-id"
                         name="bien_id"
-                        required
+                        placeholder="Laisser vide si inconnu"
+                    >
+
+                    <label class="mr-2 mb-2" for="extra-designation">
+                        Désignation
+                    </label>
+                    <input
+                        type="text"
+                        class="form-control mr-3 mb-2"
+                        id="extra-designation"
+                        name="designation"
+                        placeholder="Ex. Fauteuil de bureau"
                     >
 
                     <label class="mr-2 mb-2" for="extra-type-bien">
@@ -404,7 +451,7 @@
                                 <th>Type de bien</th>
                                 <th>Commentaire</th>
                                 <th>Statut</th>
-                                <th class="no-print" style="width: 90px;"></th>
+                                <th class="no-print" style="width: 220px;"></th>
                             </tr>
                         </thead>
 
@@ -420,7 +467,11 @@
                                     <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
                                         {{ row.bien_id }}
                                     </span>
-                                    {% if row.is_extra %}
+                                    {% if row.bien_id_temporaire %}
+                                    <span class="badge badge-secondary ml-1">
+                                        Sans numéro
+                                    </span>
+                                    {% elif row.is_extra %}
                                     <span class="badge badge-warning ml-1">
                                         En trop
                                     </span>
@@ -436,6 +487,30 @@
                                 <td class="align-middle">{{ row.line.statut }}</td>
 
                                 <td class="no-print align-middle">
+                                    {% if row.bien_id_temporaire %}
+                                    <form
+                                        method="post"
+                                        action="/inventaire-local/lines/{{ row.line.id }}/attach-bien-id"
+                                        class="form-inline flex-nowrap mb-1"
+                                    >
+                                        <input type="hidden" name="statut_filter" value="{{ statut_filter }}">
+                                        <input
+                                            type="text"
+                                            class="form-control form-control-sm mr-1"
+                                            style="min-width: 100px;"
+                                            name="bien_id"
+                                            placeholder="Vrai Bien ID"
+                                            required
+                                        >
+                                        <button
+                                            type="submit"
+                                            class="btn btn-primary btn-sm"
+                                            title="Rattacher à ce Bien ID"
+                                        >
+                                            <i class="fas fa-link fa-sm"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                     <form
                                         method="post"
                                         action="/inventaire-local/lines/{{ row.line.id }}/validate"

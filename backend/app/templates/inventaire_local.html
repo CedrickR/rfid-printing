@@ -131,15 +131,28 @@
 
                         <td class="align-middle">{{ row.designation }}</td>
 
-                        <td class="align-middle">{{ row.type_bien_libelle }}</td>
-
-                        <td colspan="2">
+                        <td colspan="3">
                             <form
                                 method="post"
                                 action="/inventaire-local/lines/{{ row.line.id }}/update"
                                 class="form-inline flex-nowrap"
                             >
                                 <input type="hidden" name="local" value="{{ local }}">
+                                <select
+                                    class="form-control form-control-sm mr-2 mb-1"
+                                    style="min-width: 160px;"
+                                    name="type_bien_id"
+                                >
+                                    <option value="">-- Aucun --</option>
+                                    {% for option in asset_type_options %}
+                                    <option
+                                        value="{{ option.id }}"
+                                        {% if option.id == row.type_bien_id %}selected{% endif %}
+                                    >
+                                        {{ option.libelle }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
                                 <input
                                     type="text"
                                     class="form-control form-control-sm mr-2 mb-1"

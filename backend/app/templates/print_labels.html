@@ -55,19 +55,19 @@
         display: flex;
         align-items: baseline;
         line-height: 0.85;
-        min-height: 9mm;
+        min-height: 10mm;
         overflow: hidden;
         flex-shrink: 0;
     }
 
     .label-destination .lettrine {
-        font-size: 9mm;
+        font-size: 10mm;
         font-weight: 700;
         margin-right: 1.5mm;
     }
 
     .label-destination .dest-rest {
-        font-size: 7mm;
+        font-size: 7.5mm;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.3mm;
@@ -79,7 +79,7 @@
     }
 
     .label-location {
-        font-size: 2.8mm;
+        font-size: 3mm;
         font-weight: 700;
         line-height: 1.05;
         white-space: normal;
@@ -88,7 +88,12 @@
         -webkit-box-orient: vertical;
         -webkit-line-clamp: 2;
         overflow: hidden;
-        flex-shrink: 1;
+        /* Hauteur figée à 2 lignes pile (2 x line-height x font-size) et
+           non rétrécissable : si le flex-box pouvait la comprimer, Chrome
+           laisse alors déborder la 2e ligne par-dessus le séparateur et le
+           code-barres au lieu de la tronquer proprement. */
+        flex-shrink: 0;
+        max-height: 6.3mm;
     }
 
     .label-separator {
@@ -110,7 +115,7 @@
     }
 
     .label-id .bien-id-number {
-        font-size: 5mm;
+        font-size: 6mm;
         font-weight: 700;
         line-height: 1;
         letter-spacing: 0.4mm;

@@ -121,7 +121,9 @@
                     <tr>
 
                         <td class="align-middle">
-                            {{ row.bien_id }}
+                            <span class="{{ bien_id_statut_class(row.line.statut, row.is_validated) }}">
+                                {{ row.bien_id }}
+                            </span>
                             {% if row.is_extra %}
                             <span class="badge badge-warning ml-1">
                                 En trop

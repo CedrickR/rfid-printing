@@ -305,7 +305,11 @@
 
                             <td class="d-none d-md-table-cell">{{ asset.id }}</td>
 
-                            <td>{{ asset.bien_id }}</td>
+                            <td>
+                                <span class="{{ bien_id_statut_class(validated_statut_by_asset_id.get(asset.id), asset.id in validated_statut_by_asset_id) }}">
+                                    {{ asset.bien_id }}
+                                </span>
+                            </td>
 
                             <td class="d-none d-md-table-cell">{{ asset.bien_designation }}</td>
 

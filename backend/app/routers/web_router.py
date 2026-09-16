@@ -117,6 +117,9 @@ from app.services.inventory_check_service import (
     InventoryCheckLineNotFoundError,
     NotExtraLineError,
     STATUTS,
+    STATUT_PRESENT,
+    STATUT_ABSENT,
+    STATUT_EN_TROP,
 )
 from app.services.bureau_service import (
     BureauImportService,
@@ -164,6 +167,30 @@ templates = Jinja2Templates(
 # par le middleware de réécriture de app/main.py).
 URL_PREFIX = os.environ.get("URL_PREFIX", "").rstrip("/")
 templates.env.globals["url_prefix"] = URL_PREFIX
+
+
+# Couleur du Bien ID selon le statut validé (Suivi par local, §2.13) :
+# vert/orange/rouge pour Présent/En Trop/Absent une fois qu'un
+# utilisateur a réellement enregistré la ligne (pas la couleur de
+# police par défaut tant qu'elle n'est que le statut par défaut créé
+# automatiquement à l'affichage du local). Utilisée à la fois sur
+# l'Inventaire (§2.4) et le Suivi par local lui-même.
+_STATUT_CSS_CLASS = {
+    STATUT_PRESENT: "text-success",
+    STATUT_EN_TROP: "text-warning",
+    STATUT_ABSENT: "text-danger",
+}
+
+
+def bien_id_statut_class(statut, is_validated):
+
+    if not is_validated:
+        return ""
+
+    return _STATUT_CSS_CLASS.get(statut, "")
+
+
+templates.env.globals["bien_id_statut_class"] = bien_id_statut_class
 
 
 @router.get("/login")
@@ -1781,6 +1808,35 @@ def _latest_printed_job_by_asset_id(db: Session, asset_ids):
     }
 
 
+def _validated_statut_by_asset_id(db: Session, asset_ids):
+    """
+    Dernier statut réellement validé (Suivi par local, §2.13 —
+    `updated_by` différent de "system", donc une ligne effectivement
+    enregistrée par un utilisateur, pas seulement créée par défaut à
+    l'affichage d'un local) par Bien ID, pour la coloration du Bien ID
+    sur l'Inventaire. Le plus récent est retenu si plusieurs existent
+    (ex. bien déplacé de local, ancienne ligne conservée).
+    """
+
+    if not asset_ids:
+        return {}
+
+    lines = (
+        db.query(InventoryCheckLine)
+        .filter(InventoryCheckLine.asset_id.in_(asset_ids))
+        .filter(InventoryCheckLine.updated_by != "system")
+        .order_by(InventoryCheckLine.updated_at.desc())
+        .all()
+    )
+
+    result = {}
+
+    for line in lines:
+        result.setdefault(line.asset_id, line.statut)
+
+    return result
+
+
 def _bureau_options(db: Session):
     """
     Liste de tous les bureaux connus (code_piece_service + libellé
@@ -1881,6 +1937,10 @@ def assets(
         db, asset_ids
     )
 
+    validated_statut_by_asset_id = _validated_statut_by_asset_id(
+        db, asset_ids
+    )
+
     destination_options = [
         destination.libelle
         for destination in DestinationService.list_destinations(db)
@@ -1917,6 +1977,7 @@ def assets(
             "glpi_info_by_bien_id": glpi_info_by_bien_id,
             "utilisateur_options": _utilisateur_options(db),
             "latest_printed_job_by_asset_id": latest_printed_job_by_asset_id,
+            "validated_statut_by_asset_id": validated_statut_by_asset_id,
             "page": page,
             "total": total,
             "page_size": page_size,
@@ -2218,7 +2279,8 @@ def _inventaire_local_rows(db: Session, lines):
                     current_type_bien_id,
                     ""
                 ),
-                "is_extra": asset is None
+                "is_extra": asset is None,
+                "is_validated": line.updated_by != "system"
             }
         )
 

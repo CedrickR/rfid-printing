@@ -584,3 +584,151 @@ def test_dashboard_mobilier_repartition_denies_reader_role(
     response = client.get("/dashboard")
 
     assert response.status_code == 403
+
+
+def test_dashboard_shows_renamed_informatique_tab(client, admin_user):
+
+    _login(client)
+
+    response = client.get("/dashboard")
+
+    assert "Répartition de l'informatique par bureau" in response.text
+
+
+def test_dashboard_tables_use_striped_rows(client, admin_user):
+
+    _login(client)
+
+    response = client.get("/dashboard")
+
+    assert "table-striped" in response.text
+
+
+def test_export_csv_informatique_includes_expected_columns(
+    client, admin_user
+):
+
+    _login(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;PC Un;;01100021\n"
+                "1002;Ecran Un;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    _upload_bureau(client, nombre_poste_prevu="1")
+
+    _upload_glpi(client, "1001", "ordinateur")
+    _upload_glpi(client, "1002", "moniteur")
+
+    response = client.get("/dashboard/export-csv-informatique")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Niveau;Nom pièce;Code pièce et service;Postes prévus;"
+        "Ordinateurs attendus;Ordinateurs réels;Écart ordinateurs;"
+        "Écrans attendus;Écrans réels;Écart écrans"
+    )
+    assert "REZ DE CHAUSSEE;021-ENTREPOT;01100021;1;1;1;0;2;1;-1" in lines
+
+
+def test_export_csv_informatique_requires_manager_role(
+    client, standard_user
+):
+
+    _login(client, "employe", "Employe123!")
+
+    response = client.get("/dashboard/export-csv-informatique")
+
+    assert response.status_code == 403
+
+
+def test_export_csv_mobilier_includes_expected_columns(client, admin_user):
+
+    _login(client)
+
+    client.post("/admin/asset-types", data={"libelle": "Bureau Fauteuil"})
+    client.post("/admin/asset-types", data={"libelle": "Caisson"})
+
+    _upload_bureau(client, code_piece_service="01100021", nom_piece="021")
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inv.csv",
+                "numero;libelle;sortie;local_numero\n"
+                "1001;Fauteuil 1;;01100021\n"
+                "1002;Caisson 1;;01100021\n",
+                "text/csv"
+            )
+        }
+    )
+
+    token = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "Admin123!"}
+    ).json()["access_token"]
+
+    assets = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    ).json()
+
+    asset_types_page = client.get("/admin/destinations").text
+
+    def _asset_type_id(libelle):
+
+        position = asset_types_page.index(libelle)
+
+        return re.search(
+            r'/admin/asset-types/(\d+)/update', asset_types_page[position:]
+        ).group(1)
+
+    fauteuil_type_id = _asset_type_id("Bureau Fauteuil")
+    caisson_type_id = _asset_type_id("Caisson")
+
+    for asset in assets:
+
+        type_id = (
+            fauteuil_type_id
+            if asset["bien_id"] == "1001"
+            else caisson_type_id
+        )
+
+        client.post(
+            f"/assets/{asset['id']}/type-bien",
+            data={"type_bien_id": type_id}
+        )
+
+    response = client.get("/dashboard/export-csv-mobilier")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+
+    lines = response.text.strip("\n").split("\n")
+
+    assert lines[0] == (
+        "Niveau;Nom pièce;Code pièce et service;Bureau Fauteuil;Caisson"
+    )
+    assert "REZ DE CHAUSSEE;021;01100021;1;1" in lines
+
+
+def test_export_csv_mobilier_requires_manager_role(client, standard_user):
+
+    _login(client, "employe", "Employe123!")
+
+    response = client.get("/dashboard/export-csv-mobilier")
+
+    assert response.status_code == 403

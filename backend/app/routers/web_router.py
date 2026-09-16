@@ -371,6 +371,109 @@ def dashboard(
     )
 
 
+@router.get("/dashboard/export-csv-informatique")
+def export_bureau_repartition_csv(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Export CSV de l'onglet "Répartition de l'informatique par bureau"
+    du tableau de bord (§2.2).
+    """
+
+    require_manager(current_user)
+
+    repartition = _compute_bureau_repartition(db)
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(
+        [
+            "Niveau", "Nom pièce", "Code pièce et service",
+            "Postes prévus",
+            "Ordinateurs attendus", "Ordinateurs réels",
+            "Écart ordinateurs",
+            "Écrans attendus", "Écrans réels", "Écart écrans"
+        ]
+    )
+
+    for bureau in repartition:
+
+        writer.writerow(
+            [
+                bureau["niveau"],
+                bureau["nom_piece"],
+                bureau["code_piece_service"],
+                bureau["nombre_poste_prevu"],
+                bureau["ordinateurs_attendus"],
+                bureau["ordinateurs_reels"],
+                bureau["ecart_ordinateurs"],
+                bureau["ecrans_attendus"],
+                bureau["ecrans_reels"],
+                bureau["ecart_ecrans"]
+            ]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"repartition_informatique_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@router.get("/dashboard/export-csv-mobilier")
+def export_mobilier_repartition_csv(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Export CSV de l'onglet "Répartition du mobilier par bureau" du
+    tableau de bord (§2.2).
+    """
+
+    require_manager(current_user)
+
+    asset_types, repartition = _compute_mobilier_repartition(db)
+
+    buffer = StringIO()
+
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
+
+    writer.writerow(
+        ["Niveau", "Nom pièce", "Code pièce et service"]
+        + [asset_type.libelle for asset_type in asset_types]
+    )
+
+    for bureau in repartition:
+
+        writer.writerow(
+            [
+                bureau["niveau"],
+                bureau["nom_piece"],
+                bureau["code_piece_service"]
+            ]
+            + bureau["counts"]
+        )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"repartition_mobilier_{timestamp}.csv"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
 def _compute_printed_by_destination(db: Session):
     """
     Pour chaque destination, le nombre de biens actifs avec étiquette

@@ -77,18 +77,20 @@ Organisé en trois onglets.
   - **Vider la base de données** : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés).
   - **Réinitialiser les lots d'impression** (`POST /admin/reset-print-jobs`) : supprime uniquement les lots d'impression (lots, lignes de lot, historique des générations/réimpressions) et les fichiers `.cmd` déjà générés sur le disque, **sans toucher à l'inventaire** (biens, imports) ni au reste des données (Destination/Bureau, GLPI, scans RFID, comptes). Utile pour repartir sur un historique d'impression vierge (ex. mise en production, §8.9) sans perdre l'inventaire déjà en place.
 
-**Onglet « Répartition par bureau »** :
+**Onglet « Répartition de l'informatique par bureau »** :
 
-- Un tableau, une ligne par bureau connu (fichier importé sur `/admin/destinations`, §2.12), comparant le nombre d'ordinateurs et d'écrans **attendus** au nombre **réel** :
+- Un tableau (lignes alternées pour la lisibilité), une ligne par bureau connu (fichier importé sur `/admin/destinations`, §2.12), comparant le nombre d'ordinateurs et d'écrans **attendus** au nombre **réel** :
   - **Attendu** : dérivé du `nombre_poste_prevu` du bureau — 1 ordinateur et 2 écrans par poste prévu (règle fixe).
   - **Réel** : biens actifs dont le **numéro local** correspond au **code pièce et service** du bureau, comptés par type — le type (ordinateur ou écran) est déterminé par le **rapprochement GLPI** (§2.7, `GlpiAsset.glpi_type`, valeurs `ordinateur`/`moniteur`) via le Bien ID commun ; un bien jamais rapproché via un import GLPI ne compte dans aucune des deux colonnes.
 - **Écart** = réel − attendu, pour les ordinateurs et pour les écrans séparément. Tout écart non nul est **mis en évidence** (fond rouge, texte en gras).
+- **Exporter en CSV** (`GET /dashboard/export-csv-informatique`) : mêmes colonnes que le tableau.
 
 **Onglet « Répartition du mobilier par bureau »** :
 
-- Un tableau, une ligne par bureau connu (même source que l'onglet précédent), avec **une colonne par type de bien** existant (`/admin/destinations`, onglet Types de bien, §2.12) : le nombre de biens **actifs** dont le **Type de bien** est renseigné, dont le **numéro local** correspond au **code pièce et service** du bureau, ventilés par type de bien.
+- Un tableau (lignes alternées pour la lisibilité), une ligne par bureau connu (même source que l'onglet précédent), avec **une colonne par type de bien** existant (`/admin/destinations`, onglet Types de bien, §2.12) : le nombre de biens **actifs** dont le **Type de bien** est renseigné, dont le **numéro local** correspond au **code pièce et service** du bureau, ventilés par type de bien.
 - Un bien dont le Type de bien n'est pas renseigné n'est compté dans **aucune** colonne.
-- Aucun tableau affiché tant qu'aucun type de bien n'existe.
+- Aucun tableau (ni bouton d'export) affiché tant qu'aucun type de bien n'existe.
+- **Exporter en CSV** (`GET /dashboard/export-csv-mobilier`) : mêmes colonnes que le tableau.
 
 ### 2.3 Import de l'inventaire (`/import`)
 

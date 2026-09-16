@@ -193,4 +193,24 @@ def test_print_labels_bien_id_font_size_increased(client, admin_user):
     )
 
     assert response.status_code == 200
-    assert "font-size: 5mm;" in response.text
+    assert "font-size: 6mm;" in response.text
+
+
+def test_print_labels_location_line_has_fixed_two_line_height(
+    client, admin_user
+):
+
+    _login(client)
+    _seed_asset(client)
+
+    response = client.post(
+        "/assets/print-labels",
+        data={"asset_ids": ["1"]}
+    )
+
+    assert response.status_code == 200
+    assert "font-size: 3mm;" in response.text
+    # La hauteur de la ligne étage/bureau/code doit rester figée à 2
+    # lignes pleines pour éviter tout chevauchement avec le code-barres
+    # lorsque le texte est long (voir commentaire dans le CSS).
+    assert "flex-shrink: 0;\n        max-height: 6.3mm;" in response.text

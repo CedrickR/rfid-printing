@@ -1,6 +1,7 @@
 from datetime import datetime
 from datetime import UTC
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.asset_model import Asset
@@ -122,6 +123,31 @@ class InventoryCheckService:
         return (
             db.query(InventoryCheckLine)
             .filter(InventoryCheckLine.statut == statut)
+            .order_by(InventoryCheckLine.local_libelle, InventoryCheckLine.id)
+            .all()
+        )
+
+    @staticmethod
+    def list_en_trop_lines(db: Session):
+        """
+        Tous les biens "en trop" à traiter (tous locaux confondus) :
+        les lignes taguées "en trop" (ajoutées manuellement via
+        add_extra_line, asset_id NULL) quel que soit leur statut
+        actuel — un bien en trop reste à traiter dans le logiciel de
+        gestion d'inventaire externe tant qu'il n'y est pas reporté,
+        indépendamment de son statut de présence lors du contrôle —,
+        plus les lignes de biens connus explicitement marquées au
+        statut "En Trop". Triées par local.
+        """
+
+        return (
+            db.query(InventoryCheckLine)
+            .filter(
+                or_(
+                    InventoryCheckLine.asset_id.is_(None),
+                    InventoryCheckLine.statut == STATUT_EN_TROP
+                )
+            )
             .order_by(InventoryCheckLine.local_libelle, InventoryCheckLine.id)
             .all()
         )

@@ -666,6 +666,85 @@ def test_statut_filter_lists_en_trop_biens(client, admin_user):
     assert "EXTRA1" in response.text
 
 
+def test_statut_filter_en_trop_shows_extra_regardless_of_statut(
+    client, admin_user
+):
+    """
+    Un bien "en trop" reste à reporter dans le logiciel de gestion
+    d'inventaire externe tant qu'il n'y figure pas, indépendamment de
+    son statut lors du contrôle — il doit donc apparaître dans le
+    filtre "En Trop" même sans jamais avoir été marqué à ce statut
+    (par défaut "Présent" à l'ajout, voir add_extra_line).
+    """
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    assert "EXTRA1" in response.text
+    assert "SALLE 101" in response.text
+
+
+def test_statut_filter_en_trop_shows_known_asset_marked_en_trop(
+    client, admin_user
+):
+
+    _login(client)
+
+    _mark_line(client, "SALLE 101", "10001", "PC Portable", "En Trop")
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    assert "10001" in response.text
+
+
+def test_statut_filter_en_trop_excludes_extra_marked_absent_from_absent_filter_only(
+    client, admin_user
+):
+    """
+    Un bien "en trop" marqué Absent apparaît dans le filtre En Trop
+    (toujours "à traiter") ET dans le filtre Absent (pour repérer les
+    biens qu'on ne retrouve plus).
+    """
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Absent"}
+    )
+
+    en_trop_response = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+    absent_response = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    assert "EXTRA1" in en_trop_response.text
+    assert "EXTRA1" in absent_response.text
+
+
 def test_statut_filter_does_not_create_lines(client, admin_user):
     """
     Contrairement à l'onglet Par local, l'onglet Biens à traiter ne
@@ -735,8 +814,10 @@ def test_export_csv_statut_includes_expected_columns(client, admin_user):
 
     lines = response.text.strip("\n").split("\n")
 
-    assert lines[0] == "Bien ID;Désignation;Type de bien;Commentaire;Statut"
-    assert "10001;PC Portable;Copieur;non retrouvé;Absent" in lines
+    assert lines[0] == (
+        "Local;Bien ID;Désignation;Type de bien;Commentaire;Statut"
+    )
+    assert "SALLE 101;10001;PC Portable;Copieur;non retrouvé;Absent" in lines
 
 
 def test_export_csv_statut_rejects_invalid_statut(client, admin_user):

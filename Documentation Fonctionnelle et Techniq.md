@@ -288,9 +288,11 @@ Contrôle physique de l'inventaire local par local (vérification sur le terrain
 **Onglet « Biens à traiter »** :
 
 - Recherche **tous locaux confondus**, à l'opposé de l'onglet Par local : liste déroulante de statut limitée à **Absent** et **En Trop** (Présent n'a pas d'intérêt à être recherché globalement, c'est l'état attendu). Rien ne s'affiche tant qu'aucun statut n'est choisi.
-- **Ne crée jamais de ligne** (contrairement à l'onglet Par local) : seules les lignes déjà **explicitement enregistrées** à ce statut apparaissent, quel que soit leur local.
-- Tableau en lecture seule (pas d'édition ici, ça reste sur l'onglet Par local ou l'Inventaire) : Local, Bien ID (coloré comme ci-dessus), Désignation, Type de bien, Commentaire, Statut.
-- **Exporter en CSV** (`GET /inventaire-local/export-csv-statut?statut=Absent|En Trop`) : CSV (`;`, avec en-tête) des biens au statut sélectionné, tous locaux confondus — Bien ID, Désignation, Type de bien, Commentaire, Statut (sans la colonne Local).
+- **Ne crée jamais de ligne** (contrairement à l'onglet Par local) : seules les lignes déjà existantes apparaissent.
+  - Filtre **Absent** : les lignes explicitement enregistrées à ce statut (bien connu ou « en trop »).
+  - Filtre **En Trop** : un sens volontairement plus large que le simple statut — **tous les biens « en trop »** (ajoutés via `POST /inventaire-local/add`, badge « En trop »), **quel que soit leur statut courant** (un bien en trop reste à reporter dans le logiciel de gestion d'inventaire externe tant qu'il n'y figure pas, y compris si son statut de présence a ensuite été changé), **plus** les lignes de biens connus explicitement marquées au statut « En Trop ».
+- Tableau en lecture seule (pas d'édition ici, ça reste sur l'onglet Par local ou l'Inventaire) : **Local** (le local à reporter dans le logiciel de gestion d'inventaire externe pour un bien « en trop »), Bien ID (coloré comme ci-dessus), Désignation, Type de bien, Commentaire, Statut.
+- **Exporter en CSV** (`GET /inventaire-local/export-csv-statut?statut=Absent|En Trop`) : CSV (`;`, avec en-tête) des biens au statut sélectionné, tous locaux confondus — Local, Bien ID, Désignation, Type de bien, Commentaire, Statut.
 
 Réservé aux profils **administrateur** et **gestionnaire**, les deux onglets (403 pour le profil lecteur, y compris pour la simple consultation — contrairement à l'Inventaire qui reste consultable par tous).
 

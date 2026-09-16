@@ -540,6 +540,112 @@ def test_delete_missing_line_returns_404(client, admin_user):
     assert response.status_code == 404
 
 
+def test_validate_known_asset_line_sets_statut_present(client, admin_user):
+
+    _login(client)
+
+    _mark_line(client, "SALLE 101", "10001", "PC Portable", "Absent")
+
+    page = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/validate')[0]
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/validate",
+        data={"statut_filter": "Absent"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/inventaire-local?statut_filter=Absent&validated=1"
+    )
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "Absent"}
+    )
+
+    assert "10001" not in response.text
+
+    # Toujours visible sur l'onglet Par local, désormais Présent.
+    local_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert "10001" in local_page.text
+
+
+def test_validate_extra_line_deletes_it(client, admin_user):
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    page = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/validate')[0]
+
+    response = client.post(
+        f"/inventaire-local/lines/{line_id}/validate",
+        data={"statut_filter": "En Trop"},
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/inventaire-local?statut_filter=En%20Trop&validated=1"
+    )
+
+    response = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    assert "EXTRA1" not in response.text
+
+    # Supprimée entièrement (pas juste sortie du filtre) : absente
+    # aussi de l'onglet Par local de ce local.
+    local_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert "EXTRA1" not in local_page.text
+
+
+def test_validate_missing_line_returns_404(client, admin_user):
+
+    _login(client)
+
+    response = client.post(
+        "/inventaire-local/lines/999/validate",
+        data={"statut_filter": "Absent"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_validate_line_requires_manager_role(client, standard_user):
+
+    _login_reader(client)
+
+    response = client.post(
+        "/inventaire-local/lines/1/validate",
+        data={"statut_filter": "Absent"}
+    )
+
+    assert response.status_code == 403
+
+
 def test_export_csv_includes_known_and_extra_lines(client, admin_user):
 
     _login(client)

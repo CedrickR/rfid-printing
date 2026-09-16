@@ -253,3 +253,39 @@ class InventoryCheckService:
 
         db.delete(line)
         db.commit()
+
+    @staticmethod
+    def validate_line(db: Session, line_id: int, username: str):
+        """
+        Valide une ligne depuis l'onglet "Biens à traiter" (§2.13),
+        pour la faire disparaître des filtres Absent/En Trop :
+
+        - Bien connu de l'inventaire : remis au statut "Présent"
+          (retrouvé, ou anomalie levée) — modifiable de nouveau
+          ensuite comme n'importe quelle ligne.
+        - Bien "en trop" : la ligne est supprimée, l'anomalie étant
+          considérée reportée dans le logiciel de gestion d'inventaire
+          externe (elle n'a alors plus besoin d'être suivie ici).
+        """
+
+        line = (
+            db.query(InventoryCheckLine)
+            .filter(InventoryCheckLine.id == line_id)
+            .first()
+        )
+
+        if not line:
+            raise InventoryCheckLineNotFoundError()
+
+        if line.asset_id is not None:
+
+            line.statut = STATUT_PRESENT
+            line.updated_by = username
+            line.updated_at = datetime.now(UTC)
+
+            db.commit()
+
+        else:
+
+            db.delete(line)
+            db.commit()

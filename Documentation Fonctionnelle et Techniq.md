@@ -291,7 +291,10 @@ Contrôle physique de l'inventaire local par local (vérification sur le terrain
 - **Ne crée jamais de ligne** (contrairement à l'onglet Par local) : seules les lignes déjà existantes apparaissent.
   - Filtre **Absent** : les lignes explicitement enregistrées à ce statut (bien connu ou « en trop »).
   - Filtre **En Trop** : un sens volontairement plus large que le simple statut — **tous les biens « en trop »** (ajoutés via `POST /inventaire-local/add`, badge « En trop »), **quel que soit leur statut courant** (un bien en trop reste à reporter dans le logiciel de gestion d'inventaire externe tant qu'il n'y figure pas, y compris si son statut de présence a ensuite été changé), **plus** les lignes de biens connus explicitement marquées au statut « En Trop ».
-- Tableau en lecture seule (pas d'édition ici, ça reste sur l'onglet Par local ou l'Inventaire) : **Local** (le local à reporter dans le logiciel de gestion d'inventaire externe pour un bien « en trop »), Bien ID (coloré comme ci-dessus), Désignation, Type de bien, Commentaire, Statut.
+- Tableau : **Local** (le local à reporter dans le logiciel de gestion d'inventaire externe pour un bien « en trop »), Bien ID (coloré comme ci-dessus), Désignation, Type de bien, Commentaire, Statut — pas d'édition du contenu de ces colonnes ici (ça reste sur l'onglet Par local ou l'Inventaire), seul le bouton **Valider** agit :
+  - **Valider** (`POST /inventaire-local/lines/{id}/validate`) : fait disparaître la ligne des filtres Absent/En Trop, une fois le bien traité.
+    - Bien connu de l'inventaire : statut remis à **Présent** (retrouvé, ou anomalie levée) — reste modifiable ensuite normalement depuis l'onglet Par local.
+    - Bien « en trop » : la ligne est **supprimée** (confirmation obligatoire) — l'anomalie est considérée reportée dans le logiciel de gestion d'inventaire externe, elle n'a alors plus besoin d'être suivie ici.
 - **Exporter en CSV** (`GET /inventaire-local/export-csv-statut?statut=Absent|En Trop`) : CSV (`;`, avec en-tête) des biens au statut sélectionné, tous locaux confondus — Local, Bien ID, Désignation, Type de bien, Commentaire, Statut.
 
 Réservé aux profils **administrateur** et **gestionnaire**, les deux onglets (403 pour le profil lecteur, y compris pour la simple consultation — contrairement à l'Inventaire qui reste consultable par tous).

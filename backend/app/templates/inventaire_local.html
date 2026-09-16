@@ -55,6 +55,10 @@
 <div class="alert alert-success no-print">
     Ligne supprimée.
 </div>
+{% elif request.query_params.get('validated') == '1' %}
+<div class="alert alert-success no-print">
+    Bien validé.
+</div>
 {% endif %}
 
 <ul class="nav nav-tabs no-print" id="inventaireLocalTab" role="tablist">
@@ -400,6 +404,7 @@
                                 <th>Type de bien</th>
                                 <th>Commentaire</th>
                                 <th>Statut</th>
+                                <th class="no-print" style="width: 90px;"></th>
                             </tr>
                         </thead>
 
@@ -430,12 +435,31 @@
 
                                 <td class="align-middle">{{ row.line.statut }}</td>
 
+                                <td class="no-print align-middle">
+                                    <form
+                                        method="post"
+                                        action="/inventaire-local/lines/{{ row.line.id }}/validate"
+                                        {% if row.is_extra %}
+                                        onsubmit="return confirm('Confirmer que ce bien « en trop » a bien été reporté dans le logiciel de gestion d\'inventaire ? Il ne sera alors plus suivi ici.');"
+                                        {% endif %}
+                                    >
+                                        <input type="hidden" name="statut_filter" value="{{ statut_filter }}">
+                                        <button
+                                            type="submit"
+                                            class="btn btn-success btn-sm"
+                                            title="{% if row.is_extra %}Marquer comme reporté dans l'inventaire{% else %}Marquer comme présent{% endif %}"
+                                        >
+                                            <i class="fas fa-check fa-sm"></i> Valider
+                                        </button>
+                                    </form>
+                                </td>
+
                             </tr>
 
                             {% else %}
 
                             <tr>
-                                <td colspan="6" class="text-center text-muted">
+                                <td colspan="7" class="text-center text-muted">
                                     Aucun bien à ce statut.
                                 </td>
                             </tr>

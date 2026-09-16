@@ -2659,6 +2659,49 @@ def inventaire_local_delete_line(
     )
 
 
+@router.post("/inventaire-local/lines/{line_id}/validate")
+def inventaire_local_validate_line(
+    request: Request,
+    line_id: int,
+    statut_filter: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Valide un bien depuis l'onglet "Biens à traiter" (§2.13), pour le
+    faire disparaître des filtres Absent/En Trop : statut remis à
+    Présent pour un bien connu de l'inventaire, ligne supprimée pour
+    un bien "en trop" (anomalie considérée reportée dans le logiciel
+    de gestion d'inventaire externe).
+    """
+
+    require_manager(current_user)
+
+    try:
+        InventoryCheckService.validate_line(
+            db, line_id, current_user["sub"]
+        )
+
+    except InventoryCheckLineNotFoundError:
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local="",
+            statut_filter=statut_filter,
+            error="Ligne introuvable.",
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/inventaire-local?statut_filter={quote(statut_filter)}"
+            "&validated=1"
+        ),
+        status_code=303
+    )
+
+
 @router.get("/inventaire-local/export-csv")
 def inventaire_local_export_csv(
     local: str = Query(default=""),

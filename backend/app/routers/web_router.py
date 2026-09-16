@@ -2458,6 +2458,23 @@ def _inventaire_local_rows(db: Session, lines):
 STATUT_FILTER_OPTIONS = (STATUT_ABSENT, STATUT_EN_TROP)
 
 
+def _lines_for_statut_filter(db: Session, statut_filter: str):
+    """
+    Lignes de l'onglet "Biens à traiter" pour le filtre demandé. "En
+    Trop" a un sens particulier : il liste tous les biens tagués "en
+    trop" (ajoutés manuellement, quel que soit leur statut — ils
+    restent à reporter dans le logiciel de gestion d'inventaire tant
+    qu'ils n'y sont pas ajoutés), pas seulement les lignes dont le
+    statut vaut littéralement "En Trop" (voir
+    InventoryCheckService.list_en_trop_lines).
+    """
+
+    if statut_filter == STATUT_EN_TROP:
+        return InventoryCheckService.list_en_trop_lines(db)
+
+    return InventoryCheckService.list_lines_by_statut(db, statut_filter)
+
+
 def _render_inventaire_local_page(
     request: Request,
     db: Session,
@@ -2473,9 +2490,7 @@ def _render_inventaire_local_page(
 
     if statut_filter in STATUT_FILTER_OPTIONS:
 
-        statut_lines = InventoryCheckService.list_lines_by_statut(
-            db, statut_filter
-        )
+        statut_lines = _lines_for_statut_filter(db, statut_filter)
 
         statut_rows = _inventaire_local_rows(db, statut_lines)
 
@@ -2644,6 +2659,49 @@ def inventaire_local_delete_line(
     )
 
 
+@router.post("/inventaire-local/lines/{line_id}/validate")
+def inventaire_local_validate_line(
+    request: Request,
+    line_id: int,
+    statut_filter: str = Form(...),
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Valide un bien depuis l'onglet "Biens à traiter" (§2.13), pour le
+    faire disparaître des filtres Absent/En Trop : statut remis à
+    Présent pour un bien connu de l'inventaire, ligne supprimée pour
+    un bien "en trop" (anomalie considérée reportée dans le logiciel
+    de gestion d'inventaire externe).
+    """
+
+    require_manager(current_user)
+
+    try:
+        InventoryCheckService.validate_line(
+            db, line_id, current_user["sub"]
+        )
+
+    except InventoryCheckLineNotFoundError:
+
+        return _render_inventaire_local_page(
+            request,
+            db,
+            local="",
+            statut_filter=statut_filter,
+            error="Ligne introuvable.",
+            status_code=404
+        )
+
+    return RedirectResponse(
+        url=(
+            f"/inventaire-local?statut_filter={quote(statut_filter)}"
+            "&validated=1"
+        ),
+        status_code=303
+    )
+
+
 @router.get("/inventaire-local/export-csv")
 def inventaire_local_export_csv(
     local: str = Query(default=""),
@@ -2702,7 +2760,10 @@ def inventaire_local_export_csv_statut(
 ):
     """
     Export de l'onglet "Biens à traiter" (§2.13) : tous les biens
-    (tous locaux confondus) au statut demandé (Absent ou En Trop).
+    (tous locaux confondus) au statut demandé (Absent ou En Trop —
+    voir _lines_for_statut_filter pour le sens particulier de "En
+    Trop"). Inclut le Local (à reporter dans le logiciel de gestion
+    d'inventaire externe pour les biens "en trop").
     """
 
     require_manager(current_user)
@@ -2710,7 +2771,7 @@ def inventaire_local_export_csv_statut(
     if statut not in STATUT_FILTER_OPTIONS:
         raise HTTPException(status_code=400, detail="Statut de filtre invalide.")
 
-    lines = InventoryCheckService.list_lines_by_statut(db, statut)
+    lines = _lines_for_statut_filter(db, statut)
 
     rows = _inventaire_local_rows(db, lines)
 
@@ -2719,13 +2780,17 @@ def inventaire_local_export_csv_statut(
     writer = csv.writer(buffer, delimiter=";", lineterminator="\n")
 
     writer.writerow(
-        ["Bien ID", "Désignation", "Type de bien", "Commentaire", "Statut"]
+        [
+            "Local", "Bien ID", "Désignation", "Type de bien",
+            "Commentaire", "Statut"
+        ]
     )
 
     for row in rows:
 
         writer.writerow(
             [
+                row["local_libelle"],
                 row["bien_id"],
                 row["designation"],
                 row["type_bien_libelle"],

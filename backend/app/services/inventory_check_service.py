@@ -1,6 +1,7 @@
 from datetime import datetime
 from datetime import UTC
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.asset_model import Asset
@@ -127,6 +128,31 @@ class InventoryCheckService:
         )
 
     @staticmethod
+    def list_en_trop_lines(db: Session):
+        """
+        Tous les biens "en trop" à traiter (tous locaux confondus) :
+        les lignes taguées "en trop" (ajoutées manuellement via
+        add_extra_line, asset_id NULL) quel que soit leur statut
+        actuel — un bien en trop reste à traiter dans le logiciel de
+        gestion d'inventaire externe tant qu'il n'y est pas reporté,
+        indépendamment de son statut de présence lors du contrôle —,
+        plus les lignes de biens connus explicitement marquées au
+        statut "En Trop". Triées par local.
+        """
+
+        return (
+            db.query(InventoryCheckLine)
+            .filter(
+                or_(
+                    InventoryCheckLine.asset_id.is_(None),
+                    InventoryCheckLine.statut == STATUT_EN_TROP
+                )
+            )
+            .order_by(InventoryCheckLine.local_libelle, InventoryCheckLine.id)
+            .all()
+        )
+
+    @staticmethod
     def add_extra_line(
         db: Session,
         local_libelle: str,
@@ -227,3 +253,39 @@ class InventoryCheckService:
 
         db.delete(line)
         db.commit()
+
+    @staticmethod
+    def validate_line(db: Session, line_id: int, username: str):
+        """
+        Valide une ligne depuis l'onglet "Biens à traiter" (§2.13),
+        pour la faire disparaître des filtres Absent/En Trop :
+
+        - Bien connu de l'inventaire : remis au statut "Présent"
+          (retrouvé, ou anomalie levée) — modifiable de nouveau
+          ensuite comme n'importe quelle ligne.
+        - Bien "en trop" : la ligne est supprimée, l'anomalie étant
+          considérée reportée dans le logiciel de gestion d'inventaire
+          externe (elle n'a alors plus besoin d'être suivie ici).
+        """
+
+        line = (
+            db.query(InventoryCheckLine)
+            .filter(InventoryCheckLine.id == line_id)
+            .first()
+        )
+
+        if not line:
+            raise InventoryCheckLineNotFoundError()
+
+        if line.asset_id is not None:
+
+            line.statut = STATUT_PRESENT
+            line.updated_by = username
+            line.updated_at = datetime.now(UTC)
+
+            db.commit()
+
+        else:
+
+            db.delete(line)
+            db.commit()

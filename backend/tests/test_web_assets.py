@@ -704,6 +704,53 @@ def test_export_csv_includes_type_bien(client, admin_user):
     assert "1001;PC actif;;;;;Copieur;;;;;Actif;Non;" in lines
 
 
+def test_assets_page_bien_id_has_no_color_without_local_check(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    response = client.get("/assets")
+
+    assert 'class="text-success"' not in response.text
+    assert 'class="text-warning"' not in response.text
+    assert 'class="text-danger"' not in response.text
+
+
+def test_assets_page_bien_id_colored_after_local_check_validation(
+    client, admin_user
+):
+
+    _login_and_seed(client)
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "loc.csv",
+                "numero;libelle;sortie;local_libelle\n"
+                "1001;PC actif;;SALLE 101\n",
+                "text/csv"
+            )
+        }
+    )
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Absent"}
+    )
+
+    response = client.get("/assets")
+
+    assert 'class="text-danger"' in response.text
+
+
 def test_assets_page_shows_destination_and_bureau_columns(client, admin_user):
 
     _login_and_seed(client)

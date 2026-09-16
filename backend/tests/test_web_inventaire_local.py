@@ -243,6 +243,95 @@ def test_add_extra_line_requires_manager_role(client, standard_user):
     assert response.status_code == 403
 
 
+def test_bien_id_has_no_color_before_validation(client, admin_user):
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    response = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert 'class="text-success"' not in response.text
+    assert 'class="text-warning"' not in response.text
+    assert 'class="text-danger"' not in response.text
+
+
+def test_bien_id_turns_green_when_validated_present(client, admin_user):
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Présent"}
+    )
+
+    response = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert 'class="text-success"' in response.text
+
+
+def test_bien_id_turns_orange_when_validated_en_trop(client, admin_user):
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "En Trop"}
+    )
+
+    response = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert 'class="text-warning"' in response.text
+
+
+def test_bien_id_turns_red_when_validated_absent(client, admin_user):
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = page.text.split(
+        '/inventaire-local/lines/'
+    )[1].split('/update')[0]
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Absent"}
+    )
+
+    response = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert 'class="text-danger"' in response.text
+
+
+def test_extra_line_bien_id_is_colored_immediately(client, admin_user):
+
+    _login(client)
+
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    response = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert 'class="text-success"' in response.text
+
+
 def test_update_line_changes_statut_and_commentaire(client, admin_user):
 
     _login(client)

@@ -112,7 +112,10 @@ def test_generate_writes_one_file_per_asset_directly_in_output_dir(
         tmp_path / "print_job_42_1001.cmd"
     ).read_text(encoding="utf-8")
 
-    assert content_1001 == "PRINT|bien_id=1001|designation=PC Portable"
+    # read_text() traduit le CRLF écrit sur disque en \n (newlines
+    # universels) : voir test_generate_always_writes_crlf_line_endings
+    # pour une vérification en octets bruts de la fin de ligne réelle.
+    assert content_1001 == "PRINT|bien_id=1001|designation=PC Portable\n"
     assert "1002" not in content_1001
 
     content_1002 = (
@@ -189,7 +192,7 @@ def test_generate_always_writes_crlf_line_endings(tmp_path):
 
     raw = (tmp_path / filenames[0]).read_bytes()
 
-    assert raw == b"L1\r\nL2\r\n1001"
+    assert raw == b"L1\r\nL2\r\n1001\r\n"
 
 
 def test_generate_does_not_double_carriage_return_on_already_crlf_template(
@@ -213,7 +216,43 @@ def test_generate_does_not_double_carriage_return_on_already_crlf_template(
 
     raw = (tmp_path / filenames[0]).read_bytes()
 
-    assert raw == b"L1\r\nL2\r\n1001"
+    assert raw == b"L1\r\nL2\r\n1001\r\n"
+
+
+def test_generate_adds_missing_trailing_crlf(tmp_path):
+    """
+    Cas réel remonté par un utilisateur : un gabarit enregistré sans
+    retour à la ligne après sa dernière valeur (ex. dernière ligne
+    tronquée par erreur en modifiant le gabarit) produisait un fichier
+    que le logiciel d'impression ignorait silencieusement, alors qu'un
+    fichier identique se terminant par CRLF fonctionnait. Le générateur
+    garantit désormais toujours cette fin de ligne, même si elle est
+    absente du gabarit enregistré.
+    """
+
+    generator = CommandGenerator(output_dir=tmp_path)
+
+    asset = make_asset("19570001", "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE")
+
+    line_template = (
+        'itemTypeName = "{{Designation}}"\n'
+        'codeItem = "{{BienId}}"\n'
+        '@serialqty = "1"'
+    )
+
+    filenames = generator.generate(
+        job_id=28,
+        assets=[asset],
+        line_template=line_template
+    )
+
+    raw = (tmp_path / filenames[0]).read_bytes()
+
+    assert raw == (
+        b'itemTypeName = "CASIER RAYONNAGE 6 TABLETTES VERT METALLISE"\r\n'
+        b'codeItem = "19570001"\r\n'
+        b'@serialqty = "1"\r\n'
+    )
 
 
 def test_generate_sanitizes_pipe_and_newlines_in_asset_fields(tmp_path):

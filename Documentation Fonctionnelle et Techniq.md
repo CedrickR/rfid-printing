@@ -220,6 +220,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 
 - Le gabarit de nom de fichier combine un préfixe libre et des placeholders (ex. `print_job_{{JobId}}_{{BienId}}`, le défaut) ; le résultat est nettoyé des caractères invalides dans un nom de fichier. Il doit produire un nom **distinct par bien du lot** (donc généralement inclure `{{BienId}}` ou un autre placeholder qui varie par bien) : sinon la génération du lot est refusée (§2.5).
 - Un placeholder inconnu (faute de frappe) est laissé tel quel dans le fichier généré (ou le nom de fichier), pour rester visible plutôt que de disparaître silencieusement.
+- Fins de ligne toujours en CRLF (`\r\n`, exigé par le logiciel d'impression Windows), y compris à la toute fin du fichier : si le gabarit de ligne enregistré ne se termine pas déjà par un retour à la ligne (ex. dernière ligne tronquée par erreur en modifiant le gabarit), le générateur en ajoute un automatiquement — cas réel constaté où son absence faisait ignorer silencieusement le fichier par le logiciel d'impression, sans erreur visible côté application.
 - Aperçu en direct (`POST /settings/cmd-template/preview`) avec un bien réel de la base si disponible, sinon un bien fictif d'exemple ; affiche la ligne et le nom de fichier qui seraient générés.
 - Le gabarit actif est toujours **le dernier enregistré** (historique conservé en base, une ligne par modification).
 

@@ -280,7 +280,7 @@ def test_custom_template_is_used_when_generating_a_print_job(
         generator.output_dir / filenames[0]
     ).read_text(encoding="utf-8")
 
-    assert content == "ETIQUETTE;10001;PC Portable;SIEGE"
+    assert content == "ETIQUETTE;10001;PC Portable;SIEGE\n"
 
 
 def test_generate_rejects_filename_template_without_bien_placeholder(

@@ -73,9 +73,10 @@ Organisé en trois onglets.
 - **Graphique « Répartition des biens actifs par destination »** (anneau) : un bien sans destination affectée apparaît sous « Sans destination ». Légende et infobulles affichent à la fois le **nombre** et le **pourcentage** de chaque destination. Basé sur [Chart.js](https://www.chartjs.org/) (servi localement, §1.2).
 - **Graphique « Biens avec étiquette générée »** (barres) : nombre de biens actifs ayant déjà été inclus dans un lot d'impression **généré** (`PrintJob.status == "GENERATED"`, au moins une fois) comparé à ceux qui ne l'ont pas encore été.
 - **Graphique « Étiquettes imprimées et non imprimées par destination »** (barres horizontales empilées) : pour chaque destination (« Sans destination » incluse), la répartition des biens actifs entre étiquette imprimée et non imprimée — même définition de « imprimée » que le graphique précédent (lot **généré** au moins une fois).
-- Panneau **« Zone sensible »** (administrateur uniquement), deux actions irréversibles avec confirmation JavaScript obligatoire :
+- Panneau **« Zone sensible »** (administrateur uniquement), trois actions irréversibles avec confirmation JavaScript obligatoire :
   - **Vider la base de données** : réinitialisation complète de la base de données métier (biens, imports, lots, historique — les comptes utilisateurs sont conservés).
   - **Réinitialiser les lots d'impression** (`POST /admin/reset-print-jobs`) : supprime uniquement les lots d'impression (lots, lignes de lot, historique des générations/réimpressions) et les fichiers `.cmd` déjà générés sur le disque, **sans toucher à l'inventaire** (biens, imports) ni au reste des données (Destination/Bureau, GLPI, scans RFID, comptes). Utile pour repartir sur un historique d'impression vierge (ex. mise en production, §8.9) sans perdre l'inventaire déjà en place.
+  - **Réinitialiser le suivi par local** (`POST /admin/reset-inventory-check`) : supprime uniquement les lignes du Suivi de l'inventaire par local (§2.13), tous locaux confondus — biens connus comme biens « en trop » —, **sans toucher à l'inventaire** ni au reste des données (y compris les lots d'impression). Utile pour repartir sur un suivi vierge avant de tester/valider le processus (ex. avant une mise en production, ou après une campagne de test). Une ligne liée à un bien connu de l'inventaire est recréée automatiquement (statut « Présent » par défaut) au prochain affichage de son local tant que le bien y reste affecté — seul son historique (statut/commentaire explicitement enregistrés) est réellement perdu, pas sa présence dans le tableau ; une ligne « en trop » disparaît en revanche définitivement.
 
 **Onglet « Répartition de l'informatique par bureau »** :
 
@@ -245,7 +246,7 @@ Compare le **numéro local** enregistré dans l'inventaire avec le **numéro de 
 - **Tableau des sauvegardes** : date, origine (import inventaire / scan RFID / GLPI / manuelle), auteur, taille, avec pour chaque ligne :
   - **Restaurer** (`POST /admin/backups/{fichier}/restore`) : remplace intégralement la base active par le contenu de cette sauvegarde. Confirmation obligatoire ; action irréversible.
   - **Supprimer** (`POST /admin/backups/{fichier}/delete`) : supprime définitivement cette sauvegarde. Confirmation obligatoire.
-- **Zone sensible** : boutons « Vider la base de données » et « Réinitialiser les lots d'impression » (mêmes actions que sur le tableau de bord, §2.2, `POST /admin/reset-database` et `POST /admin/reset-print-jobs`), avec confirmation obligatoire — regroupés ici avec les sauvegardes qui en sont le filet de sécurité.
+- **Zone sensible** : boutons « Vider la base de données », « Réinitialiser les lots d'impression » et « Réinitialiser le suivi par local » (mêmes actions que sur le tableau de bord, §2.2, `POST /admin/reset-database`, `POST /admin/reset-print-jobs` et `POST /admin/reset-inventory-check`), avec confirmation obligatoire — regroupés ici avec les sauvegardes qui en sont le filet de sécurité.
 - Les fichiers de sauvegarde (`.db`) et leurs métadonnées (`.json`) sont stockés hors de la base elle-même (dossier `backend/backups/`, non versionné), pour rester disponibles et cohérents même après une restauration.
 
 ### 2.12 Destination et Bureau (`/admin/destinations`, administrateur uniquement)
@@ -528,6 +529,7 @@ Toutes les routes ci-dessous rendent du HTML et s'appuient sur le cookie `access
 | `GET` | `/dashboard` | Tableau de bord |
 | `POST` | `/admin/reset-database` | Réinitialisation de la base métier (administrateur) |
 | `POST` | `/admin/reset-print-jobs` | Réinitialisation des seuls lots d'impression, sans toucher à l'inventaire (administrateur) |
+| `POST` | `/admin/reset-inventory-check` | Réinitialisation des seules lignes du Suivi de l'inventaire par local, sans toucher à l'inventaire (administrateur) |
 | `GET` | `/admin/users` | Liste des utilisateurs (administrateur) |
 | `POST` | `/admin/users` | Création d'un utilisateur (administrateur) |
 | `POST` | `/admin/users/{id}/role` | Changement de profil (administrateur) |
@@ -845,6 +847,7 @@ Python étant déjà installé sur le serveur, seules les étapes suivantes sont
 
    - Démarrer temporairement l'application en local (`uvicorn app.main:app --host 127.0.0.1 --port 8000`), se connecter avec un compte administrateur existant, puis :
      - Pour repartir avec un historique d'impression **vierge** tout en conservant l'inventaire : utiliser le bouton **« Réinitialiser les lots d'impression »** (tableau de bord ou page Sauvegardes, §2.2/§2.11 — `POST /admin/reset-print-jobs`). Supprime les lots, leurs lignes, l'historique des générations/réimpressions et les fichiers `.cmd` déjà générés, **sans toucher à l'inventaire** (biens, imports) ni au reste des données (Destination/Bureau, GLPI, scans RFID, comptes utilisateurs).
+     - De la même façon, si la base copiée contient des lignes de test du **Suivi de l'inventaire par local** (§2.13) : bouton **« Réinitialiser le suivi par local »** (mêmes emplacements — `POST /admin/reset-inventory-check`), sans effet sur l'inventaire ni sur le reste des données.
      - Pour conserver l'historique de test tel quel (déconseillé en production) : ne rien faire à cette étape.
    - Arrêter ce serveur temporaire (Ctrl+C) avant de poursuivre.
 

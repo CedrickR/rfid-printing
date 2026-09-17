@@ -311,3 +311,16 @@ def test_backups_page_shows_reset_print_jobs_danger_zone(client, admin_user):
     assert response.status_code == 200
     assert 'action="/admin/reset-print-jobs"' in response.text
     assert "Réinitialiser les lots d'impression" in response.text
+
+
+def test_backups_page_shows_reset_inventory_check_danger_zone(
+    client, admin_user
+):
+
+    _login(client)
+
+    response = client.get("/admin/backups")
+
+    assert response.status_code == 200
+    assert 'action="/admin/reset-inventory-check"' in response.text
+    assert "Réinitialiser le suivi par local" in response.text

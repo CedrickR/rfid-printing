@@ -229,3 +229,100 @@ def test_reset_print_jobs_wipes_jobs_but_keeps_inventory(
     assert history_after.json() == []
 
     assert not any(generated_dir.glob("*.cmd"))
+
+
+def test_reset_inventory_check_requires_admin_role(client, standard_user):
+
+    _login_web(client, "employe", "Employe123!")
+
+    response = client.post(
+        "/admin/reset-inventory-check",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_inventory_check_denies_manager_role(client, manager_user):
+
+    _login_web(client, "gestionnaire", "Gestionnaire123!")
+
+    response = client.post(
+        "/admin/reset-inventory-check",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 403
+
+
+def test_reset_inventory_check_requires_login(client):
+
+    response = client.post(
+        "/admin/reset-inventory-check",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_reset_inventory_check_wipes_lines_but_keeps_inventory(
+    client, admin_user
+):
+
+    _login_web(client, "admin", "Admin123!")
+
+    csv_content = (
+        "numero;libelle;sortie;local_libelle\n"
+        "10001;PC Portable;;SALLE 101\n"
+    )
+
+    client.post(
+        "/import",
+        files={"file": ("inventaire.csv", csv_content, "text/csv")}
+    )
+
+    # Crée une ligne connue (auto) et une ligne "en trop".
+    client.get("/inventaire-local", params={"local": "SALLE 101"})
+    client.post(
+        "/inventaire-local/add",
+        data={"local": "SALLE 101", "bien_id": "EXTRA1"}
+    )
+
+    before_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert "10001" in before_page.text
+    assert "EXTRA1" in before_page.text
+
+    response = client.post(
+        "/admin/reset-inventory-check",
+        follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "/dashboard?reset_inventory_check=1"
+    )
+
+    token = _get_token(client)
+
+    assets_after = client.get(
+        "/api/import/assets",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert len(assets_after.json()) == 1
+
+    after_page = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    assert "EXTRA1" not in after_page.text
+    # La ligne connue est recréée automatiquement à l'affichage du
+    # local tant que le bien y reste affecté (comportement normal,
+    # voir InventoryCheckService.list_lines_for_local) : seul son
+    # historique (statut/commentaire explicitement enregistrés) est
+    # réellement perdu, pas sa présence dans le tableau.
+    assert "10001" in after_page.text

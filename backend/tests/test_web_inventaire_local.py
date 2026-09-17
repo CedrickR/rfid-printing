@@ -1009,6 +1009,38 @@ def _add_temp_line(client, local, designation="Fauteuil non identifié"):
     return _line_id_for_bien(page.text, temp_bien_id)
 
 
+def test_attach_bien_id_form_has_confirmation_dialog(client, admin_user):
+    """
+    Rattacher un bien "sans numéro" à son vrai Bien ID modifie
+    silencieusement les données ; une boîte de confirmation s'assure
+    que l'utilisateur a bien reporté ce Bien ID dans l'application
+    d'inventaire avant de valider ici (onglet Par local, et onglet
+    Biens à traiter).
+    """
+
+    _login(client)
+
+    _add_temp_line(client, "SALLE 101")
+
+    local_page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert (
+        "onsubmit=\"return confirm('Confirmer que ce bien a bien été "
+        "mis à jour avec ce Bien ID dans l\\'application d\\'inventaire ?');\""
+        in local_page.text
+    )
+
+    statut_page = client.get(
+        "/inventaire-local", params={"statut_filter": "En Trop"}
+    )
+
+    assert (
+        "onsubmit=\"return confirm('Confirmer que ce bien a bien été "
+        "mis à jour avec ce Bien ID dans l\\'application d\\'inventaire ?');\""
+        in statut_page.text
+    )
+
+
 def test_attach_bien_id_links_temp_line_to_existing_asset(
     client, admin_user
 ):

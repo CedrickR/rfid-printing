@@ -281,7 +281,7 @@ Contrôle physique de l'inventaire local par local (vérification sur le terrain
   - **Type de bien** (liste déroulante, alimentée par `/admin/destinations`, onglet Types de bien, §2.12), **Commentaire** (texte libre) et **Statut** (liste déroulante : **Présent**, **Absent**, **En Trop**) : modifiables à tout moment (`POST /inventaire-local/lines/{id}/update`) et enregistrés immédiatement au clic sur le bouton d'enregistrement (icône disquette) de la ligne. La valeur déjà connue, le cas échéant, est présélectionnée. Statut « Présent » par défaut. Pour un bien connu de l'inventaire, le Type de bien modifié ici est **le même champ** que sur l'Inventaire (§2.4, `Asset.type_bien_id`) — une seule valeur partagée, modifiable indifféremment depuis l'une ou l'autre page ; pour un bien « en trop », il est propre à la ligne.
   - **Bien ID coloré au clic sur l'icône disquette** : vert si le statut enregistré est **Présent**, orange si **En Trop**, rouge si **Absent** ; couleur de police normale tant que la ligne n'a jamais été **explicitement enregistrée** (création automatique par défaut à l'affichage du local non comprise). Un bien « en trop » est coloré dès son ajout (action explicite). Même règle, même coloration, sur l'Inventaire (§2.4).
 - **Ajouter un bien en trop** (`POST /inventaire-local/add`) : pour un bien physiquement présent dans le local mais non affecté à celui-ci dans l'inventaire (ou totalement inconnu) — Bien ID, Désignation, Type de bien et commentaire (tous facultatifs). Statut toujours **Présent** à l'ajout (le bien vient d'être constaté sur place) ; modifiable ensuite comme les autres lignes. Repéré dans le tableau par un badge « En trop » à côté du Bien ID. Seule une ligne « en trop » peut être supprimée (`POST /inventaire-local/lines/{id}/delete`) — une ligne liée à un bien connu de l'inventaire ne peut pas l'être (elle serait de toute façon recréée au prochain affichage du local tant que le bien y reste affecté).
-  - **Bien sans numéro** (ex. fauteuil ou meuble non étiqueté, trouvé lors du contrôle) : le Bien ID peut être laissé vide — une référence temporaire est alors générée automatiquement (`SN-<id>`, `InventoryCheckService.add_extra_line`), repérée par un badge **« Sans numéro »** à la place du badge « En trop ». La Désignation permet de décrire l'objet en attendant. Une fois son vrai Bien ID retrouvé (sur place ou dans le logiciel de gestion d'inventaire externe), l'action **Rattacher à un Bien ID** (icône chaîne, `POST /inventaire-local/lines/{id}/attach-bien-id`, visible uniquement sur les lignes « Sans numéro ») le renseigne sans recréer la ligne (commentaire et statut conservés) :
+  - **Bien sans numéro** (ex. fauteuil ou meuble non étiqueté, trouvé lors du contrôle) : le Bien ID peut être laissé vide — une référence temporaire est alors générée automatiquement (`SN-<id>`, `InventoryCheckService.add_extra_line`), repérée par un badge **« Sans numéro »** à la place du badge « En trop ». La Désignation permet de décrire l'objet en attendant. Une fois son vrai Bien ID retrouvé (sur place ou dans le logiciel de gestion d'inventaire externe), l'action **Rattacher à un Bien ID** (icône chaîne, `POST /inventaire-local/lines/{id}/attach-bien-id`, visible uniquement sur les lignes « Sans numéro », **confirmation obligatoire** pour s'assurer que ce Bien ID a bien été reporté dans l'application d'inventaire) le renseigne sans recréer la ligne (commentaire et statut conservés) :
     - si ce Bien ID correspond à un bien actif déjà connu de l'inventaire, la ligne devient une ligne **normale** liée à cet Asset (Bien ID, désignation et type de bien alors lus en direct dessus, comme pour toute ligne connue) — refusé (400) si ce bien a déjà sa propre ligne dans ce même local (éviterait un doublon) ;
     - sinon, la référence temporaire est simplement remplacée par le Bien ID indiqué : la ligne reste « en trop » (toujours à reporter dans le logiciel de gestion d'inventaire externe), mais n'est plus « sans numéro ».
 - **Export** :
@@ -600,7 +600,9 @@ py -3.11 -m venv venv
 # Dépendances (dont pytest/httpx pour les tests)
 pip install -r requirements-dev.txt
 
-# Configuration
+# Configuration (mémo de la valeur ; voir la note sous §7.3 — .env
+# n'est pas chargé automatiquement, il faut aussi l'exporter avant de
+# lancer l'application, comme pour les tests en §7.4)
 copy .env.example .env
 # Ouvrir .env et renseigner RFID_SECRET_KEY, par ex. :
 python -c "import secrets; print(secrets.token_hex(32))"
@@ -618,8 +620,11 @@ python -m app.seed
 ### 7.3 Lancer l'application
 
 ```powershell
+$env:RFID_SECRET_KEY = "<même valeur que dans .env>"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+> `.env` n'est pas chargé automatiquement par l'application (aucun mécanisme de lecture de ce fichier dans le code) : sans cet export, une clé temporaire différente est générée à chaque redémarrage, ce qui déconnecte la session en cours à chaque rechargement (`--reload`) — gênant en développement, sans plus de conséquence. Même règle en production, où ces variables doivent alors être définies sur le service NSSM (§8.3/§8.4).
 
 Accéder ensuite à `http://127.0.0.1:8000/login` (identifiant/mot de passe définis dans `app/seed.py`, à changer immédiatement via `/admin/users`). L'option `--reload` recharge automatiquement le serveur à chaque modification du code (pratique en développement, à ne **jamais** utiliser en production).
 
@@ -685,7 +690,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Éditer `C:\rfid-printing\backend\.env` :
+Éditer `C:\rfid-printing\backend\.env` (mémo des valeurs à retenir, voir l'avertissement ci-dessous) :
 
 ```ini
 RFID_SECRET_KEY=<valeur générée aléatoirement, à garder secrète>
@@ -693,6 +698,8 @@ COOKIE_SECURE=true
 CORS_ALLOWED_ORIGINS=
 ```
 
+> **`.env` n'est pas chargé automatiquement par l'application** (aucun mécanisme de lecture de ce fichier dans le code — les variables sont lues directement dans l'environnement du process via `os.environ`). L'éditer seul n'a donc aucun effet : chaque valeur doit être répercutée comme variable d'environnement du process qui exécute réellement l'application — `$env:VARIABLE = "valeur"` dans la console pour un test local ponctuel (ci-dessous), et sur le service NSSM (onglet *Environment*/`AppEnvironmentExtra`, §8.4) une fois celui-ci installé, à chaque valeur ajoutée ou modifiée. Même règle déjà documentée pour `URL_PREFIX` (§8.11).
+>
 > `COOKIE_SECURE=true` impose que le cookie de session ne soit transmis qu'en HTTPS : ne l'activer qu'une fois le HTTPS effectivement configuré sur Apache (§8.5), sinon la connexion à l'application échouera.
 
 ```powershell
@@ -700,7 +707,14 @@ alembic upgrade head
 python -m app.seed
 ```
 
-Se connecter une première fois en local (`uvicorn app.main:app --host 127.0.0.1 --port 8000`, puis `http://127.0.0.1:8000/login`) pour vérifier que tout fonctionne, créer les comptes réels de l'équipe via `/admin/users`, puis arrêter ce serveur temporaire (Ctrl+C) avant de passer à l'installation en service (§8.4).
+Se connecter une première fois en local pour vérifier que tout fonctionne — en exportant `RFID_SECRET_KEY` dans la console avant de lancer `uvicorn` (sinon une clé temporaire est générée, ce qui n'empêche pas ce test mais ne reflète pas la configuration finale) :
+
+```powershell
+$env:RFID_SECRET_KEY = "<même valeur que dans .env>"
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Puis `http://127.0.0.1:8000/login`, créer les comptes réels de l'équipe via `/admin/users`, et arrêter ce serveur temporaire (Ctrl+C) avant de passer à l'installation en service (§8.4).
 
 ### 8.4 Exécuter l'application comme service Windows permanent
 
@@ -718,6 +732,12 @@ Un simple `uvicorn` lancé dans une fenêtre console s'arrête à la fermeture d
    - **Startup directory** : `C:\rfid-printing\backend` *(essentiel : c'est le dossier de travail attendu par l'application)*
    - **Arguments** : `app.main:app --host 127.0.0.1 --port 8000`
    - Onglet **Details** : *Startup type* = `Automatic`.
+   - Onglet **Environment** : reporter ici les valeurs saisies dans `.env` à l'étape précédente (§8.3) — **indispensable**, `.env` n'étant pas lu par l'application (voir l'avertissement §8.3), une ligne par variable :
+     ```
+     RFID_SECRET_KEY=<même valeur que dans .env>
+     COOKIE_SECURE=true
+     ```
+     (ajouter `URL_PREFIX=/rfid` ici aussi si applicable, §8.11 — ne pas oublier de reporter les valeurs existantes en cas de modification ultérieure, `nssm set` remplaçant tout le contenu de cet onglet, pas seulement la ligne changée).
    - Onglet **I/O** : rediriger la sortie standard/erreur vers des fichiers de log, ex. `C:\rfid-printing\logs\stdout.log` / `stderr.log` (créer le dossier au préalable).
 
 3. Démarrer le service :
@@ -734,6 +754,12 @@ Commandes utiles :
 nssm stop RfidPrinting
 nssm restart RfidPrinting
 nssm remove RfidPrinting confirm   # désinstalle le service
+
+# Consulter/modifier les variables d'environnement du service après coup
+# (équivalent en ligne de commande de l'onglet Environment ci-dessus ;
+# `` `r`n `` sépare les lignes dans une chaîne PowerShell) :
+nssm get RfidPrinting AppEnvironmentExtra
+nssm set RfidPrinting AppEnvironmentExtra "RFID_SECRET_KEY=<valeur>`r`nCOOKIE_SECURE=true"
 ```
 
 > Alternative sans outil tiers : une tâche planifiée (Planificateur de tâches Windows) déclenchée « au démarrage de l'ordinateur », exécutant `uvicorn.exe` avec les mêmes arguments, avec l'option de relance automatique en cas d'échec. NSSM reste préférable (gestion native en tant que service, logs, arrêt propre).
@@ -776,7 +802,7 @@ Deux approches, selon l'infrastructure existante :
 - **Certificat déjà géré par XAMPP/Apache** (cas le plus fréquent en environnement d'entreprise) : réutiliser la configuration `mod_ssl` existante (`httpd-ssl.conf`), et dupliquer le bloc `ProxyPass`/`ProxyPassReverse` du §8.5 dans le `<VirtualHost *:443>` correspondant.
 - **Aucun certificat existant** : générer un certificat interne (autorité de certification d'entreprise) ou, si la machine est exposée sur Internet, un certificat [Let's Encrypt](https://letsencrypt.org/) via un outil compatible Windows tel que [win-acme](https://www.win-acme.com/).
 
-Une fois HTTPS actif, repasser `COOKIE_SECURE=true` dans `.env` (§8.3) si ce n'était pas déjà fait, puis redémarrer le service (`nssm restart RfidPrinting`).
+Une fois HTTPS actif, repasser `COOKIE_SECURE=true` dans la configuration du service (onglet *Environment* NSSM, §8.4 — pas seulement `.env`, voir l'avertissement §8.3) si ce n'était pas déjà fait, puis redémarrer le service (`nssm restart RfidPrinting`).
 
 ### 8.7 Pare-feu Windows
 
@@ -977,6 +1003,8 @@ nssm start RfidPrinting
 ## 10. Annexes
 
 ### 10.1 Variables d'environnement (`.env`)
+
+> `.env` n'est pas chargé automatiquement par l'application (voir l'avertissement §8.3) : ces variables doivent être définies dans l'environnement réel du process (onglet *Environment*/`AppEnvironmentExtra` du service NSSM en production, §8.4, ou `$env:VARIABLE = "valeur"` pour un lancement local).
 
 | Variable | Rôle | Valeur par défaut |
 |---|---|---|

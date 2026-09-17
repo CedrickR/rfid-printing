@@ -238,6 +238,7 @@
                                         method="post"
                                         action="/inventaire-local/lines/{{ row.line.id }}/attach-bien-id"
                                         class="form-inline flex-nowrap mb-1"
+                                        onsubmit="return confirm('Confirmer que ce bien a bien été mis à jour avec ce Bien ID dans l\'application d\'inventaire ?');"
                                     >
                                         <input type="hidden" name="local" value="{{ local }}">
                                         <input
@@ -492,6 +493,7 @@
                                         method="post"
                                         action="/inventaire-local/lines/{{ row.line.id }}/attach-bien-id"
                                         class="form-inline flex-nowrap mb-1"
+                                        onsubmit="return confirm('Confirmer que ce bien a bien été mis à jour avec ce Bien ID dans l\'application d\'inventaire ?');"
                                     >
                                         <input type="hidden" name="statut_filter" value="{{ statut_filter }}">
                                         <input

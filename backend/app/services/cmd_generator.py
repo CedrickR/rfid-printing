@@ -215,6 +215,15 @@ class CommandGenerator:
             # pour empêcher toute retraduction ultérieure.
             normalized = content.replace("\r\n", "\n").replace("\n", "\r\n")
 
+            # Cas réel remonté par un utilisateur : un gabarit enregistré
+            # sans retour à la ligne final (ex. dernière ligne du
+            # textarea tronquée par erreur en le modifiant) produit un
+            # fichier que le logiciel d'impression ignore silencieusement
+            # sans erreur visible. On garantit donc toujours une fin de
+            # ligne CRLF en fin de fichier, quel que soit le gabarit.
+            if normalized and not normalized.endswith("\r\n"):
+                normalized += "\r\n"
+
             (self.output_dir / asset_filename).write_text(
                 normalized,
                 encoding="utf-8",

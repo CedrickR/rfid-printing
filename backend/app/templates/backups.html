@@ -176,6 +176,27 @@
             </button>
         </form>
 
+        <hr>
+
+        <p class="mb-3">
+            Supprime définitivement toutes les lignes du Suivi de
+            l'inventaire par local (tous locaux confondus, biens connus
+            comme biens « en trop »). L'inventaire et le reste des
+            données ne sont pas affectés. Utile pour repartir sur un
+            suivi vierge avant de tester/valider le processus. Cette
+            action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/admin/reset-inventory-check"
+            onsubmit="return confirm('Supprimer définitivement toutes les lignes du Suivi de l\'inventaire par local (tous locaux confondus) ? L\'inventaire ne sera pas affecté. Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Réinitialiser le suivi par local
+            </button>
+        </form>
+
     </div>
 
 </div>

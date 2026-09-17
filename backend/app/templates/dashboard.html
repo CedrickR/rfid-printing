@@ -35,6 +35,13 @@
 </div>
 {% endif %}
 
+{% if request.query_params.get('reset_inventory_check') == '1' %}
+<div class="alert alert-success">
+    Suivi de l'inventaire par local réinitialisé : toutes les lignes (tous
+    locaux confondus) ont été supprimées. L'inventaire n'est pas affecté.
+</div>
+{% endif %}
+
 <ul class="nav nav-tabs" id="dashboardTab" role="tablist">
 
     <li class="nav-item">
@@ -309,6 +316,27 @@
         >
             <button type="submit" class="btn btn-danger btn-sm">
                 <i class="fas fa-trash fa-sm"></i> Réinitialiser les lots d'impression
+            </button>
+        </form>
+
+        <hr>
+
+        <p class="mb-3">
+            Supprime définitivement toutes les lignes du Suivi de
+            l'inventaire par local (tous locaux confondus, biens connus
+            comme biens « en trop »). L'inventaire et le reste des
+            données ne sont pas affectés. Utile pour repartir sur un
+            suivi vierge avant de tester/valider le processus. Cette
+            action est irréversible.
+        </p>
+
+        <form
+            method="post"
+            action="/admin/reset-inventory-check"
+            onsubmit="return confirm('Supprimer définitivement toutes les lignes du Suivi de l\'inventaire par local (tous locaux confondus) ? L\'inventaire ne sera pas affecté. Cette action est irréversible.');"
+        >
+            <button type="submit" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash fa-sm"></i> Réinitialiser le suivi par local
             </button>
         </form>
 

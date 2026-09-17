@@ -721,6 +721,40 @@ def reset_print_jobs(
     )
 
 
+@router.post("/admin/reset-inventory-check")
+def reset_inventory_check(
+    current_user=Depends(get_current_user_web),
+    db: Session = Depends(get_db)
+):
+    """
+    Vide uniquement les données du Suivi de l'inventaire par local
+    (§2.13) : toutes les lignes (biens connus comme biens "en trop"),
+    tous locaux confondus. N'affecte ni l'inventaire (biens, imports)
+    ni les autres données (lots d'impression, Destination/Bureau,
+    GLPI, scans RFID, comptes utilisateurs). Réservé aux
+    administrateurs : action irréversible. Utile pour repartir sur un
+    suivi par local vierge (ex. avant de tester/valider le processus,
+    ou pour une mise en production) sans perdre l'inventaire déjà en
+    place.
+    """
+
+    require_admin(current_user)
+
+    db.query(InventoryCheckLine).delete()
+
+    db.commit()
+
+    logger.warning(
+        "Suivi de l'inventaire par local réinitialisé par %s",
+        current_user["sub"]
+    )
+
+    return RedirectResponse(
+        url="/dashboard?reset_inventory_check=1",
+        status_code=303
+    )
+
+
 def _render_backups_page(
     request: Request,
     db: Session,

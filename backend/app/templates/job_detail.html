@@ -84,7 +84,14 @@
             <a href="/jobs/{{ job.id }}/export-csv" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-file-csv fa-sm"></i> Exporter en CSV
             </a>
-            <form action="/jobs/{{ job.id }}/generate" method="post" class="d-inline m-0">
+            <form
+                action="/jobs/{{ job.id }}/generate"
+                method="post"
+                class="d-inline m-0"
+                {% if job.labels_count > 10 %}
+                onsubmit="return confirm('Ce lot contient {{ job.labels_count }} étiquettes à générer. Une sélection aussi importante est inhabituelle (vérifiez qu\'une sélection précédente n\'est pas restée en mémoire). Confirmer la génération ?');"
+                {% endif %}
+            >
                 <button class="btn btn-success btn-sm" type="submit">
                     <i class="fas fa-cog fa-sm"></i> Générer CMD
                 </button>

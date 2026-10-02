@@ -125,24 +125,24 @@ def _login_and_seed_many(client, count):
     )
 
 
-def test_assets_default_page_size_is_ten(client, admin_user):
+def test_assets_default_page_size_is_twenty_five(client, admin_user):
 
     _login_and_seed_many(client, 30)
 
     response = client.get("/assets")
 
     assert response.status_code == 200
-    assert response.text.count("Bien numero ") == 10
+    assert response.text.count("Bien numero ") == 25
 
 
-def test_assets_page_size_25(client, admin_user):
+def test_assets_page_size_10(client, admin_user):
 
     _login_and_seed_many(client, 30)
 
-    response = client.get("/assets", params={"page_size": "25"})
+    response = client.get("/assets", params={"page_size": "10"})
 
     assert response.status_code == 200
-    assert response.text.count("Bien numero ") == 25
+    assert response.text.count("Bien numero ") == 10
 
 
 def test_assets_page_size_50(client, admin_user):
@@ -155,14 +155,16 @@ def test_assets_page_size_50(client, admin_user):
     assert response.text.count("Bien numero ") == 30
 
 
-def test_assets_invalid_page_size_falls_back_to_ten(client, admin_user):
+def test_assets_invalid_page_size_falls_back_to_twenty_five(
+    client, admin_user
+):
 
     _login_and_seed_many(client, 30)
 
     response = client.get("/assets", params={"page_size": "999"})
 
     assert response.status_code == 200
-    assert response.text.count("Bien numero ") == 10
+    assert response.text.count("Bien numero ") == 25
 
 
 def _login_and_seed_locations(client):

@@ -1191,3 +1191,103 @@ def test_attach_bien_id_from_biens_a_traiter_redirects_with_statut_filter(
     assert response.headers["location"] == (
         "/inventaire-local?statut_filter=En%20Trop&attached=1"
     )
+
+
+def test_statut_dropdown_has_no_default_selection_for_unvalidated_line(
+    client, admin_user
+):
+    """
+    Une ligne jamais explicitement enregistrée (créée automatiquement
+    à l'affichage du local, voir is_validated) ne doit présélectionner
+    aucun statut dans la liste déroulante : l'utilisateur doit choisir
+    explicitement, plutôt que risquer d'enregistrer "Présent" par
+    défaut sans avoir réellement vérifié le bien.
+    """
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert re.search(
+        r'<option\s+value=""\s+disabled\s+selected\s*>\s*'
+        r'-- Sélectionner --',
+        page.text
+    )
+    assert not re.search(r'value="Présent"\s+selected', page.text)
+    assert not re.search(r'value="Absent"\s+selected', page.text)
+    assert not re.search(r'value="En Trop"\s+selected', page.text)
+
+
+def test_statut_dropdown_shows_current_value_for_validated_line(
+    client, admin_user
+):
+
+    _login(client)
+    _mark_line(client, "SALLE 101", "10001", "PC Portable", "Absent")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    assert re.search(r'value="Absent"\s+selected', page.text)
+    assert not re.search(
+        r'<option\s+value=""\s+disabled\s+selected', page.text
+    )
+
+
+def test_par_local_table_shows_unvalidated_rows_before_validated_ones(
+    client, admin_user
+):
+    """
+    Les biens pas encore contrôlés (statut jamais explicitement
+    enregistré) doivent rester groupés en premier dans le tableau, pour
+    ne pas se perdre parmi les biens déjà traités au fur et à mesure
+    de la validation.
+    """
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+    _import_asset(client, "10002", "Ecran", "SALLE 101")
+    _import_asset(client, "10003", "Imprimante", "SALLE 101")
+
+    page = client.get("/inventaire-local", params={"local": "SALLE 101"})
+
+    line_id = _line_id_for_bien(page.text, "10002")
+
+    client.post(
+        f"/inventaire-local/lines/{line_id}/update",
+        data={"local": "SALLE 101", "statut": "Présent"}
+    )
+
+    page_after = client.get(
+        "/inventaire-local", params={"local": "SALLE 101"}
+    )
+
+    positions = {
+        bien_id: page_after.text.index(bien_id)
+        for bien_id in ("10001", "10002", "10003")
+    }
+
+    # 10002 vient d'être explicitement validé : il doit désormais
+    # apparaître après les deux autres, restés non vérifiés.
+    assert positions["10001"] < positions["10002"]
+    assert positions["10003"] < positions["10002"]
+
+
+def test_local_field_is_searchable_text_input_with_datalist(
+    client, admin_user
+):
+    """
+    Le champ Local doit permettre de taper pour filtrer rapidement
+    parmi les locaux existants (datalist HTML natif, sans dépendance
+    JS supplémentaire), plutôt qu'une simple liste déroulante à
+    parcourir entièrement.
+    """
+
+    _login(client)
+    _import_asset(client, "10001", "PC Portable", "SALLE 101")
+
+    page = client.get("/inventaire-local")
+
+    assert 'list="local-options-list"' in page.text
+    assert '<datalist id="local-options-list">' in page.text
+    assert '<option value="SALLE 101"></option>' in page.text

@@ -2087,13 +2087,13 @@ def assets(
     local: str = Query(default=""),
     printed: str = Query(default=""),
     page: int = 1,
-    page_size: int = Query(default=10),
+    page_size: int = Query(default=25),
     current_user=Depends(get_current_user_web),
     db: Session = Depends(get_db)
 ):
 
     if page_size not in (10, 25, 50):
-        page_size = 10
+        page_size = 25
 
     query = _filtered_assets_query(
         db, q, active_only, bien_id_from, bien_id_to, immeuble, niveau, local,
@@ -2537,6 +2537,17 @@ def _render_inventaire_local_page(
 
         statut_rows = _inventaire_local_rows(db, statut_lines)
 
+    # Onglet "Par local" : les biens pas encore contrôlés (statut
+    # jamais explicitement enregistré) sont affichés en premier, pour
+    # rester visibles tant qu'il reste du travail — au fur et à mesure
+    # de la validation, chaque bien rejoint le groupe des biens déjà
+    # traités, en bas. Tri stable : l'ordre relatif au sein de chaque
+    # groupe (Bien ID, puis biens "en trop") est conservé.
+    rows = sorted(
+        _inventaire_local_rows(db, lines),
+        key=lambda row: row["is_validated"]
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="inventaire_local.html",
@@ -2544,7 +2555,7 @@ def _render_inventaire_local_page(
             "local": local,
             "local_options": _distinct_values(db, Asset.local_libelle),
             "asset_type_options": AssetTypeService.list_asset_types(db),
-            "rows": _inventaire_local_rows(db, lines),
+            "rows": rows,
             "statuts": STATUTS,
             "statut_filter": statut_filter,
             "statut_filter_options": STATUT_FILTER_OPTIONS,

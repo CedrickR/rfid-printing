@@ -112,20 +112,23 @@
                     <label class="mr-2" for="local-select">
                         Local
                     </label>
-                    <select
+                    <input
+                        type="text"
                         class="form-control mr-3 mb-2"
                         style="min-width: 260px;"
                         id="local-select"
                         name="local"
+                        list="local-options-list"
+                        value="{{ local }}"
+                        placeholder="-- Sélectionner ou rechercher un local --"
+                        autocomplete="off"
                         onchange="this.form.submit()"
                     >
-                        <option value="">-- Sélectionner un local --</option>
+                    <datalist id="local-options-list">
                         {% for option in local_options %}
-                        <option value="{{ option }}" {% if option == local %}selected{% endif %}>
-                            {{ option }}
-                        </option>
+                        <option value="{{ option }}"></option>
                         {% endfor %}
-                    </select>
+                    </datalist>
 
                 </form>
 
@@ -216,11 +219,19 @@
                                             class="form-control form-control-sm mr-2 mb-1"
                                             style="min-width: 140px;"
                                             name="statut"
+                                            required
                                         >
+                                            <option
+                                                value=""
+                                                disabled
+                                                {% if not row.is_validated %}selected{% endif %}
+                                            >
+                                                -- Sélectionner --
+                                            </option>
                                             {% for statut in statuts %}
                                             <option
                                                 value="{{ statut }}"
-                                                {% if statut == row.line.statut %}selected{% endif %}
+                                                {% if row.is_validated and statut == row.line.statut %}selected{% endif %}
                                             >
                                                 {{ statut }}
                                             </option>

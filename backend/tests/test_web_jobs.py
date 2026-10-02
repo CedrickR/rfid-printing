@@ -58,6 +58,73 @@ def test_job_detail_shows_generated_files_after_generation(
     assert "1001.cmd" in response.text
 
 
+def test_job_detail_generate_has_no_confirmation_for_small_job(
+    client, admin_user
+):
+    """
+    Un lot de taille normale (10 étiquettes ou moins) ne doit pas
+    déclencher de confirmation supplémentaire à la génération.
+    """
+
+    job_url = _login_and_create_job(client)
+
+    response = client.get(job_url)
+
+    assert response.status_code == 200
+    assert "onsubmit=" not in response.text
+
+
+def test_job_detail_generate_has_confirmation_for_large_job(
+    client, admin_user
+):
+    """
+    Cas réel remonté par un utilisateur : une sélection plus
+    importante que prévue (ex. une sélection précédente restée en
+    mémoire côté navigateur, §2.4) peut mener à générer bien plus
+    d'étiquettes que voulu. Une confirmation est exigée au-delà de 10
+    étiquettes pour permettre de s'en rendre compte avant de lancer la
+    génération.
+    """
+
+    client.post(
+        "/login",
+        data={
+            "username": "admin",
+            "password": "Admin123!",
+            "next": "/dashboard"
+        }
+    )
+
+    rows = "".join(
+        f"{i};Bien numero {i};\n" for i in range(1, 12)
+    )
+
+    client.post(
+        "/import",
+        files={
+            "file": (
+                "inventaire.csv",
+                "numero;libelle;sortie\n" + rows,
+                "text/csv"
+            )
+        }
+    )
+
+    response = client.post(
+        "/jobs/create",
+        data={"asset_ids": [str(i) for i in range(1, 12)]},
+        follow_redirects=False
+    )
+
+    job_url = response.headers["location"]
+
+    detail_response = client.get(job_url)
+
+    assert detail_response.status_code == 200
+    assert "11 étiquettes à générer" in detail_response.text
+    assert "onsubmit=\"return confirm(" in detail_response.text
+
+
 def test_job_export_csv_contains_header_and_assets(client, admin_user):
 
     job_url = _login_and_create_job(client)
